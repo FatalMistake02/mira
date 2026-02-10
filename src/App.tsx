@@ -10,13 +10,9 @@ function App() {
   };
 
   return (
-    <div style={{height: '100vh', display: 'flex', flexDirection: 'column'}}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <AddressBar url={url} setUrl={setUrl} onGo={go} />
-      <iframe
-        ref={iframeRef}
-        src={url}
-        style={{flex: 1, border: 'none'}}
-      />
+      <iframe ref={iframeRef} src={url} style={{ flex: 1, border: 'none' }} />
     </div>
   );
 }
