@@ -25,13 +25,27 @@
     "package.json"
   ],
   "win": {
-    "target": ["nsis", "portable"]
+    "artifactName": "${productName}-${version}-win.${ext}",
+    "target": ["portable", "nsis"]
   },
+
+  "nsis": {
+    "artifactName": "${productName}-${version}-win-setup.${ext}",
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true
+  },
+
   "mac": {
-    "target": "dmg"
+    "artifactName": "${productName}-${version}-mac.${ext}",
+    "target": ["dmg", "zip"],
+    "category": "public.app-category.utilities"
   },
+
   "linux": {
-    "target": "AppImage"
+    "artifactName": "${productName}-${version}-linux.${ext}",
+    "target": ["AppImage", "deb", "rpm"],
+    "category": "Utility"
   }
 },
 
