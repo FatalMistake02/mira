@@ -14,7 +14,7 @@
 - [x] Ctrl+T new tab
 - [x] Ctrl+W close tab
 - [x] Ctrl+L focus address bar
-- [ ] Address bar can search google
+- [x] Address bar can search google
 
 ## v0.4.0
 - [ ] Basic history

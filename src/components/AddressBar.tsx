@@ -21,16 +21,35 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     }
   }, [tabs, activeId]);
 
-  const go = () => {
-    let url = input.trim();
-    if (!url) return;
+  const isSupportedProtocol = (url: string) => {
+    return (
+      url.startsWith('http://') ||
+      url.startsWith('https://') ||
+      url.startsWith('file://') ||
+      url.startsWith('mira://')
+    );
+  };
 
-    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('mira://')) {
-      url = 'https://' + url;
+  const go = () => {
+    const raw = input.trim();
+    if (!raw) return;
+
+    let finalUrl: string;
+
+    if (isSupportedProtocol(raw)) {
+      finalUrl = raw;
+    } else if (raw.includes('.')) {
+      finalUrl = raw.startsWith('http://') || raw.startsWith('https://')
+        ? raw
+        : `https://${raw}`;
+    } else {
+      const query = encodeURIComponent(raw);
+      finalUrl = `https://www.google.com/search?q=${query}`;
     }
 
-    navigate(url);
+    navigate(finalUrl);
   };
+  // ---------------------------------------------------------------------------
 
   const activeTab = tabs.find((t) => t.id === activeId);
   const canGoBack = activeTab && activeTab.historyIndex > 0;
