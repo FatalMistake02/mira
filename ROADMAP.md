@@ -9,8 +9,8 @@
 - [x] Tabs
 
 ## v0.3.0
-- [ ] Back/forward buttons
-- [ ] Refresh button
+- [x] Back/forward buttons
+- [x] Refresh button
 - [ ] Ctrl+T new tab
 - [ ] Ctrl+W close tab
 - [ ] Ctrl+L focus address bar
