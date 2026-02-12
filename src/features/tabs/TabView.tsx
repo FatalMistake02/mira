@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import React, { useRef } from 'react';
+import React from 'react';
 import { useTabs } from './TabsProvider';
 
 interface WebviewNavigationEvent extends Event {
@@ -8,11 +8,12 @@ interface WebviewNavigationEvent extends Event {
 
 interface WebviewElement extends HTMLElement {
   src: string;
+  reload: () => void;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
   didNavigateInPageHandler?: (e: WebviewNavigationEvent) => void;
 }
 
-// Load all internal pages
+// Load all internal pages (unchanged)
 const modules = import.meta.glob('../../browser_pages/**/*.tsx', { eager: true }) as Record<
   string,
   { default: React.ComponentType }
@@ -44,8 +45,7 @@ function renderInternal(url: string) {
 }
 
 export default function TabView() {
-  const { tabs, activeId, navigate } = useTabs();
-  const webviewRefs = useRef<Record<string, WebviewElement>>({});
+  const { tabs, activeId, navigate, registerWebview } = useTabs();
 
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
@@ -70,10 +70,15 @@ export default function TabView() {
             ) : (
               <webview
                 ref={(el) => {
-                  if (!el) return;
+                  if (!el) {
+                    // When the element unmounts we deregister it
+                    registerWebview(tab.id, null);
+                    return;
+                  }
                   const wv = el as unknown as WebviewElement;
-                  webviewRefs.current[tab.id] = wv;
+                  registerWebview(tab.id, wv);
 
+                  // Clean any old listeners that might still be attached
                   if (wv.didNavigateHandler) {
                     wv.removeEventListener('did-navigate', wv.didNavigateHandler as EventListener);
                   }
@@ -85,13 +90,12 @@ export default function TabView() {
                   }
 
                   const didNavigateHandler = (e: Event) => {
-                    const event = e as WebviewNavigationEvent;
-                    navigate(event.url);
+                    const ev = e as WebviewNavigationEvent;
+                    navigate(ev.url);
                   };
-
                   const didNavigateInPageHandler = (e: Event) => {
-                    const event = e as WebviewNavigationEvent;
-                    navigate(event.url);
+                    const ev = e as WebviewNavigationEvent;
+                    navigate(ev.url);
                   };
 
                   wv.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;

@@ -3,7 +3,7 @@ import { useTabs } from '../features/tabs/TabsProvider';
 
 export default function NewTab() {
   const [query, setQuery] = useState('');
-  const { navigate } = useTabs(); 
+  const { navigate } = useTabs();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

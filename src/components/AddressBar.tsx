@@ -2,15 +2,14 @@ import { useState, useEffect } from 'react';
 import { useTabs } from '../features/tabs/TabsProvider';
 
 export default function AddressBar() {
-  const { tabs, activeId, navigate } = useTabs();
+  const { tabs, activeId, navigate, goBack, goForward, reload } = useTabs();
+
   const [input, setInput] = useState('');
 
-  // Sync input with the active tab's URL
   useEffect(() => {
     const activeTab = tabs.find((t) => t.id === activeId);
     if (!activeTab) return;
 
-    // Only show the URL if it's not the NewTab page
     if (activeTab.url === 'mira://NewTab') {
       setInput('');
     } else {
@@ -22,7 +21,6 @@ export default function AddressBar() {
     let url = input.trim();
     if (!url) return;
 
-    // If user didn't type a protocol, assume https
     if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('mira://')) {
       url = 'https://' + url;
     }
@@ -30,12 +28,58 @@ export default function AddressBar() {
     navigate(url);
   };
 
+  const activeTab = tabs.find((t) => t.id === activeId);
+  const canGoBack = activeTab && activeTab.historyIndex > 0;
+  const canGoForward = activeTab && activeTab.historyIndex < activeTab.history.length - 1;
+
   return (
-    <div style={{ display: 'flex', padding: 4, background: 'var(--address-bar-bg, #222)' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        padding: 4,
+        background: 'var(--address-bar-bg, #222)',
+      }}
+    >
+      {/* ← Back */}
+      <button
+        onClick={goBack}
+        disabled={!canGoBack}
+        title="Back"
+        style={{
+          marginRight: 4,
+          padding: '4px 8px',
+          cursor: canGoBack ? 'pointer' : 'default',
+        }}
+      >
+        ◀︎
+      </button>
+
+      {/* → Forward */}
+      <button
+        onClick={goForward}
+        disabled={!canGoForward}
+        title="Forward"
+        style={{
+          marginRight: 4,
+          padding: '4px 8px',
+          cursor: canGoForward ? 'pointer' : 'default',
+        }}
+      >
+        ▶︎
+      </button>
+
+      {/* ↻ Refresh */}
+      <button onClick={reload} title="Refresh" style={{ marginRight: 4, padding: '4px 8px' }}>
+        ⟳
+      </button>
+
+      {/* URL input */}
       <input
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && go()}
+        placeholder="Enter URL"
         style={{
           flex: 1,
           padding: '6px 10px',
@@ -46,8 +90,9 @@ export default function AddressBar() {
           background: 'var(--input-bg, #333)',
           color: 'var(--input-fg, #fff)',
         }}
-        placeholder="Enter URL"
       />
+
+      {/* Go button */}
       <button
         onClick={go}
         style={{
