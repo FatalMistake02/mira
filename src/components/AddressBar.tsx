@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTabs } from '../features/tabs/TabsProvider';
+import DownloadButton from './DownloadButton';
 
 type AddressBarProps = {
   inputRef?: React.RefObject<HTMLInputElement>;
@@ -39,9 +40,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     if (isSupportedProtocol(raw)) {
       finalUrl = raw;
     } else if (raw.includes('.')) {
-      finalUrl = raw.startsWith('http://') || raw.startsWith('https://')
-        ? raw
-        : `https://${raw}`;
+      finalUrl = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
     } else {
       const query = encodeURIComponent(raw);
       finalUrl = `https://www.google.com/search?q=${query}`;
@@ -132,6 +131,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       >
         Go
       </button>
+      <DownloadButton />
     </div>
   );
 }
