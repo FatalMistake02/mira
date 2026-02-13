@@ -23,9 +23,9 @@
 - [x] Downloads manager
 
 ## v0.5.0
-- [ ] Find in page (Ctrl+F)
-- [ ] Open link in new tab/middle click
-- [ ] Basic settings page
+- [x] Middle click opens link in new tab 
+- [x] Basic settings page
+- [x] New tab url setting (mira://settings)
 
 ## v0.6.0
 - [ ] Themes system
@@ -35,8 +35,13 @@
 - [ ] Performance improvements
 - [ ] Icons / branding
 
+## v0.7.0
+- [ ] Find in page (Ctrl+F)
+- [ ] Reload (Ctrl+R)
+- [ ] Fix other shortcuts
+
 ## v1.0.0 — Stable Release
 - [ ] Installer & portable builds for Windows, macOS, and Linux
 - [ ] Clean UI
-- [ ] Fix bugs
+- [ ] Fix bugs/issues
  

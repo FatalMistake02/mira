@@ -9,6 +9,7 @@ interface WebviewNavigationEvent extends Event {
 interface WebviewElement extends HTMLElement {
   src: string;
   reload: () => void;
+  findInPage: (text: string) => void;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
   didNavigateInPageHandler?: (e: WebviewNavigationEvent) => void;
 }
@@ -90,7 +91,6 @@ export default function TabView() {
                       wv.didNavigateInPageHandler as EventListener,
                     );
                   }
-
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     navigate(ev.url);

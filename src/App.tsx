@@ -10,9 +10,9 @@ import DownloadProvider from './features/downloads/DownloadProvider';
 
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const { newTab, closeTab, activeId } = useTabs();
+  const { newTab, closeTab, reload, findInPage, activeId } = useTabs();
 
-  useKeyboardShortcuts({ newTab, closeTab, activeId, addressInputRef });
+  useKeyboardShortcuts({ newTab, closeTab, reload, findInPage, activeId, addressInputRef });
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', width: '100vw' }}>
       <TabBar />

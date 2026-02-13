@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import DownloadButton from './DownloadButton';
+import { getBrowserSettings } from '../features/settings/browserSettings';
 
 type AddressBarProps = {
   inputRef?: React.RefObject<HTMLInputElement | null>;
@@ -15,7 +16,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     const activeTab = tabs.find((t) => t.id === activeId);
     if (!activeTab) return;
 
-    if (activeTab.url === 'mira://NewTab') {
+    if (activeTab.url === getBrowserSettings().newTabPage) {
       setInput('');
     } else {
       setInput(activeTab.url);

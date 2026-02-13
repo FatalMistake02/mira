@@ -1,12 +1,15 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { Tab } from './types';
 import { addHistoryEntry } from '../history/clientHistory';
+import { electron } from '../../electronBridge';
+import { getBrowserSettings } from '../settings/browserSettings';
 
 const SESSION_STORAGE_KEY = 'mira.session.tabs.v1';
-const DEFAULT_TAB_URL = 'mira://NewTab';
+const IPC_OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 
 type WebviewElement = {
   reload: () => void;
+  findInPage: (text: string) => void;
 } | null;
 
 type SessionSnapshot = {
@@ -24,6 +27,7 @@ type TabsContextType = {
   goBack: () => void;
   goForward: () => void;
   reload: () => void;
+  findInPage: () => void;
   registerWebview: (id: string, el: WebviewElement) => void;
   setActive: (id: string) => void;
   restorePromptOpen: boolean;
@@ -35,7 +39,7 @@ type TabsContextType = {
 const TabsContext = createContext<TabsContextType>(null!);
 export const useTabs = () => useContext(TabsContext);
 
-function createInitialTab(url = DEFAULT_TAB_URL): Tab {
+function createInitialTab(url: string): Tab {
   return {
     id: crypto.randomUUID(),
     url,
@@ -49,11 +53,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function normalizeTab(value: unknown): Tab | null {
+function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
   if (!isRecord(value)) return null;
 
   const id = typeof value.id === 'string' ? value.id : crypto.randomUUID();
-  const url = typeof value.url === 'string' && value.url.trim() ? value.url : DEFAULT_TAB_URL;
+  const url = typeof value.url === 'string' && value.url.trim() ? value.url : defaultTabUrl;
   const historyRaw = Array.isArray(value.history) ? value.history : [url];
   const history = historyRaw.filter((entry): entry is string => typeof entry === 'string' && !!entry.trim());
   const normalizedHistory = history.length ? history : [url];
@@ -70,7 +74,7 @@ function normalizeTab(value: unknown): Tab | null {
   };
 }
 
-function parseSnapshot(raw: string | null): SessionSnapshot | null {
+function parseSnapshot(raw: string | null, defaultTabUrl: string): SessionSnapshot | null {
   if (!raw) return null;
 
   try {
@@ -78,7 +82,9 @@ function parseSnapshot(raw: string | null): SessionSnapshot | null {
     if (!isRecord(parsed)) return null;
 
     const tabsRaw = Array.isArray(parsed.tabs) ? parsed.tabs : [];
-    const tabs = tabsRaw.map((tab) => normalizeTab(tab)).filter((tab): tab is Tab => tab !== null);
+    const tabs = tabsRaw
+      .map((tab) => normalizeTab(tab, defaultTabUrl))
+      .filter((tab): tab is Tab => tab !== null);
     if (!tabs.length) return null;
 
     const activeIdRaw = typeof parsed.activeId === 'string' ? parsed.activeId : tabs[0].id;
@@ -94,12 +100,13 @@ function parseSnapshot(raw: string | null): SessionSnapshot | null {
   }
 }
 
-function isDefaultSnapshot(snapshot: SessionSnapshot): boolean {
-  return snapshot.tabs.length === 1 && snapshot.tabs[0].url === DEFAULT_TAB_URL;
+function isDefaultSnapshot(snapshot: SessionSnapshot, defaultTabUrl: string): boolean {
+  return snapshot.tabs.length === 1 && snapshot.tabs[0].url === defaultTabUrl;
 }
 
 export default function TabsProvider({ children }: { children: React.ReactNode }) {
-  const initialTabRef = useRef<Tab>(createInitialTab());
+  const initialTabUrlRef = useRef(getBrowserSettings().newTabPage);
+  const initialTabRef = useRef<Tab>(createInitialTab(initialTabUrlRef.current));
   const [tabs, setTabs] = useState<Tab[]>([initialTabRef.current]);
   const [activeId, setActiveId] = useState(initialTabRef.current.id);
   const [restorePromptOpen, setRestorePromptOpen] = useState(false);
@@ -107,6 +114,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
   const webviewMap = useRef<Record<string, WebviewElement>>({});
   const hydratedRef = useRef(false);
+  const recentIpcTabOpenRef = useRef<{ url: string; openedAt: number } | null>(null);
 
   const persistSession = (nextTabs: Tab[], nextActiveId: string) => {
     try {
@@ -122,8 +130,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY));
-    if (snapshot && !isDefaultSnapshot(snapshot)) {
+    const currentDefaultTabUrl = getBrowserSettings().newTabPage;
+    const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY), currentDefaultTabUrl);
+    if (snapshot && !isDefaultSnapshot(snapshot, currentDefaultTabUrl)) {
       setPendingSession(snapshot);
       setRestorePromptOpen(true);
     }
@@ -158,18 +167,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const newTab = (url = 'mira://NewTab') => {
+  const newTab = useCallback((url?: string) => {
+    const defaultNewTabUrl = getBrowserSettings().newTabPage;
+    const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
     const id = crypto.randomUUID();
     const newEntry: Tab = {
       id,
-      url,
-      history: [url],
+      url: targetUrl,
+      history: [targetUrl],
       historyIndex: 0,
       reloadToken: 0,
     };
     setTabs((t) => [...t, newEntry]);
     setActiveId(id);
-  };
+  }, []);
 
   const closeTab = (id: string) => {
     setTabs((t) => {
@@ -250,11 +261,45 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     );
   };
 
+  const findInPage = () => {
+    const wv = webviewMap.current[activeId];
+    if (!wv || typeof wv.findInPage !== 'function') return;
+
+    const query = window.prompt('Find in page');
+    if (!query) return;
+    wv.findInPage(query);
+  };
+
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (restorePromptOpen) return;
     persistSession(tabs, activeId);
   }, [tabs, activeId, restorePromptOpen]);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onOpenUrlInNewTab = (_event: unknown, url: string) => {
+      if (!url || typeof url !== 'string') return;
+      const normalized = url.trim();
+      if (!normalized) return;
+
+      const now = Date.now();
+      const last = recentIpcTabOpenRef.current;
+      const isDuplicate =
+        !!last &&
+        last.url === normalized &&
+        now - last.openedAt < IPC_OPEN_TAB_DEDUPE_WINDOW_MS;
+      if (isDuplicate) return;
+
+      recentIpcTabOpenRef.current = { url: normalized, openedAt: now };
+      newTab(normalized);
+    };
+
+    ipc.on('open-url-in-new-tab', onOpenUrlInNewTab);
+    return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
+  }, [newTab]);
 
   return (
     <TabsContext.Provider
@@ -267,6 +312,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         goBack,
         goForward,
         reload,
+        findInPage,
         registerWebview,
         setActive: setActiveId,
         restorePromptOpen,

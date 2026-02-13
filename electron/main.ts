@@ -19,6 +19,8 @@ interface HistoryEntry {
 }
 
 let historyCache: HistoryEntry[] = [];
+const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
+const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
 
 function getHistoryFilePath() {
   return path.join(app.getPath('userData'), 'history.json');
@@ -158,6 +160,31 @@ function setupDownloadHandlers(win: BrowserWindow) {
   });
 }
 
+function setupWebviewTabOpenHandler() {
+  app.on('web-contents-created', (_, contents) => {
+    const host = contents.hostWebContents;
+    if (!host) return;
+
+    contents.setWindowOpenHandler(({ url }) => {
+      const normalized = (url ?? '').trim();
+      if (!normalized || normalized === 'about:blank') {
+        return { action: 'deny' };
+      }
+
+      const now = Date.now();
+      const last = recentOpenTabByHost.get(host.id);
+      const isDuplicate =
+        !!last && last.url === normalized && now - last.openedAt < OPEN_TAB_DEDUPE_WINDOW_MS;
+
+      if (host && !host.isDestroyed() && !isDuplicate) {
+        recentOpenTabByHost.set(host.id, { url: normalized, openedAt: now });
+        host.send('open-url-in-new-tab', normalized);
+      }
+      return { action: 'deny' };
+    });
+  });
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
@@ -177,12 +204,31 @@ function createWindow(): BrowserWindow {
     win.loadFile('dist/index.html');
   }
 
+  win.webContents.on('before-input-event', (event, input) => {
+    const key = input.key.toLowerCase();
+    const isPrimaryChord = (input.control || input.meta) && !input.shift;
+    const isReloadChord = isPrimaryChord && key === 'r';
+    const isFindChord = isPrimaryChord && key === 'f';
+    const isReloadKey = key === 'f5';
+    if (isReloadChord || isReloadKey) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'reload-tab');
+      return;
+    }
+
+    if (isFindChord) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'find-in-page');
+    }
+  });
+
   return win;
 }
 
 app.whenReady().then(async () => {
   await loadHistory().catch(() => undefined);
   setupHistoryHandlers();
+  setupWebviewTabOpenHandler();
   const win = createWindow();
   setupDownloadHandlers(win);
 });
