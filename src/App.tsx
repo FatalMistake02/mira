@@ -7,6 +7,7 @@ import AddressBar from './components/AddressBar';
 import RestoreTabsPrompt from './components/RestoreTabsPrompt';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import DownloadProvider from './features/downloads/DownloadProvider';
+import { electron } from './electronBridge';
 import {
   BROWSER_SETTINGS_CHANGED_EVENT,
   getBrowserSettings,
@@ -21,15 +22,18 @@ function Browser() {
   useKeyboardShortcuts({ newTab, closeTab, reload, findInPage, activeId, addressInputRef });
 
   useEffect(() => {
-    const applySelectedTheme = () => {
+    const applyRuntimeSettings = () => {
       const settings = getBrowserSettings();
       applyTheme(getThemeById(settings.themeId));
+      electron?.ipcRenderer
+        .invoke('settings-set-ad-block-enabled', settings.adBlockEnabled)
+        .catch(() => undefined);
     };
 
-    applySelectedTheme();
+    applyRuntimeSettings();
 
-    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applySelectedTheme);
-    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applySelectedTheme);
+    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applyRuntimeSettings);
+    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applyRuntimeSettings);
   }, []);
 
   return (

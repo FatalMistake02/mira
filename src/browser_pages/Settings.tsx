@@ -24,6 +24,7 @@ export default function Settings() {
   const [tabSleepValue, setTabSleepValue] = useState(() => initialSettings.tabSleepValue);
   const [tabSleepUnit, setTabSleepUnit] = useState(() => initialSettings.tabSleepUnit);
   const [tabSleepMode, setTabSleepMode] = useState(() => initialSettings.tabSleepMode);
+  const [adBlockEnabled, setAdBlockEnabled] = useState(() => initialSettings.adBlockEnabled);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [importMessage, setImportMessage] = useState('');
@@ -38,6 +39,7 @@ export default function Settings() {
     setTabSleepValue(DEFAULT_BROWSER_SETTINGS.tabSleepValue);
     setTabSleepUnit(DEFAULT_BROWSER_SETTINGS.tabSleepUnit);
     setTabSleepMode(DEFAULT_BROWSER_SETTINGS.tabSleepMode);
+    setAdBlockEnabled(DEFAULT_BROWSER_SETTINGS.adBlockEnabled);
     applyTheme(getThemeById(DEFAULT_BROWSER_SETTINGS.themeId));
     setThemes(getAllThemes());
     setImportMessage('');
@@ -96,7 +98,14 @@ export default function Settings() {
 
     setSaveStatus('saving');
     const timer = setTimeout(() => {
-      saveBrowserSettings({ newTabPage, themeId, tabSleepValue, tabSleepUnit, tabSleepMode });
+      saveBrowserSettings({
+        newTabPage,
+        themeId,
+        tabSleepValue,
+        tabSleepUnit,
+        tabSleepMode,
+        adBlockEnabled,
+      });
       setSaveStatus('saved');
 
       if (clearSavedTimerRef.current) {
@@ -108,7 +117,7 @@ export default function Settings() {
     }, AUTO_SAVE_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [newTabPage, themeId, tabSleepValue, tabSleepUnit, tabSleepMode]);
+  }, [newTabPage, themeId, tabSleepValue, tabSleepUnit, tabSleepMode, adBlockEnabled]);
 
   useEffect(() => {
     return () => {
@@ -219,6 +228,27 @@ export default function Settings() {
             <option value="discard">Discard (save more memory)</option>
           </select>
         </div>
+      </div>
+
+      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="ad-block-enabled" style={{ fontWeight: 600 }}>
+          Ad Blocker
+        </label>
+        <label
+          htmlFor="ad-block-enabled"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        >
+          <input
+            id="ad-block-enabled"
+            type="checkbox"
+            checked={adBlockEnabled}
+            onChange={(e) => {
+              setAdBlockEnabled(e.currentTarget.checked);
+              setSaveStatus('saving');
+            }}
+          />
+          Enabled
+        </label>
       </div>
 
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>

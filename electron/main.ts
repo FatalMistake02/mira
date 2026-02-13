@@ -21,6 +21,168 @@ interface HistoryEntry {
 let historyCache: HistoryEntry[] = [];
 const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
+let adBlockEnabled = true;
+const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
+const AD_BLOCK_FETCH_TIMEOUT_MS = 15000;
+const AD_BLOCK_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+const DEFAULT_BLOCKED_AD_HOSTS = [
+  'doubleclick.net',
+  'googlesyndication.com',
+  'googleadservices.com',
+  'adnxs.com',
+  'taboola.com',
+  'outbrain.com',
+  'criteo.com',
+  'adsrvr.org',
+  'scorecardresearch.com',
+  'zedo.com',
+  'adform.net',
+];
+const AD_BLOCK_LIST_URLS = [
+  // Widely used in Pi-hole setups
+  'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
+  // Common Pi-hole community list
+  'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/light.txt',
+];
+let blockedAdHosts = new Set<string>(DEFAULT_BLOCKED_AD_HOSTS);
+
+function getAdBlockCachePath(): string {
+  return path.join(app.getPath('userData'), AD_BLOCK_CACHE_FILE);
+}
+
+function isValidHostnameToken(token: string): boolean {
+  if (!token.includes('.')) return false;
+  if (!/^[a-z0-9.-]+$/.test(token)) return false;
+  if (token.startsWith('.') || token.endsWith('.')) return false;
+  if (token.includes('..')) return false;
+  return true;
+}
+
+function normalizeBlockedHostToken(token: string): string | null {
+  const normalized = token.trim().toLowerCase().replace(/\.$/, '');
+  if (!normalized) return null;
+  if (normalized === 'localhost' || normalized === 'local') return null;
+  if (!isValidHostnameToken(normalized)) return null;
+  return normalized;
+}
+
+function extractHostFromBlocklistLine(line: string): string | null {
+  const withoutComment = line.split('#', 1)[0]?.trim() ?? '';
+  if (!withoutComment) return null;
+  if (withoutComment.startsWith('!')) return null;
+
+  const parts = withoutComment.split(/\s+/).filter(Boolean);
+  if (!parts.length) return null;
+
+  const first = parts[0].toLowerCase();
+  const hostToken =
+    first === '0.0.0.0' ||
+    first === '127.0.0.1' ||
+    first === '::' ||
+    first === '::1' ||
+    first === '0:0:0:0:0:0:0:1'
+      ? parts[1]
+      : parts[0];
+  if (!hostToken) return null;
+
+  return normalizeBlockedHostToken(hostToken);
+}
+
+function parseHostsFromBlocklist(raw: string): Set<string> {
+  const parsed = new Set<string>();
+
+  for (const line of raw.split(/\r?\n/)) {
+    const host = extractHostFromBlocklistLine(line);
+    if (host) parsed.add(host);
+  }
+
+  return parsed;
+}
+
+async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} while fetching ${url}`);
+    }
+    return await response.text();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function loadCachedAdBlockHosts(): Promise<void> {
+  try {
+    const raw = await fs.readFile(getAdBlockCachePath(), 'utf-8');
+    const cachedHosts = parseHostsFromBlocklist(raw);
+    if (!cachedHosts.size) return;
+
+    blockedAdHosts = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...cachedHosts]);
+  } catch {
+    // No cache yet.
+  }
+}
+
+async function refreshAdBlockHostsFromLists(): Promise<void> {
+  const downloadedHosts = new Set<string>();
+
+  for (const listUrl of AD_BLOCK_LIST_URLS) {
+    try {
+      const listText = await fetchTextWithTimeout(listUrl, AD_BLOCK_FETCH_TIMEOUT_MS);
+      const parsedHosts = parseHostsFromBlocklist(listText);
+      for (const host of parsedHosts) {
+        downloadedHosts.add(host);
+      }
+    } catch {
+      // Ignore single-list failures and continue with remaining lists.
+    }
+  }
+
+  if (!downloadedHosts.size) return;
+
+  blockedAdHosts = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...downloadedHosts]);
+  try {
+    await fs.writeFile(getAdBlockCachePath(), Array.from(downloadedHosts).join('\n'), 'utf-8');
+  } catch {
+    // Cache write failures should not disable blocking.
+  }
+}
+
+function scheduleAdBlockListRefresh(): void {
+  void refreshAdBlockHostsFromLists();
+  const interval = setInterval(() => {
+    void refreshAdBlockHostsFromLists();
+  }, AD_BLOCK_REFRESH_INTERVAL_MS);
+  interval.unref();
+}
+
+function isHostBlocked(hostname: string): boolean {
+  let candidate = hostname;
+  while (candidate) {
+    if (blockedAdHosts.has(candidate)) return true;
+    const nextDot = candidate.indexOf('.');
+    if (nextDot === -1) return false;
+    candidate = candidate.slice(nextDot + 1);
+  }
+  return false;
+}
+
+function shouldBlockRequest(url: string, resourceType: string): boolean {
+  if (!adBlockEnabled) return false;
+  if (resourceType === 'mainFrame') return false;
+
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol !== 'http:' && protocol !== 'https:') return false;
+    return isHostBlocked(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 function getHistoryFilePath() {
   return path.join(app.getPath('userData'), 'history.json');
@@ -185,6 +347,18 @@ function setupWebviewTabOpenHandler() {
   });
 }
 
+function setupAdBlocker() {
+  const ses = session.defaultSession;
+  ses.webRequest.onBeforeRequest((details, callback) => {
+    callback({ cancel: shouldBlockRequest(details.url, details.resourceType) });
+  });
+
+  ipcMain.handle('settings-set-ad-block-enabled', async (_, enabled: unknown) => {
+    adBlockEnabled = enabled !== false;
+    return adBlockEnabled;
+  });
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
@@ -227,8 +401,11 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(async () => {
   await loadHistory().catch(() => undefined);
+  await loadCachedAdBlockHosts().catch(() => undefined);
   setupHistoryHandlers();
   setupWebviewTabOpenHandler();
+  setupAdBlocker();
+  scheduleAdBlockListRefresh();
   const win = createWindow();
   setupDownloadHandlers(win);
 });
