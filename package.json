@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.fatalmistake02.mira",
     "productName": "Mira",
+    "icon": "assets/icon.png",
     "directories": {
       "output": "release"
     },
@@ -26,6 +27,7 @@
     ],
     "win": {
       "artifactName": "${productName}-${version}-win.${ext}",
+      "icon": "assets/app_icons/icon.ico",
       "target": [
         "portable",
         "nsis"
@@ -39,6 +41,7 @@
     },
     "mac": {
       "artifactName": "${productName}-${version}-mac.${ext}",
+      "icon": "assets/app_icons/icon.icns",
       "target": [
         "dmg",
         "zip"
