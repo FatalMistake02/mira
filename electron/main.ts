@@ -235,6 +235,25 @@ async function addHistoryEntry(payload: { url?: string; title?: string }) {
   await persistHistory();
 }
 
+async function deleteHistoryEntry(id: string): Promise<boolean> {
+  const normalizedId = id.trim();
+  if (!normalizedId) return false;
+
+  const next = historyCache.filter((entry) => entry.id !== normalizedId);
+  if (next.length === historyCache.length) return false;
+
+  historyCache = next;
+  await persistHistory();
+  return true;
+}
+
+async function clearHistory(): Promise<boolean> {
+  if (!historyCache.length) return false;
+  historyCache = [];
+  await persistHistory();
+  return true;
+}
+
 function setupHistoryHandlers() {
   ipcMain.handle('history-add', async (_, payload: { url?: string; title?: string }) => {
     await addHistoryEntry(payload ?? {});
@@ -245,6 +264,14 @@ function setupHistoryHandlers() {
     historyCache = pruneHistory(historyCache);
     await persistHistory();
     return historyCache;
+  });
+
+  ipcMain.handle('history-delete', async (_, id: string) => {
+    return deleteHistoryEntry(typeof id === 'string' ? id : '');
+  });
+
+  ipcMain.handle('history-clear', async () => {
+    return clearHistory();
   });
 }
 
