@@ -2,7 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { Tab } from './types';
 import { addHistoryEntry } from '../history/clientHistory';
 import { electron } from '../../electronBridge';
-import { getBrowserSettings } from '../settings/browserSettings';
+import {
+  BROWSER_SETTINGS_CHANGED_EVENT,
+  getBrowserSettings,
+  getTabSleepAfterMs,
+} from '../settings/browserSettings';
 
 const SESSION_STORAGE_KEY = 'mira.session.tabs.v1';
 const IPC_OPEN_TAB_DEDUPE_WINDOW_MS = 500;
@@ -40,12 +44,15 @@ const TabsContext = createContext<TabsContextType>(null!);
 export const useTabs = () => useContext(TabsContext);
 
 function createInitialTab(url: string): Tab {
+  const now = Date.now();
   return {
     id: crypto.randomUUID(),
     url,
     history: [url],
     historyIndex: 0,
     reloadToken: 0,
+    isSleeping: false,
+    lastActiveAt: now,
   };
 }
 
@@ -64,6 +71,11 @@ function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
   const historyIndexRaw = typeof value.historyIndex === 'number' ? value.historyIndex : normalizedHistory.length - 1;
   const historyIndex = Math.min(Math.max(Math.floor(historyIndexRaw), 0), normalizedHistory.length - 1);
   const reloadToken = typeof value.reloadToken === 'number' && Number.isFinite(value.reloadToken) ? value.reloadToken : 0;
+  const isSleeping = typeof value.isSleeping === 'boolean' ? value.isSleeping : false;
+  const lastActiveAt =
+    typeof value.lastActiveAt === 'number' && Number.isFinite(value.lastActiveAt)
+      ? value.lastActiveAt
+      : Date.now();
 
   return {
     id,
@@ -71,6 +83,8 @@ function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
     history: normalizedHistory,
     historyIndex,
     reloadToken,
+    isSleeping,
+    lastActiveAt,
   };
 }
 
@@ -109,12 +123,16 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const initialTabRef = useRef<Tab>(createInitialTab(initialTabUrlRef.current));
   const [tabs, setTabs] = useState<Tab[]>([initialTabRef.current]);
   const [activeId, setActiveId] = useState(initialTabRef.current.id);
+  const [tabSleepAfterMs, setTabSleepAfterMs] = useState(() =>
+    getTabSleepAfterMs(getBrowserSettings()),
+  );
   const [restorePromptOpen, setRestorePromptOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState<SessionSnapshot | null>(null);
 
   const webviewMap = useRef<Record<string, WebviewElement>>({});
   const hydratedRef = useRef(false);
   const recentIpcTabOpenRef = useRef<{ url: string; openedAt: number } | null>(null);
+  const tabSleepTimerRef = useRef<number | null>(null);
 
   const persistSession = (nextTabs: Tab[], nextActiveId: string) => {
     try {
@@ -128,6 +146,16 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       // Ignore storage failures (quota/private mode).
     }
   };
+
+  useEffect(() => {
+    const syncTabSleepTimeout = () => {
+      setTabSleepAfterMs(getTabSleepAfterMs(getBrowserSettings()));
+    };
+
+    syncTabSleepTimeout();
+    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncTabSleepTimeout);
+    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncTabSleepTimeout);
+  }, []);
 
   useEffect(() => {
     const currentDefaultTabUrl = getBrowserSettings().newTabPage;
@@ -145,11 +173,15 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       return;
     }
 
-    setTabs(pendingSession.tabs);
+    const now = Date.now();
+    const restoredTabs = pendingSession.tabs.map((tab) =>
+      tab.id === pendingSession.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+    );
+    setTabs(restoredTabs);
     setActiveId(pendingSession.activeId);
     setRestorePromptOpen(false);
     setPendingSession(null);
-    persistSession(pendingSession.tabs, pendingSession.activeId);
+    persistSession(restoredTabs, pendingSession.activeId);
   };
 
   const discardPreviousSession = () => {
@@ -170,6 +202,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const newTab = useCallback((url?: string) => {
     const defaultNewTabUrl = getBrowserSettings().newTabPage;
     const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+    const now = Date.now();
     const id = crypto.randomUUID();
     const newEntry: Tab = {
       id,
@@ -177,18 +210,57 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       history: [targetUrl],
       historyIndex: 0,
       reloadToken: 0,
+      isSleeping: false,
+      lastActiveAt: now,
     };
-    setTabs((t) => [...t, newEntry]);
+    setTabs((t) =>
+      t
+        .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
+        .concat(newEntry),
+    );
     setActiveId(id);
-  }, []);
+  }, [activeId]);
 
   const closeTab = (id: string) => {
     setTabs((t) => {
       const next = t.filter((tab) => tab.id !== id);
-      if (id === activeId && next.length) setActiveId(next[0].id);
-      return next;
+      if (id !== activeId || !next.length) return next;
+
+      const nextActiveId = next[0].id;
+      const now = Date.now();
+      setActiveId(nextActiveId);
+      return next.map((tab) =>
+        tab.id === nextActiveId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+      );
     });
   };
+
+  const setActive = useCallback(
+    (id: string) => {
+      const now = Date.now();
+      setTabs((currentTabs) => {
+        let changed = false;
+        const nextTabs = currentTabs.map((tab) => {
+          if (tab.id === activeId || tab.id === id) {
+            const nextLastActiveAt = now;
+            const nextIsSleeping = tab.id === id ? false : tab.isSleeping;
+            if (tab.lastActiveAt !== nextLastActiveAt || tab.isSleeping !== nextIsSleeping) {
+              changed = true;
+              return {
+                ...tab,
+                lastActiveAt: nextLastActiveAt,
+                isSleeping: nextIsSleeping,
+              };
+            }
+          }
+          return tab;
+        });
+        return changed ? nextTabs : currentTabs;
+      });
+      setActiveId(id);
+    },
+    [activeId],
+  );
 
   const navigate = (url: string) => {
     const normalized = url.trim();
@@ -271,6 +343,66 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
+    const sleepInactiveTabs = () => {
+      const now = Date.now();
+      setTabs((currentTabs) => {
+        let changed = false;
+        const nextTabs = currentTabs.map((tab) => {
+          if (tab.id === activeId) {
+            if (tab.isSleeping) {
+              changed = true;
+              return { ...tab, isSleeping: false, lastActiveAt: now };
+            }
+            return tab;
+          }
+
+          const shouldSleep = now - tab.lastActiveAt >= tabSleepAfterMs;
+          if (shouldSleep && !tab.isSleeping) {
+            changed = true;
+            return { ...tab, isSleeping: true };
+          }
+
+          return tab;
+        });
+        return changed ? nextTabs : currentTabs;
+      });
+    };
+
+    const scheduleNextSleepCheck = () => {
+      if (tabSleepTimerRef.current !== null) {
+        window.clearTimeout(tabSleepTimerRef.current);
+      }
+
+      const now = Date.now();
+      let nextCheckInMs: number | null = null;
+
+      for (const tab of tabs) {
+        if (tab.id === activeId || tab.isSleeping) continue;
+        const remainingMs = Math.max(tab.lastActiveAt + tabSleepAfterMs - now, 0);
+        if (nextCheckInMs === null || remainingMs < nextCheckInMs) {
+          nextCheckInMs = remainingMs;
+        }
+      }
+
+      if (nextCheckInMs === null) return;
+
+      tabSleepTimerRef.current = window.setTimeout(() => {
+        sleepInactiveTabs();
+      }, nextCheckInMs);
+    };
+
+    sleepInactiveTabs();
+    scheduleNextSleepCheck();
+
+    return () => {
+      if (tabSleepTimerRef.current !== null) {
+        window.clearTimeout(tabSleepTimerRef.current);
+        tabSleepTimerRef.current = null;
+      }
+    };
+  }, [tabs, activeId, tabSleepAfterMs]);
+
+  useEffect(() => {
     if (!hydratedRef.current) return;
     if (restorePromptOpen) return;
     persistSession(tabs, activeId);
@@ -314,7 +446,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         reload,
         findInPage,
         registerWebview,
-        setActive: setActiveId,
+        setActive,
         restorePromptOpen,
         restoreTabCount: pendingSession?.tabs.length ?? 0,
         restorePreviousSession,

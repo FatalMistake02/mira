@@ -18,19 +18,24 @@ export default function TabBar() {
             gap: 6,
           }}
         >
-          Tab
+          <span>Tab</span>
+          {tab.isSleeping ? (
+            <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
+              zz
+            </span>
+          ) : null}
           <span
             onClick={(e) => {
               e.stopPropagation();
               closeTab(tab.id);
             }}
           >
-            ✕
+            x
           </span>
         </div>
       ))}
 
-      <button onClick={() => newTab()}>＋</button>
+      <button onClick={() => newTab()}>+</button>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTabs } from './TabsProvider';
+import { BROWSER_SETTINGS_CHANGED_EVENT, getBrowserSettings } from '../settings/browserSettings';
 
 interface WebviewNavigationEvent extends Event {
   url: string;
@@ -47,11 +48,25 @@ function renderInternal(url: string, reloadToken: number) {
 
 export default function TabView() {
   const { tabs, activeId, navigate, registerWebview } = useTabs();
+  const [tabSleepMode, setTabSleepMode] = useState(() => getBrowserSettings().tabSleepMode);
+
+  useEffect(() => {
+    const syncTabSleepMode = () => {
+      setTabSleepMode(getBrowserSettings().tabSleepMode);
+    };
+
+    syncTabSleepMode();
+    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncTabSleepMode);
+    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncTabSleepMode);
+  }, []);
 
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
       {tabs.map((tab) => {
         const isVisible = tab.id === activeId;
+        if (tabSleepMode === 'discard' && tab.isSleeping && !isVisible) {
+          return null;
+        }
 
         return (
           <div

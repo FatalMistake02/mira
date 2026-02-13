@@ -1,17 +1,32 @@
 import { DEFAULT_THEME_ID } from '../themes/themeLoader';
 
+export type TabSleepUnit = 'seconds' | 'minutes' | 'hours';
+export type TabSleepMode = 'freeze' | 'discard';
+
 export type BrowserSettings = {
   newTabPage: string;
   themeId: string;
+  tabSleepValue: number;
+  tabSleepUnit: TabSleepUnit;
+  tabSleepMode: TabSleepMode;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   newTabPage: 'mira://NewTab',
   themeId: DEFAULT_THEME_ID,
+  tabSleepValue: 10,
+  tabSleepUnit: 'minutes',
+  tabSleepMode: 'freeze',
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
 export const BROWSER_SETTINGS_CHANGED_EVENT = 'mira:settings-changed';
+
+const TAB_SLEEP_UNIT_TO_MS: Record<TabSleepUnit, number> = {
+  seconds: 1000,
+  minutes: 60 * 1000,
+  hours: 60 * 60 * 1000,
+};
 
 function normalizeNewTabPage(value: unknown): string {
   if (typeof value !== 'string') return DEFAULT_BROWSER_SETTINGS.newTabPage;
@@ -31,6 +46,31 @@ function normalizeThemeId(value: unknown): string {
   return normalized;
 }
 
+function normalizeTabSleepValue(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_BROWSER_SETTINGS.tabSleepValue;
+  }
+
+  const normalized = Math.max(1, Math.floor(value));
+  return normalized;
+}
+
+function normalizeTabSleepUnit(value: unknown): TabSleepUnit {
+  if (value === 'seconds' || value === 'minutes' || value === 'hours') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_SETTINGS.tabSleepUnit;
+}
+
+function normalizeTabSleepMode(value: unknown): TabSleepMode {
+  if (value === 'freeze' || value === 'discard') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_SETTINGS.tabSleepMode;
+}
+
 export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   if (typeof value !== 'object' || value === null) {
     return DEFAULT_BROWSER_SETTINGS;
@@ -40,7 +80,14 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   return {
     newTabPage: normalizeNewTabPage(candidate.newTabPage),
     themeId: normalizeThemeId(candidate.themeId),
+    tabSleepValue: normalizeTabSleepValue(candidate.tabSleepValue),
+    tabSleepUnit: normalizeTabSleepUnit(candidate.tabSleepUnit),
+    tabSleepMode: normalizeTabSleepMode(candidate.tabSleepMode),
   };
+}
+
+export function getTabSleepAfterMs(settings: BrowserSettings): number {
+  return settings.tabSleepValue * TAB_SLEEP_UNIT_TO_MS[settings.tabSleepUnit];
 }
 
 export function getBrowserSettings(): BrowserSettings {

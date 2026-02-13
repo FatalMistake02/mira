@@ -31,9 +31,9 @@
 - [x] Themes system
 - [x] Theme JSON files
 - [x] Error pages
-- [ ] Tab sleeping (save memory)
+- [x] Tab sleeping
 - [ ] Performance improvements
-- [ ] Icons / branding
+- [x] Icons
 
 ## v0.7.0
 - [ ] Find in page (Ctrl+F)

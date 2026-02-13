@@ -4,4 +4,6 @@ export type Tab = {
   history: string[];
   historyIndex: number;
   reloadToken: number;
+  isSleeping: boolean;
+  lastActiveAt: number;
 };

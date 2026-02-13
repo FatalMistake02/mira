@@ -3,6 +3,7 @@ import {
   DEFAULT_BROWSER_SETTINGS,
   getBrowserSettings,
   saveBrowserSettings,
+  type TabSleepMode,
 } from '../features/settings/browserSettings';
 import { applyTheme } from '../features/themes/applyTheme';
 import {
@@ -20,6 +21,9 @@ export default function Settings() {
   const initialSettings = getBrowserSettings();
   const [newTabPage, setNewTabPage] = useState(() => initialSettings.newTabPage);
   const [themeId, setThemeId] = useState(() => initialSettings.themeId);
+  const [tabSleepValue, setTabSleepValue] = useState(() => initialSettings.tabSleepValue);
+  const [tabSleepUnit, setTabSleepUnit] = useState(() => initialSettings.tabSleepUnit);
+  const [tabSleepMode, setTabSleepMode] = useState(() => initialSettings.tabSleepMode);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [importMessage, setImportMessage] = useState('');
@@ -31,6 +35,9 @@ export default function Settings() {
   const handleReset = () => {
     setNewTabPage(DEFAULT_BROWSER_SETTINGS.newTabPage);
     setThemeId(DEFAULT_BROWSER_SETTINGS.themeId);
+    setTabSleepValue(DEFAULT_BROWSER_SETTINGS.tabSleepValue);
+    setTabSleepUnit(DEFAULT_BROWSER_SETTINGS.tabSleepUnit);
+    setTabSleepMode(DEFAULT_BROWSER_SETTINGS.tabSleepMode);
     applyTheme(getThemeById(DEFAULT_BROWSER_SETTINGS.themeId));
     setThemes(getAllThemes());
     setImportMessage('');
@@ -89,7 +96,7 @@ export default function Settings() {
 
     setSaveStatus('saving');
     const timer = setTimeout(() => {
-      saveBrowserSettings({ newTabPage, themeId });
+      saveBrowserSettings({ newTabPage, themeId, tabSleepValue, tabSleepUnit, tabSleepMode });
       setSaveStatus('saved');
 
       if (clearSavedTimerRef.current) {
@@ -101,7 +108,7 @@ export default function Settings() {
     }, AUTO_SAVE_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [newTabPage, themeId]);
+  }, [newTabPage, themeId, tabSleepValue, tabSleepUnit, tabSleepMode]);
 
   useEffect(() => {
     return () => {
@@ -138,8 +145,79 @@ export default function Settings() {
             color: '#fff',
           }}
         />
-        <div style={{ color: '#aaa', fontSize: 13 }}>
-          Used when creating a new tab. Default: {DEFAULT_BROWSER_SETTINGS.newTabPage}
+      </div>
+
+      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="tab-sleep-value" style={{ fontWeight: 600 }}>
+          Tab Sleep Timeout
+        </label>
+        <div style={{ display: 'flex', gap: 8, maxWidth: 360 }}>
+          <input
+            id="tab-sleep-value"
+            type="number"
+            min={1}
+            step={1}
+            value={tabSleepValue}
+            onChange={(e) => {
+              const nextValue = e.currentTarget.valueAsNumber;
+              if (!Number.isFinite(nextValue)) return;
+              setTabSleepValue(Math.max(1, Math.floor(nextValue)));
+              setSaveStatus('saving');
+            }}
+            style={{
+              width: 120,
+              padding: '8px 10px',
+              borderRadius: 6,
+              border: '1px solid #555',
+              background: '#1f1f1f',
+              color: '#fff',
+            }}
+          />
+          <select
+            id="tab-sleep-unit"
+            value={tabSleepUnit}
+            onChange={(e) => {
+              const nextUnit = e.currentTarget.value;
+              if (nextUnit === 'seconds' || nextUnit === 'minutes' || nextUnit === 'hours') {
+                setTabSleepUnit(nextUnit);
+              }
+              setSaveStatus('saving');
+            }}
+            style={{
+              padding: '8px 10px',
+              borderRadius: 6,
+              border: '1px solid #555',
+              background: '#1f1f1f',
+              color: '#fff',
+            }}
+          >
+            <option value="seconds">Seconds</option>
+            <option value="minutes">Minutes</option>
+            <option value="hours">Hours</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 8, maxWidth: 360 }}>
+          <select
+            id="tab-sleep-mode"
+            value={tabSleepMode}
+            onChange={(e) => {
+              const nextMode = e.currentTarget.value;
+              if (nextMode === 'freeze' || nextMode === 'discard') {
+                setTabSleepMode(nextMode as TabSleepMode);
+              }
+              setSaveStatus('saving');
+            }}
+            style={{
+              padding: '8px 10px',
+              borderRadius: 6,
+              border: '1px solid #555',
+              background: '#1f1f1f',
+              color: '#fff',
+            }}
+          >
+            <option value="freeze">Freeze (keep page state)</option>
+            <option value="discard">Discard (save more memory)</option>
+          </select>
         </div>
       </div>
 
