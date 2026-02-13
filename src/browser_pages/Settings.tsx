@@ -128,6 +128,10 @@ export default function Settings() {
   }, []);
 
   const selectedTheme = themes.find((entry) => entry.id === themeId) ?? themes[0] ?? null;
+  const formatThemeLabel = (entry: ThemeEntry) => {
+    const modeLabel = entry.theme.mode === 'light' ? 'Light' : 'Dark';
+    return `${entry.theme.name} - ${entry.theme.author} (${modeLabel})`;
+  };
 
   return (
     <div
@@ -264,7 +268,7 @@ export default function Settings() {
             }}
           >
             {selectedTheme
-              ? `${selectedTheme.theme.name} - ${selectedTheme.theme.author}`
+              ? formatThemeLabel(selectedTheme)
               : 'No themes available'}
           </button>
 
@@ -301,7 +305,7 @@ export default function Settings() {
                       padding: '6px 8px',
                     }}
                   >
-                    {entry.theme.name} - {entry.theme.author}
+                    {formatThemeLabel(entry)}
                   </button>
 
                   {entry.source === 'custom' && (

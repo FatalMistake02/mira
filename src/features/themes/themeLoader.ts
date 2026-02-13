@@ -1,9 +1,37 @@
-import type { Theme } from '../../themes/types';
+import type { Theme, ThemeMode } from '../../themes/types';
 
 const modules = import.meta.glob('../../themes/*.json', { eager: true });
 
 const CUSTOM_THEME_STORAGE_KEY = 'mira.themes.custom.v1';
 export const DEFAULT_THEME_ID = 'default_dark';
+const NON_SPECIFIC_BASE_COLOR_KEYS = [
+  'buttonBg',
+  'buttonBgHover',
+  'buttonBgActive',
+  'buttonText',
+  'buttonTextHover',
+  'buttonTextActive',
+  'buttonBorder',
+  'buttonBorderHover',
+  'buttonBorderActive',
+  'fieldBg',
+  'fieldBgHover',
+  'fieldBgActive',
+  'fieldText',
+  'fieldTextPlaceholder',
+  'fieldBorder',
+  'fieldBorderHover',
+  'fieldBorderActive',
+  'surfaceBg',
+  'surfaceBgHover',
+  'surfaceBgActive',
+  'surfaceText',
+  'surfaceTextHover',
+  'surfaceTextActive',
+  'surfaceBorder',
+  'surfaceBorderHover',
+  'surfaceBorderActive',
+] as const;
 
 type StoredTheme = { id: string; theme: Theme };
 
@@ -15,6 +43,40 @@ export type ThemeEntry = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function parseHexColor(value: string): { r: number; g: number; b: number } | null {
+  const raw = value.trim();
+  if (!raw.startsWith('#')) return null;
+
+  const hex = raw.slice(1);
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+    return { r, g, b };
+  }
+
+  if (hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+    return { r, g, b };
+  }
+
+  return null;
+}
+
+function inferThemeMode(colors: Record<string, string>): 'light' | 'dark' {
+  const sample = colors.bg || colors.surfaceBg || colors.tabBg || '';
+  const rgb = parseHexColor(sample);
+  if (!rgb) return 'dark';
+
+  // Relative luminance approximation (sRGB)
+  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+  return luminance >= 0.5 ? 'light' : 'dark';
 }
 
 function normalizeTheme(value: unknown): Theme | null {
@@ -33,10 +95,36 @@ function normalizeTheme(value: unknown): Theme | null {
   });
 
   if (!Object.keys(colors).length) return null;
+  const modeRaw = typeof value.mode === 'string' ? value.mode.trim().toLowerCase() : '';
+  const mode = modeRaw === 'light' || modeRaw === 'dark' ? modeRaw : inferThemeMode(colors);
 
   return {
     name,
     author,
+    mode,
+    colors,
+  };
+}
+
+function applyModeBaseColorFallback(
+  theme: Theme,
+  baseColorsByMode: Record<ThemeMode, Record<string, string>>,
+): Theme {
+  const base = baseColorsByMode[theme.mode] ?? {};
+  const colors: Record<string, string> = { ...theme.colors };
+
+  for (const key of NON_SPECIFIC_BASE_COLOR_KEYS) {
+    const currentValue = colors[key];
+    if (typeof currentValue === 'string' && currentValue.trim()) continue;
+
+    const fallbackValue = base[key];
+    if (typeof fallbackValue === 'string' && fallbackValue.trim()) {
+      colors[key] = fallbackValue;
+    }
+  }
+
+  return {
+    ...theme,
     colors,
   };
 }
@@ -57,12 +145,26 @@ function pathToThemeId(path: string): string | null {
   return match[1].trim();
 }
 
-const bundledThemes: ThemeEntry[] = Object.entries(modules).flatMap(([path, moduleValue]) => {
+const bundledThemesRaw: ThemeEntry[] = Object.entries(modules).flatMap(([path, moduleValue]) => {
   const id = pathToThemeId(path);
   const theme = moduleToTheme(moduleValue);
   if (!id || !theme) return [];
   return [{ id, theme, source: 'bundled' as const }];
 });
+
+const defaultDarkBaseColors =
+  bundledThemesRaw.find((entry) => entry.id === 'default_dark')?.theme.colors ?? {};
+const defaultLightBaseColors =
+  bundledThemesRaw.find((entry) => entry.id === 'default_light')?.theme.colors ?? {};
+const baseColorsByMode: Record<ThemeMode, Record<string, string>> = {
+  dark: Object.keys(defaultDarkBaseColors).length ? defaultDarkBaseColors : defaultLightBaseColors,
+  light: Object.keys(defaultLightBaseColors).length ? defaultLightBaseColors : defaultDarkBaseColors,
+};
+
+const bundledThemes: ThemeEntry[] = bundledThemesRaw.map((entry) => ({
+  ...entry,
+  theme: applyModeBaseColorFallback(entry.theme, baseColorsByMode),
+}));
 
 function readCustomThemes(): StoredTheme[] {
   try {
@@ -78,7 +180,7 @@ function readCustomThemes(): StoredTheme[] {
         const id = typeof entry.id === 'string' ? entry.id.trim() : '';
         const theme = normalizeTheme(entry.theme);
         if (!id || !theme) return null;
-        return { id, theme };
+        return { id, theme: applyModeBaseColorFallback(theme, baseColorsByMode) };
       })
       .filter((entry): entry is StoredTheme => entry !== null);
   } catch {
@@ -147,18 +249,19 @@ export function importThemeFromJson(jsonText: string): ThemeEntry {
   if (!theme) {
     throw new Error('Theme JSON must include name, author, and a colors object with string values.');
   }
+  const themeWithFallback = applyModeBaseColorFallback(theme, baseColorsByMode);
 
   const customThemes = readCustomThemes();
   const existingIds = new Set(getAllThemes().map((entry) => entry.id));
-  const id = createCustomThemeId(theme, existingIds);
-  const storedTheme: StoredTheme = { id, theme };
+  const id = createCustomThemeId(themeWithFallback, existingIds);
+  const storedTheme: StoredTheme = { id, theme: themeWithFallback };
 
   customThemes.push(storedTheme);
   writeCustomThemes(customThemes);
 
   return {
     id,
-    theme,
+    theme: themeWithFallback,
     source: 'custom',
   };
 }

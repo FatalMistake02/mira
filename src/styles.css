@@ -53,6 +53,32 @@ body {
   --urlBarBorder: #2e3b4e;
   --urlBarBorderHover: #43536a;
   --urlBarBorderActive: #5a6f8d;
+  --buttonBg: var(--navButtonBg);
+  --buttonBgHover: var(--navButtonBgHover);
+  --buttonBgActive: var(--navButtonBgActive);
+  --buttonText: var(--navButtonText);
+  --buttonTextHover: var(--navButtonTextHover);
+  --buttonTextActive: var(--navButtonTextActive);
+  --buttonBorder: var(--navButtonBorder);
+  --buttonBorderHover: var(--navButtonBorderHover);
+  --buttonBorderActive: var(--navButtonBorderActive);
+  --fieldBg: var(--urlBarBg);
+  --fieldBgHover: var(--urlBarBgHover);
+  --fieldBgActive: var(--urlBarBgActive);
+  --fieldText: var(--urlBarText);
+  --fieldTextPlaceholder: var(--urlBarTextPlaceholder);
+  --fieldBorder: var(--urlBarBorder);
+  --fieldBorderHover: var(--urlBarBorderHover);
+  --fieldBorderActive: var(--urlBarBorderActive);
+  --surfaceBg: var(--tabBg);
+  --surfaceBgHover: var(--tabBgHover);
+  --surfaceBgActive: var(--tabBgActive);
+  --surfaceText: var(--tabText);
+  --surfaceTextHover: var(--tabTextHover);
+  --surfaceTextActive: var(--tabTextActive);
+  --surfaceBorder: var(--tabBorder);
+  --surfaceBorderHover: var(--tabBorderHover);
+  --surfaceBorderActive: var(--tabBorderActive);
 }
 
 body {
@@ -83,30 +109,30 @@ body {
 }
 
 .theme-panel {
-  background: var(--tabBg);
-  border: 1px solid var(--tabBorder);
-  color: var(--text1);
+  background: var(--surfaceBg, var(--tabBg));
+  border: 1px solid var(--surfaceBorder, var(--tabBorder));
+  color: var(--surfaceText, var(--text1));
 }
 
 .theme-input {
-  background: var(--urlBarBg);
-  border: 1px solid var(--urlBarBorder);
-  color: var(--urlBarText);
+  background: var(--urlBarBg, var(--fieldBg));
+  border: 1px solid var(--urlBarBorder, var(--fieldBorder));
+  color: var(--urlBarText, var(--fieldText));
   border-radius: 6px;
 }
 
 .theme-input::placeholder {
-  color: var(--urlBarTextPlaceholder);
+  color: var(--urlBarTextPlaceholder, var(--fieldTextPlaceholder));
 }
 
 .theme-input:hover {
-  background: var(--urlBarBgHover);
-  border-color: var(--urlBarBorderHover);
+  background: var(--urlBarBgHover, var(--fieldBgHover));
+  border-color: var(--urlBarBorderHover, var(--fieldBorderHover));
 }
 
 .theme-input:focus {
-  background: var(--urlBarBgActive);
-  border-color: var(--urlBarBorderActive);
+  background: var(--urlBarBgActive, var(--fieldBgActive));
+  border-color: var(--urlBarBorderActive, var(--fieldBorderActive));
   outline: none;
 }
 
@@ -121,79 +147,79 @@ body {
 }
 
 .theme-btn-nav {
-  background: var(--navButtonBg);
-  border: 1px solid var(--navButtonBorder);
-  color: var(--navButtonText);
+  background: var(--navButtonBg, var(--buttonBg));
+  border: 1px solid var(--navButtonBorder, var(--buttonBorder));
+  color: var(--navButtonText, var(--buttonText));
 }
 
 .theme-btn-nav:hover:not(:disabled) {
-  background: var(--navButtonBgHover);
-  border-color: var(--navButtonBorderHover);
-  color: var(--navButtonTextHover);
+  background: var(--navButtonBgHover, var(--buttonBgHover));
+  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
+  color: var(--navButtonTextHover, var(--buttonTextHover));
 }
 
 .theme-btn-nav:active:not(:disabled) {
-  background: var(--navButtonBgActive);
-  border-color: var(--navButtonBorderActive);
-  color: var(--navButtonTextActive);
+  background: var(--navButtonBgActive, var(--buttonBgActive));
+  border-color: var(--navButtonBorderActive, var(--buttonBorderActive));
+  color: var(--navButtonTextActive, var(--buttonTextActive));
 }
 
 .theme-btn-go {
-  background: var(--goButtonBg);
-  border: 1px solid var(--goButtonBorder);
-  color: var(--goButtonText);
+  background: var(--goButtonBg, var(--buttonBg));
+  border: 1px solid var(--goButtonBorder, var(--buttonBorder));
+  color: var(--goButtonText, var(--buttonText));
 }
 
 .theme-btn-go:hover:not(:disabled) {
-  background: var(--goButtonBgHover);
-  border-color: var(--goButtonBorderHover);
-  color: var(--goButtonTextHover);
+  background: var(--goButtonBgHover, var(--buttonBgHover));
+  border-color: var(--goButtonBorderHover, var(--buttonBorderHover));
+  color: var(--goButtonTextHover, var(--buttonTextHover));
 }
 
 .theme-btn-go:active:not(:disabled) {
-  background: var(--goButtonBgActive);
-  border-color: var(--goButtonBorderActive);
-  color: var(--goButtonTextActive);
+  background: var(--goButtonBgActive, var(--buttonBgActive));
+  border-color: var(--goButtonBorderActive, var(--buttonBorderActive));
+  color: var(--goButtonTextActive, var(--buttonTextActive));
 }
 
 .theme-btn-download {
-  background: var(--downloadButtonBg);
-  border: 1px solid var(--downloadButtonBorder);
-  color: var(--downloadButtonText);
+  background: var(--downloadButtonBg, var(--buttonBg));
+  border: 1px solid var(--downloadButtonBorder, var(--buttonBorder));
+  color: var(--downloadButtonText, var(--buttonText));
 }
 
 .theme-btn-download:hover:not(:disabled) {
-  background: var(--downloadButtonBgHover);
-  border-color: var(--downloadButtonBorderHover);
-  color: var(--downloadButtonTextHover);
+  background: var(--downloadButtonBgHover, var(--buttonBgHover));
+  border-color: var(--downloadButtonBorderHover, var(--buttonBorderHover));
+  color: var(--downloadButtonTextHover, var(--buttonTextHover));
 }
 
 .theme-btn-download:active:not(:disabled) {
-  background: var(--downloadButtonBgActive);
-  border-color: var(--downloadButtonBorderActive);
-  color: var(--downloadButtonTextActive);
+  background: var(--downloadButtonBgActive, var(--buttonBgActive));
+  border-color: var(--downloadButtonBorderActive, var(--buttonBorderActive));
+  color: var(--downloadButtonTextActive, var(--buttonTextActive));
 }
 
 .theme-tab {
-  background: var(--tabBg);
-  border: 1px solid var(--tabBorder);
-  color: var(--tabText);
+  background: var(--tabBg, var(--surfaceBg));
+  border: 1px solid var(--tabBorder, var(--surfaceBorder));
+  color: var(--tabText, var(--surfaceText));
 }
 
 .theme-tab:hover {
-  background: var(--tabBgHover);
-  border-color: var(--tabBorderHover);
-  color: var(--tabTextHover);
+  background: var(--tabBgHover, var(--surfaceBgHover));
+  border-color: var(--tabBorderHover, var(--surfaceBorderHover));
+  color: var(--tabTextHover, var(--surfaceTextHover));
 }
 
 .theme-tab:active {
-  background: var(--tabBgActive);
-  border-color: var(--tabBorderActive);
-  color: var(--tabTextActive);
+  background: var(--tabBgActive, var(--surfaceBgActive));
+  border-color: var(--tabBorderActive, var(--surfaceBorderActive));
+  color: var(--tabTextActive, var(--surfaceTextActive));
 }
 
 .theme-tab-selected {
-  background: var(--tabBgHover);
-  border-color: var(--tabBorderHover);
-  color: var(--tabTextHover);
+  background: var(--tabBgHover, var(--surfaceBgHover));
+  border-color: var(--tabBorderHover, var(--surfaceBorderHover));
+  color: var(--tabTextHover, var(--surfaceTextHover));
 }

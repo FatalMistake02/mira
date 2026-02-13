@@ -1,6 +1,7 @@
 {
   "name": "Default Dark",
   "author": "Mira",
+  "mode": "dark",
   "colors": {
     "bg": "#12161d",
     "tabBg": "#1a2029",
@@ -49,6 +50,32 @@
     "urlBarTextPlaceholder": "#7f8ba0",
     "urlBarBorder": "#2e3b4e",
     "urlBarBorderHover": "#43536a",
-    "urlBarBorderActive": "#5a6f8d"
+    "urlBarBorderActive": "#5a6f8d",
+    "buttonBg": "var(--navButtonBg)",
+    "buttonBgHover": "var(--navButtonBgHover)",
+    "buttonBgActive": "var(--navButtonBgActive)",
+    "buttonText": "var(--navButtonText)",
+    "buttonTextHover": "var(--navButtonTextHover)",
+    "buttonTextActive": "var(--navButtonTextActive)",
+    "buttonBorder": "var(--navButtonBorder)",
+    "buttonBorderHover": "var(--navButtonBorderHover)",
+    "buttonBorderActive": "var(--navButtonBorderActive)",
+    "fieldBg": "var(--urlBarBg)",
+    "fieldBgHover": "var(--urlBarBgHover)",
+    "fieldBgActive": "var(--urlBarBgActive)",
+    "fieldText": "var(--urlBarText)",
+    "fieldTextPlaceholder": "var(--urlBarTextPlaceholder)",
+    "fieldBorder": "var(--urlBarBorder)",
+    "fieldBorderHover": "var(--urlBarBorderHover)",
+    "fieldBorderActive": "var(--urlBarBorderActive)",
+    "surfaceBg": "var(--tabBg)",
+    "surfaceBgHover": "var(--tabBgHover)",
+    "surfaceBgActive": "var(--tabBgActive)",
+    "surfaceText": "var(--tabText)",
+    "surfaceTextHover": "var(--tabTextHover)",
+    "surfaceTextActive": "var(--tabTextActive)",
+    "surfaceBorder": "var(--tabBorder)",
+    "surfaceBorderHover": "var(--tabBorderHover)",
+    "surfaceBorderActive": "var(--tabBorderActive)"
   }
 }
