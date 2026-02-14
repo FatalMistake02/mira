@@ -444,6 +444,16 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('window-new-with-url', (event, url: unknown) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    const normalizedUrl = typeof url === 'string' ? url.trim() : '';
+    createWindow(
+      sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow : undefined,
+      normalizedUrl || undefined,
+    );
+    return true;
+  });
+
   ipcMain.handle('window-minimize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return false;
@@ -494,6 +504,17 @@ function setupGlobalShortcuts() {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
   });
+}
+
+function setupMacDockMenu() {
+  if (process.platform !== 'darwin') return;
+  const dockMenu = Menu.buildFromTemplate([
+    {
+      label: 'New Window',
+      click: () => createWindow(),
+    },
+  ]);
+  app.dock.setMenu(dockMenu);
 }
 
 function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): BrowserWindow {
@@ -601,6 +622,7 @@ app.whenReady().then(async () => {
   setupAdBlocker();
   setupWindowControlsHandlers();
   setupGlobalShortcuts();
+  setupMacDockMenu();
   scheduleAdBlockListRefresh();
   setupDownloadHandlers();
   createWindow();

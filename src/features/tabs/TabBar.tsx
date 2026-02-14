@@ -1,6 +1,6 @@
+import { useEffect, useState } from 'react';
 import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
-import { electron } from '../../electronBridge';
 
 function getDisplayTitle(url: string, title?: string): string {
   const normalizedTitle = title?.trim();
@@ -35,14 +35,25 @@ function getDisplayFavicon(url: string, favicon?: string): string | undefined {
 }
 
 export default function TabBar() {
-  const { tabs, activeId, setActive, closeTab, newTab } = useTabs();
-  const openNewWindow = () => {
-    if (electron?.ipcRenderer) {
-      electron.ipcRenderer.invoke('window-new').catch(() => undefined);
-      return;
-    }
-    window.open(window.location.href, '_blank', 'noopener,noreferrer');
-  };
+  const { tabs, activeId, setActive, closeTab, moveTabToNewWindow, newTab } = useTabs();
+  const [menuTabId, setMenuTabId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!menuPos) return;
+    const closeMenu = () => {
+      setMenuTabId(null);
+      setMenuPos(null);
+    };
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('contextmenu', closeMenu);
+    window.addEventListener('blur', closeMenu);
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('contextmenu', closeMenu);
+      window.removeEventListener('blur', closeMenu);
+    };
+  }, [menuPos]);
 
   return (
     <div
@@ -66,6 +77,11 @@ export default function TabBar() {
           <div
             key={tab.id}
             onClick={() => setActive(tab.id)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setMenuTabId(tab.id);
+              setMenuPos({ x: event.clientX, y: event.clientY });
+            }}
             className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
             style={{
               padding: '6px 10px',
@@ -145,14 +161,36 @@ export default function TabBar() {
         +
       </button>
 
-      <button
-        onClick={openNewWindow}
-        className="theme-btn theme-btn-nav"
-        title="New Window"
-        style={{ padding: '5px 10px', minWidth: 34, flexShrink: 0 }}
-      >
-        []
-      </button>
+      {menuPos && menuTabId ? (
+        <div
+          style={{
+            position: 'fixed',
+            left: menuPos.x,
+            top: menuPos.y,
+            zIndex: 9999,
+            minWidth: 170,
+            background: 'var(--surfaceBg, var(--tabBg))',
+            border: '1px solid var(--surfaceBorder, var(--tabBorder))',
+            borderRadius: 8,
+            padding: 6,
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.35)',
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            className="theme-btn theme-btn-nav"
+            style={{ width: '100%', textAlign: 'left', padding: '8px 10px', justifyContent: 'flex-start' }}
+            onClick={() => {
+              moveTabToNewWindow(menuTabId);
+              setMenuTabId(null);
+              setMenuPos(null);
+            }}
+          >
+            Move to New Window
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -32,6 +32,7 @@ type TabsContextType = {
   activeId: string;
   newTab: (url?: string) => void;
   closeTab: (id: string) => void;
+  moveTabToNewWindow: (id: string) => void;
   navigate: (url: string, tabId?: string) => void;
   goBack: () => void;
   goForward: () => void;
@@ -261,6 +262,39 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       );
     });
   };
+
+  const moveTabToNewWindow = useCallback(
+    (id: string) => {
+      const tabToMove = tabs.find((tab) => tab.id === id);
+      if (!tabToMove) return;
+
+      const url = tabToMove.url.trim();
+      if (electron?.ipcRenderer) {
+        electron.ipcRenderer.invoke('window-new-with-url', url).catch(() => undefined);
+      } else {
+        window.open(url || window.location.href, '_blank', 'noopener,noreferrer');
+      }
+
+      setTabs((currentTabs) => {
+        const nextTabs = currentTabs.filter((tab) => tab.id !== id);
+        if (!nextTabs.length) {
+          const replacement = createInitialTab(getBrowserSettings().newTabPage);
+          setActiveId(replacement.id);
+          return [replacement];
+        }
+
+        if (id !== activeId) return nextTabs;
+
+        const now = Date.now();
+        const nextActiveId = nextTabs[0].id;
+        setActiveId(nextActiveId);
+        return nextTabs.map((tab) =>
+          tab.id === nextActiveId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+        );
+      });
+    },
+    [tabs, activeId],
+  );
 
   const setActive = useCallback(
     (id: string) => {
@@ -545,6 +579,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         activeId,
         newTab,
         closeTab,
+        moveTabToNewWindow,
         navigate,
         goBack,
         goForward,
