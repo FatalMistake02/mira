@@ -90,11 +90,20 @@ function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
       ? value.favicon.trim()
       : undefined;
   const historyRaw = Array.isArray(value.history) ? value.history : [url];
-  const history = historyRaw.filter((entry): entry is string => typeof entry === 'string' && !!entry.trim());
+  const history = historyRaw.filter(
+    (entry): entry is string => typeof entry === 'string' && !!entry.trim(),
+  );
   const normalizedHistory = history.length ? history : [url];
-  const historyIndexRaw = typeof value.historyIndex === 'number' ? value.historyIndex : normalizedHistory.length - 1;
-  const historyIndex = Math.min(Math.max(Math.floor(historyIndexRaw), 0), normalizedHistory.length - 1);
-  const reloadToken = typeof value.reloadToken === 'number' && Number.isFinite(value.reloadToken) ? value.reloadToken : 0;
+  const historyIndexRaw =
+    typeof value.historyIndex === 'number' ? value.historyIndex : normalizedHistory.length - 1;
+  const historyIndex = Math.min(
+    Math.max(Math.floor(historyIndexRaw), 0),
+    normalizedHistory.length - 1,
+  );
+  const reloadToken =
+    typeof value.reloadToken === 'number' && Number.isFinite(value.reloadToken)
+      ? value.reloadToken
+      : 0;
   const isSleeping = typeof value.isSleeping === 'boolean' ? value.isSleeping : false;
   const lastActiveAt =
     typeof value.lastActiveAt === 'number' && Number.isFinite(value.lastActiveAt)
@@ -435,9 +444,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
 
     setTabs((t) =>
-      t.map((tab) =>
-        tab.id === activeId ? { ...tab, reloadToken: tab.reloadToken + 1 } : tab,
-      ),
+      t.map((tab) => (tab.id === activeId ? { ...tab, reloadToken: tab.reloadToken + 1 } : tab)),
     );
   };
 
@@ -544,9 +551,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       const now = Date.now();
       const last = recentIpcTabOpenRef.current;
       const isDuplicate =
-        !!last &&
-        last.url === normalized &&
-        now - last.openedAt < IPC_OPEN_TAB_DEDUPE_WINDOW_MS;
+        !!last && last.url === normalized && now - last.openedAt < IPC_OPEN_TAB_DEDUPE_WINDOW_MS;
       if (isDuplicate) return;
 
       recentIpcTabOpenRef.current = { url: normalized, openedAt: now };

@@ -132,4 +132,3 @@ export function saveBrowserSettings(next: Partial<BrowserSettings>): BrowserSett
 
   return normalized;
 }
-

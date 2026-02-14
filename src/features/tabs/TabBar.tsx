@@ -153,6 +153,55 @@ export default function TabBar() {
         );
       })}
 
+          >
+            {displayFavicon ? (
+              <img
+                src={displayFavicon}
+                alt=""
+                style={{ width: faviconSize, height: faviconSize, borderRadius: 3, flexShrink: 0 }}
+              />
+            ) : (
+              <span
+                aria-hidden={true}
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 3,
+                  display: 'inline-block',
+                  background: 'var(--borderColor, rgba(255,255,255,0.2))',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <span
+              title={displayTitle}
+              style={{
+                maxWidth: 180,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {displayTitle}
+            </span>
+            {tab.isSleeping ? (
+              <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
+                zz
+              </span>
+            ) : null}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTab(tab.id);
+              }}
+              style={{ opacity: 0.8 }}
+            >
+              x
+            </span>
+          </div>
+        );
+      })}
+
       <button
         onClick={() => newTab()}
         className="theme-btn theme-btn-nav"

@@ -158,7 +158,9 @@ const defaultLightBaseColors =
   bundledThemesRaw.find((entry) => entry.id === 'default_light')?.theme.colors ?? {};
 const baseColorsByMode: Record<ThemeMode, Record<string, string>> = {
   dark: Object.keys(defaultDarkBaseColors).length ? defaultDarkBaseColors : defaultLightBaseColors,
-  light: Object.keys(defaultLightBaseColors).length ? defaultLightBaseColors : defaultDarkBaseColors,
+  light: Object.keys(defaultLightBaseColors).length
+    ? defaultLightBaseColors
+    : defaultDarkBaseColors,
 };
 
 const bundledThemes: ThemeEntry[] = bundledThemesRaw.map((entry) => ({
@@ -204,7 +206,8 @@ function slugify(value: string): string {
 }
 
 function createCustomThemeId(theme: Theme, existingIds: Set<string>): string {
-  const base = `${slugify(theme.name)}-${slugify(theme.author)}`.replace(/^-+|-+$/g, '') || 'custom-theme';
+  const base =
+    `${slugify(theme.name)}-${slugify(theme.author)}`.replace(/^-+|-+$/g, '') || 'custom-theme';
   let candidate = base;
   let counter = 2;
   while (existingIds.has(candidate)) {
@@ -247,7 +250,9 @@ export function importThemeFromJson(jsonText: string): ThemeEntry {
 
   const theme = normalizeTheme(parsed);
   if (!theme) {
-    throw new Error('Theme JSON must include name, author, and a colors object with string values.');
+    throw new Error(
+      'Theme JSON must include name, author, and a colors object with string values.',
+    );
   }
   const themeWithFallback = applyModeBaseColorFallback(theme, baseColorsByMode);
 
