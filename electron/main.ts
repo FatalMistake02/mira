@@ -420,10 +420,12 @@ function setupWindowControlsHandlers() {
 }
 
 function createWindow(): BrowserWindow {
+  const isMacOS = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
-    frame: false,
+    frame: !isMacOS ? false : true,
+    titleBarStyle: isMacOS ? 'hiddenInset' : undefined,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -433,6 +435,10 @@ function createWindow(): BrowserWindow {
       sandbox: true,
     },
   });
+
+  if (isMacOS) {
+    win.setWindowButtonVisibility(true);
+  }
 
   if (!app.isPackaged) {
     win.loadURL('http://localhost:5173');
