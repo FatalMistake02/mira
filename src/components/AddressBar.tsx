@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import DownloadButton from './DownloadButton';
 import { getBrowserSettings } from '../features/settings/browserSettings';
@@ -21,8 +21,10 @@ type AddressBarProps = {
 };
 
 export default function AddressBar({ inputRef }: AddressBarProps) {
-  const { tabs, activeId, navigate, goBack, goForward, reload } = useTabs();
+  const { tabs, activeId, navigate, goBack, goForward, reload, newTab, setActive } = useTabs();
   const [input, setInput] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const activeTab = tabs.find((t) => t.id === activeId);
@@ -66,6 +68,20 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   const activeTab = tabs.find((t) => t.id === activeId);
   const canGoBack = activeTab && activeTab.historyIndex > 0;
   const canGoForward = activeTab && activeTab.historyIndex < activeTab.history.length - 1;
+  const newTabPage = getBrowserSettings().newTabPage;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (!menuRef.current) return;
+      if (menuRef.current.contains(event.target as Node)) return;
+      setMenuOpen(false);
+    };
+
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [menuOpen]);
 
   return (
     <div
@@ -137,6 +153,59 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       />
 
       <DownloadButton />
+
+      <div ref={menuRef} style={{ position: 'relative' }}>
+        <button
+          onClick={() => setMenuOpen((prev) => !prev)}
+          title="Menu"
+          className="theme-btn theme-btn-nav"
+          style={{
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: 2,
+          }}
+        >
+          <ChevronDown size={16} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+
+        {menuOpen && (
+          <div
+            className="theme-panel"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              right: 0,
+              minWidth: 160,
+              borderRadius: 8,
+              overflow: 'hidden',
+              zIndex: 1200,
+              padding: 6,
+            }}
+          >
+            <button
+              type="button"
+              className="theme-btn theme-btn-nav"
+              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
+              onClick={() => {
+                const existingSettingsTab = tabs.find((tab) => tab.url === 'mira://Settings');
+
+                if (existingSettingsTab) {
+                  setActive(existingSettingsTab.id);
+                } else if (activeTab?.url === newTabPage) {
+                  navigate('mira://Settings');
+                } else {
+                  newTab('mira://Settings');
+                }
+                setMenuOpen(false);
+              }}
+            >
+              Settings
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
