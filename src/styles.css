@@ -18,15 +18,6 @@ body {
   --text1: #e8edf5;
   --text2: #b6c0cf;
   --text3: #8793a6;
-  --goButtonBg: #253042;
-  --goButtonBgHover: #304059;
-  --goButtonBgActive: #3c5070;
-  --goButtonText: #f4f8ff;
-  --goButtonTextHover: #ffffff;
-  --goButtonTextActive: #ffffff;
-  --goButtonBorder: #3f5169;
-  --goButtonBorderHover: #526a89;
-  --goButtonBorderActive: #6785aa;
   --downloadButtonBg: #26362f;
   --downloadButtonBgHover: #30463d;
   --downloadButtonBgActive: #3a594d;
@@ -162,24 +153,6 @@ body {
   background: var(--navButtonBgActive, var(--buttonBgActive));
   border-color: var(--navButtonBorderActive, var(--buttonBorderActive));
   color: var(--navButtonTextActive, var(--buttonTextActive));
-}
-
-.theme-btn-go {
-  background: var(--goButtonBg, var(--buttonBg));
-  border: 1px solid var(--goButtonBorder, var(--buttonBorder));
-  color: var(--goButtonText, var(--buttonText));
-}
-
-.theme-btn-go:hover:not(:disabled) {
-  background: var(--goButtonBgHover, var(--buttonBgHover));
-  border-color: var(--goButtonBorderHover, var(--buttonBorderHover));
-  color: var(--goButtonTextHover, var(--buttonTextHover));
-}
-
-.theme-btn-go:active:not(:disabled) {
-  background: var(--goButtonBgActive, var(--buttonBgActive));
-  border-color: var(--goButtonBorderActive, var(--buttonBorderActive));
-  color: var(--goButtonTextActive, var(--buttonTextActive));
 }
 
 .theme-btn-download {

@@ -136,17 +136,6 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         }}
       />
 
-      <button
-        onClick={go}
-        className="theme-btn theme-btn-go"
-        style={{
-          padding: '6px 12px',
-          fontSize: 16,
-        }}
-      >
-        Go
-      </button>
-
       <DownloadButton />
     </div>
   );
