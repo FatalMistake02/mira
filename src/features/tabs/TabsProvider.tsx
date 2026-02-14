@@ -523,6 +523,21 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
   }, [newTab]);
 
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onOpenUrlInCurrentTab = (_event: unknown, url: string) => {
+      if (typeof url !== 'string') return;
+      const normalized = url.trim();
+      if (!normalized) return;
+      navigate(normalized);
+    };
+
+    ipc.on('open-url-in-current-tab', onOpenUrlInCurrentTab);
+    return () => ipc.off('open-url-in-current-tab', onOpenUrlInCurrentTab);
+  }, [navigate]);
+
   return (
     <TabsContext.Provider
       value={{

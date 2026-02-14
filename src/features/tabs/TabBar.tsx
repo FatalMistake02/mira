@@ -1,5 +1,6 @@
 import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
+import { electron } from '../../electronBridge';
 
 function getDisplayTitle(url: string, title?: string): string {
   const normalizedTitle = title?.trim();
@@ -35,6 +36,13 @@ function getDisplayFavicon(url: string, favicon?: string): string | undefined {
 
 export default function TabBar() {
   const { tabs, activeId, setActive, closeTab, newTab } = useTabs();
+  const openNewWindow = () => {
+    if (electron?.ipcRenderer) {
+      electron.ipcRenderer.invoke('window-new').catch(() => undefined);
+      return;
+    }
+    window.open(window.location.href, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div
@@ -135,6 +143,15 @@ export default function TabBar() {
         style={{ padding: '5px 10px', minWidth: 34, flexShrink: 0 }}
       >
         +
+      </button>
+
+      <button
+        onClick={openNewWindow}
+        className="theme-btn theme-btn-nav"
+        title="New Window"
+        style={{ padding: '5px 10px', minWidth: 34, flexShrink: 0 }}
+      >
+        []
       </button>
     </div>
   );

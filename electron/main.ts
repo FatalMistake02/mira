@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, shell, session } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, shell, session } from 'electron';
 import { v4 as uuidv4 } from 'uuid'; // install uuid ^9
 import type { DownloadItem } from 'electron';
 import { promises as fs } from 'fs';
@@ -279,8 +279,16 @@ function setupHistoryHandlers() {
   });
 }
 
-function setupDownloadHandlers(win: BrowserWindow) {
+function setupDownloadHandlers() {
   const ses = session.defaultSession;
+
+  const sendToItemWindow = (item: DownloadItem, channel: string, payload: Record<string, unknown>) => {
+    const sourceContents = item.getWebContents();
+    const sourceWindow = sourceContents ? BrowserWindow.fromWebContents(sourceContents) : null;
+    const targetWindow = sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow : null;
+    if (!targetWindow) return;
+    targetWindow.webContents.send(channel, payload);
+  };
 
   // Every download gets a UUID so the renderer can track it
   ses.on('will-download', (event, item) => {
@@ -291,7 +299,7 @@ function setupDownloadHandlers(win: BrowserWindow) {
     downloadMap.set(downloadId, item);
 
     // Tell the renderer a new download started
-    win.webContents.send('download-start', {
+    sendToItemWindow(item, 'download-start', {
       id: downloadId,
       url: item.getURL(),
       filename,
@@ -301,13 +309,13 @@ function setupDownloadHandlers(win: BrowserWindow) {
     // Progress updates
     item.on('updated', (_, state) => {
       if (state === 'interrupted') {
-        win.webContents.send('download-error', {
+        sendToItemWindow(item, 'download-error', {
           id: downloadId,
           error: 'interrupted',
         });
         return;
       }
-      win.webContents.send('download-progress', {
+      sendToItemWindow(item, 'download-progress', {
         id: downloadId,
         receivedBytes: item.getReceivedBytes(),
         totalBytes: item.getTotalBytes(),
@@ -320,12 +328,12 @@ function setupDownloadHandlers(win: BrowserWindow) {
       downloadMap.delete(downloadId);
 
       if (state === 'completed') {
-        win.webContents.send('download-done', {
+        sendToItemWindow(item, 'download-done', {
           id: downloadId,
           savePath: item.getSavePath(),
         });
       } else {
-        win.webContents.send('download-error', {
+        sendToItemWindow(item, 'download-error', {
           id: downloadId,
           error: state,
         });
@@ -366,6 +374,37 @@ function setupWebviewTabOpenHandler() {
     const host = contents.hostWebContents;
     if (!host) return;
 
+    contents.on('before-input-event', (event, input) => {
+      const key = input.key.toLowerCase();
+      const isPrimaryChord = (input.control || input.meta) && !input.shift;
+      const isNewWindowChord = isPrimaryChord && key === 'n';
+
+      if (!isNewWindowChord) return;
+
+      event.preventDefault();
+      const hostWindow = BrowserWindow.fromWebContents(host);
+      if (!hostWindow || hostWindow.isDestroyed()) return;
+      createWindow(hostWindow);
+    });
+
+    contents.on('context-menu', (event, params) => {
+      const linkUrl = (params.linkURL ?? '').trim();
+      if (!linkUrl) return;
+
+      const hostWindow = BrowserWindow.fromWebContents(host);
+      if (!hostWindow || hostWindow.isDestroyed()) return;
+
+      const menu = Menu.buildFromTemplate([
+        {
+          label: 'Open Link in New Window',
+          click: () => {
+            createWindow(hostWindow, linkUrl);
+          },
+        },
+      ]);
+      menu.popup({ window: hostWindow });
+    });
+
     contents.setWindowOpenHandler(({ url }) => {
       const normalized = (url ?? '').trim();
       if (!normalized || normalized === 'about:blank') {
@@ -399,6 +438,12 @@ function setupAdBlocker() {
 }
 
 function setupWindowControlsHandlers() {
+  ipcMain.handle('window-new', (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    createWindow(sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow : undefined);
+    return true;
+  });
+
   ipcMain.handle('window-minimize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return false;
@@ -451,9 +496,12 @@ function setupGlobalShortcuts() {
   });
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): BrowserWindow {
   const isMacOS = process.platform === 'darwin';
+  const sourceBounds = sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow.getBounds() : null;
   const win = new BrowserWindow({
+    x: sourceBounds ? sourceBounds.x + 24 : undefined,
+    y: sourceBounds ? sourceBounds.y + 24 : undefined,
     width: 1200,
     height: 800,
     frame: !isMacOS ? false : true,
@@ -477,6 +525,14 @@ function createWindow(): BrowserWindow {
     win.loadURL('http://localhost:5173');
   } else {
     win.loadFile('dist/index.html');
+  }
+
+  const normalizedInitialUrl = initialUrl?.trim();
+  if (normalizedInitialUrl) {
+    win.webContents.once('did-finish-load', () => {
+      if (win.isDestroyed()) return;
+      win.webContents.send('open-url-in-current-tab', normalizedInitialUrl);
+    });
   }
 
   win.setMenuBarVisibility(false);
@@ -513,11 +569,18 @@ function createWindow(): BrowserWindow {
     const isPrimaryChord = (input.control || input.meta) && !input.shift;
     const isReloadChord = isPrimaryChord && key === 'r';
     const isFindChord = isPrimaryChord && key === 'f';
+    const isNewWindowChord = isPrimaryChord && key === 'n';
     const isReloadKey = key === 'f5';
 
     if (isReloadChord || isReloadKey) {
       event.preventDefault();
       win.webContents.send('app-shortcut', 'reload-tab');
+      return;
+    }
+
+    if (isNewWindowChord) {
+      event.preventDefault();
+      createWindow(win);
       return;
     }
 
@@ -539,6 +602,18 @@ app.whenReady().then(async () => {
   setupWindowControlsHandlers();
   setupGlobalShortcuts();
   scheduleAdBlockListRefresh();
-  const win = createWindow();
-  setupDownloadHandlers(win);
+  setupDownloadHandlers();
+  createWindow();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
