@@ -17,6 +17,7 @@
     "appId": "com.fatalmistake02.mira",
     "productName": "Mira",
     "icon": "assets/mira_icon.png",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
