@@ -115,7 +115,12 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         disabled={!canGoBack}
         title="Back"
         className="theme-btn theme-btn-nav"
-        style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{
+          padding: '4px 8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         <BackIcon />
       </button>
@@ -125,7 +130,12 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         disabled={!canGoForward}
         title="Forward"
         className="theme-btn theme-btn-nav"
-        style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{
+          padding: '4px 8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         <ForwardIcon />
       </button>
@@ -134,7 +144,12 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         onClick={reload}
         title="Refresh"
         className="theme-btn theme-btn-nav"
-        style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{
+          padding: '4px 8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         <ReloadIcon />
       </button>

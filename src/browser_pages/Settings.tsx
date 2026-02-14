@@ -267,9 +267,7 @@ export default function Settings() {
               padding: '8px 10px',
             }}
           >
-            {selectedTheme
-              ? formatThemeLabel(selectedTheme)
-              : 'No themes available'}
+            {selectedTheme ? formatThemeLabel(selectedTheme) : 'No themes available'}
           </button>
 
           {themeDropdownOpen && (
@@ -350,7 +348,11 @@ export default function Settings() {
       </div>
 
       <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-        <button onClick={handleReset} className="theme-btn theme-btn-nav" style={{ padding: '8px 12px' }}>
+        <button
+          onClick={handleReset}
+          className="theme-btn theme-btn-nav"
+          style={{ padding: '8px 12px' }}
+        >
           Reset to Default
         </button>
         {saveStatus === 'saving' && (

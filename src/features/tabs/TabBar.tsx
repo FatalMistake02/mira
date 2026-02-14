@@ -33,13 +33,9 @@ export default function TabBar() {
             zIndex: tab.id === activeId ? 2 : 1,
             marginBottom: tab.id === activeId ? -1 : 1,
             background:
-              tab.id === activeId
-                ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                : undefined,
+              tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
             borderBottomColor:
-              tab.id === activeId
-                ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                : undefined,
+              tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
           }}
         >
           <span>Tab</span>
