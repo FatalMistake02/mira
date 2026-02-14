@@ -48,79 +48,86 @@ export default function TabBar() {
         overflowY: 'hidden',
       }}
     >
-      {tabs.map((tab) => (
-        <div
-          key={tab.id}
-          onClick={() => setActive(tab.id)}
-          className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
-          style={{
-            padding: '6px 10px',
-            cursor: 'pointer',
-            borderRadius: tab.id === activeId ? '8px 8px 0 0' : '8px',
-            display: 'flex',
-            gap: 6,
-            alignItems: 'center',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-            position: 'relative',
-            zIndex: tab.id === activeId ? 2 : 1,
-            marginBottom: tab.id === activeId ? -1 : 1,
-            background:
-              tab.id === activeId
-                ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                : undefined,
-            borderBottomColor:
-              tab.id === activeId
-                ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                : undefined,
-          }}
-        >
-          {getDisplayFavicon(tab.url, tab.favicon) ? (
-            <img
-              src={getDisplayFavicon(tab.url, tab.favicon)}
-              alt=""
-              style={{ width: 16, height: 16, borderRadius: 3, flexShrink: 0 }}
-            />
-          ) : (
-            <span
-              aria-hidden={true}
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 3,
-                display: 'inline-block',
-                background: 'var(--borderColor, rgba(255,255,255,0.2))',
-                flexShrink: 0,
-              }}
-            />
-          )}
-          <span
-            title={getDisplayTitle(tab.url, tab.title)}
+      {tabs.map((tab) => {
+        const displayFavicon = getDisplayFavicon(tab.url, tab.favicon);
+        const displayTitle = getDisplayTitle(tab.url, tab.title);
+        const isInternalTab = tab.url.startsWith('mira://');
+        const faviconSize = isInternalTab ? 22 : 16;
+
+        return (
+          <div
+            key={tab.id}
+            onClick={() => setActive(tab.id)}
+            className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
             style={{
-              maxWidth: 180,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              borderRadius: tab.id === activeId ? '8px 8px 0 0' : '8px',
+              display: 'flex',
+              gap: 6,
+              alignItems: 'center',
               whiteSpace: 'nowrap',
+              flexShrink: 0,
+              position: 'relative',
+              zIndex: tab.id === activeId ? 2 : 1,
+              marginBottom: tab.id === activeId ? -1 : 1,
+              background:
+                tab.id === activeId
+                  ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                  : undefined,
+              borderBottomColor:
+                tab.id === activeId
+                  ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                  : undefined,
             }}
           >
-            {getDisplayTitle(tab.url, tab.title)}
-          </span>
-          {tab.isSleeping ? (
-            <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
-              zz
+            {displayFavicon ? (
+              <img
+                src={displayFavicon}
+                alt=""
+                style={{ width: faviconSize, height: faviconSize, borderRadius: 3, flexShrink: 0 }}
+              />
+            ) : (
+              <span
+                aria-hidden={true}
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 3,
+                  display: 'inline-block',
+                  background: 'var(--borderColor, rgba(255,255,255,0.2))',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <span
+              title={displayTitle}
+              style={{
+                maxWidth: 180,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {displayTitle}
             </span>
-          ) : null}
-          <span
-            onClick={(e) => {
-              e.stopPropagation();
-              closeTab(tab.id);
-            }}
-            style={{ opacity: 0.8 }}
-          >
-            x
-          </span>
-        </div>
-      ))}
+            {tab.isSleeping ? (
+              <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
+                zz
+              </span>
+            ) : null}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTab(tab.id);
+              }}
+              style={{ opacity: 0.8 }}
+            >
+              x
+            </span>
+          </div>
+        );
+      })}
 
       <button
         onClick={() => newTab()}
