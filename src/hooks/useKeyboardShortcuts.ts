@@ -25,55 +25,68 @@ export function useKeyboardShortcuts({
 }: UseKeyboardShortcutsProps) {
   useEffect(() => {
     const hasElectronBridge = !!electron?.ipcRenderer;
+    const isMacOS =
+      electron?.isMacOS ??
+      ((
+        (
+          navigator as Navigator & { userAgentData?: { platform?: string } }
+        ).userAgentData?.platform ||
+        navigator.platform ||
+        navigator.userAgent ||
+        ''
+      )
+        .toLowerCase()
+        .includes('mac'));
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
+      const isPrimaryModifier = isMacOS ? e.metaKey : e.ctrlKey;
 
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 't') {
+      if (isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         e.stopPropagation();
         newTab();
         return;
       }
 
-      if (!hasElectronBridge && (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'n') {
+      if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         e.stopPropagation();
         openNewWindow();
         return;
       }
 
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'w') {
+      if (isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         e.stopPropagation();
         if (activeId) closeTab(activeId);
         return;
       }
 
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'l') {
         e.preventDefault();
         e.stopPropagation();
         addressInputRef.current?.focus();
         return;
       }
 
-      if (!hasElectronBridge && e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'r') {
+      if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'r') {
         e.preventDefault();
         e.stopPropagation();
         reload();
         return;
       }
 
-      if (!hasElectronBridge && e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+      if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         e.stopPropagation();
         findInPage();
         return;
       }
 
-      if (!hasElectronBridge && e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i') {
+      if (!hasElectronBridge && isPrimaryModifier && e.shiftKey && e.key.toLowerCase() === 'i') {
         e.preventDefault();
         e.stopPropagation();
         toggleDevTools();

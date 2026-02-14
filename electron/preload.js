@@ -3,6 +3,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
+  platform: process.platform,
+  isMacOS: process.platform === 'darwin',
   ipcRenderer: {
     on: (channel, listener) => ipcRenderer.on(channel, listener),
     off: (channel, listener) => ipcRenderer.removeListener(channel, listener),
