@@ -223,3 +223,19 @@ body {
   border-color: var(--tabBorderHover, var(--surfaceBorderHover));
   color: var(--tabTextHover, var(--surfaceTextHover));
 }
+
+@keyframes download-ring-spin {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+
+.download-ring-indeterminate {
+  animation: download-ring-spin 900ms linear infinite;
+  transform-origin: 15px 15px;
+  stroke-dasharray: 34 70;
+  stroke-dashoffset: 0;
+}

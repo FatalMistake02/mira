@@ -62,6 +62,7 @@
   "dependencies": {
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
+    "lucide-react": "^0.564.0",
     "prettier": "^3.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

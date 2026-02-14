@@ -1,51 +1,19 @@
 import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import DownloadButton from './DownloadButton';
 import { getBrowserSettings } from '../features/settings/browserSettings';
 
 function ReloadIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M13 3v4H9M3 13v-4h4M4.2 6.1A5 5 0 0 1 13 7M12 9a5 5 0 0 1-8.8 2.9"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <RotateCw size={16} strokeWidth={1.9} aria-hidden="true" />;
 }
 
 function BackIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M10.5 3.5L5.5 8l5 4.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ChevronLeft size={16} strokeWidth={2.1} aria-hidden="true" />;
 }
 
 function ForwardIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M5.5 3.5L10.5 8l-5 4.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ChevronRight size={16} strokeWidth={2.1} aria-hidden="true" />;
 }
 
 type AddressBarProps = {
