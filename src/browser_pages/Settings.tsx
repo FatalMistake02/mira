@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useTabs } from '../features/tabs/TabsProvider';
 import {
   DEFAULT_BROWSER_SETTINGS,
   getBrowserSettings,
@@ -32,6 +33,7 @@ export default function Settings() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const isFirstAutoSaveRef = useRef(true);
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { navigate } = useTabs();
 
   const handleReset = () => {
     setNewTabPage(DEFAULT_BROWSER_SETTINGS.newTabPage);
@@ -339,6 +341,14 @@ export default function Settings() {
             onChange={handleImportTheme}
             style={{ display: 'none' }}
           />
+          <button
+            type="button"
+            onClick={() => navigate('mira://ThemeCreator')}
+            className="theme-btn theme-btn-nav"
+            style={{ padding: '8px 12px' }}
+          >
+            Open Theme Creator
+          </button>
         </div>
         {!!importMessage && (
           <div className="theme-text2" style={{ fontSize: 13 }}>
