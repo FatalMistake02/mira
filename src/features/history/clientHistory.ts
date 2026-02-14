@@ -37,7 +37,10 @@ export async function addHistoryEntry(url: string, title: string): Promise<void>
   if (!normalized || normalized.startsWith('mira://')) return;
 
   if (electron?.ipcRenderer) {
-    await electron.ipcRenderer.invoke('history-add', { url: normalized, title: title.trim() || normalized });
+    await electron.ipcRenderer.invoke('history-add', {
+      url: normalized,
+      title: title.trim() || normalized,
+    });
     return;
   }
 

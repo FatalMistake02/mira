@@ -24,9 +24,7 @@ export default function ErrorLayout({ title, subtitle, description, onReload }: 
     >
       <h1 style={{ margin: 0, fontSize: 48, lineHeight: 1.1 }}>{title}</h1>
       <h2 style={{ margin: '10px 0 0 0', fontSize: 24, fontWeight: 600 }}>{subtitle}</h2>
-      <p style={{ margin: '12px 0 0 0', fontSize: 15, color: 'var(--text2)' }}>
-        {description}
-      </p>
+      <p style={{ margin: '12px 0 0 0', fontSize: 15, color: 'var(--text2)' }}>{description}</p>
       <button
         type="button"
         onClick={onReload}

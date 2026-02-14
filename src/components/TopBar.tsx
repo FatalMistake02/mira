@@ -14,7 +14,15 @@ function MinimizeIcon() {
 function MaximizeIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <rect
+        x="1.5"
+        y="1.5"
+        width="7"
+        height="7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
     </svg>
   );
 }
@@ -53,9 +61,14 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    const platformFromUAData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
-      ?.platform;
-    const platform = (platformFromUAData || navigator.platform || navigator.userAgent || '').toLowerCase();
+    const platformFromUAData = (navigator as Navigator & { userAgentData?: { platform?: string } })
+      .userAgentData?.platform;
+    const platform = (
+      platformFromUAData ||
+      navigator.platform ||
+      navigator.userAgent ||
+      ''
+    ).toLowerCase();
     const isMac = platform.includes('mac');
     setIsMacOS(isMac);
 

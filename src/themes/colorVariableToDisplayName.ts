@@ -1,0 +1,92 @@
+export const THEME_COLOR_DISPLAY_NAMES: Record<string, string> = {
+  bg: 'App Background',
+  tabBg: 'Tab Background',
+  tabBgHover: 'Tab Background Hover',
+  tabBgActive: 'Tab Background Active',
+  tabText: 'Tab Text',
+  tabTextHover: 'Tab Text Hover',
+  tabTextActive: 'Tab Text Active',
+  tabBorder: 'Tab Border',
+  tabBorderHover: 'Tab Border Hover',
+  tabBorderActive: 'Tab Border Active',
+  text1: 'Primary Text',
+  text2: 'Secondary Text',
+  text3: 'Muted Text',
+  goButtonBg: 'Go Button Background',
+  goButtonBgHover: 'Go Button Background Hover',
+  goButtonBgActive: 'Go Button Background Active',
+  goButtonText: 'Go Button Text',
+  goButtonTextHover: 'Go Button Text Hover',
+  goButtonTextActive: 'Go Button Text Active',
+  goButtonBorder: 'Go Button Border',
+  goButtonBorderHover: 'Go Button Border Hover',
+  goButtonBorderActive: 'Go Button Border Active',
+  downloadButtonBg: 'Download Button Background',
+  downloadButtonBgHover: 'Download Button Background Hover',
+  downloadButtonBgActive: 'Download Button Background Active',
+  downloadButtonText: 'Download Button Text',
+  downloadButtonTextHover: 'Download Button Text Hover',
+  downloadButtonTextActive: 'Download Button Text Active',
+  downloadButtonBorder: 'Download Button Border',
+  downloadButtonBorderHover: 'Download Button Border Hover',
+  downloadButtonBorderActive: 'Download Button Border Active',
+  navButtonBg: 'Nav Button Background',
+  navButtonBgHover: 'Nav Button Background Hover',
+  navButtonBgActive: 'Nav Button Background Active',
+  navButtonText: 'Nav Button Text',
+  navButtonTextHover: 'Nav Button Text Hover',
+  navButtonTextActive: 'Nav Button Text Active',
+  navButtonBorder: 'Nav Button Border',
+  navButtonBorderHover: 'Nav Button Border Hover',
+  navButtonBorderActive: 'Nav Button Border Active',
+  urlBarBg: 'Address Bar Background',
+  urlBarBgHover: 'Address Bar Background Hover',
+  urlBarBgActive: 'Address Bar Background Active',
+  urlBarText: 'Address Bar Text',
+  urlBarTextPlaceholder: 'Address Bar Placeholder',
+  urlBarBorder: 'Address Bar Border',
+  urlBarBorderHover: 'Address Bar Border Hover',
+  urlBarBorderActive: 'Address Bar Border Active',
+  buttonBg: 'Generic Button Background',
+  buttonBgHover: 'Generic Button Background Hover',
+  buttonBgActive: 'Generic Button Background Active',
+  buttonText: 'Generic Button Text',
+  buttonTextHover: 'Generic Button Text Hover',
+  buttonTextActive: 'Generic Button Text Active',
+  buttonBorder: 'Generic Button Border',
+  buttonBorderHover: 'Generic Button Border Hover',
+  buttonBorderActive: 'Generic Button Border Active',
+  fieldBg: 'Field Background',
+  fieldBgHover: 'Field Background Hover',
+  fieldBgActive: 'Field Background Active',
+  fieldText: 'Field Text',
+  fieldTextPlaceholder: 'Field Placeholder',
+  fieldBorder: 'Field Border',
+  fieldBorderHover: 'Field Border Hover',
+  fieldBorderActive: 'Field Border Active',
+  surfaceBg: 'Surface Background',
+  surfaceBgHover: 'Surface Background Hover',
+  surfaceBgActive: 'Surface Background Active',
+  surfaceText: 'Surface Text',
+  surfaceTextHover: 'Surface Text Hover',
+  surfaceTextActive: 'Surface Text Active',
+  surfaceBorder: 'Surface Border',
+  surfaceBorderHover: 'Surface Border Hover',
+  surfaceBorderActive: 'Surface Border Active',
+};
+
+function splitCamelCase(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+}
+
+export function getThemeColorDisplayName(key: string): string {
+  const known = THEME_COLOR_DISPLAY_NAMES[key];
+  if (known) return known;
+
+  const normalized = splitCamelCase(key)
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  if (!normalized) return key;
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
