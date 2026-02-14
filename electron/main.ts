@@ -235,6 +235,25 @@ async function addHistoryEntry(payload: { url?: string; title?: string }) {
   await persistHistory();
 }
 
+async function deleteHistoryEntry(id: string): Promise<boolean> {
+  const normalizedId = id.trim();
+  if (!normalizedId) return false;
+
+  const next = historyCache.filter((entry) => entry.id !== normalizedId);
+  if (next.length === historyCache.length) return false;
+
+  historyCache = next;
+  await persistHistory();
+  return true;
+}
+
+async function clearHistory(): Promise<boolean> {
+  if (!historyCache.length) return false;
+  historyCache = [];
+  await persistHistory();
+  return true;
+}
+
 function setupHistoryHandlers() {
   ipcMain.handle('history-add', async (_, payload: { url?: string; title?: string }) => {
     await addHistoryEntry(payload ?? {});
@@ -245,6 +264,14 @@ function setupHistoryHandlers() {
     historyCache = pruneHistory(historyCache);
     await persistHistory();
     return historyCache;
+  });
+
+  ipcMain.handle('history-delete', async (_, id: string) => {
+    return deleteHistoryEntry(typeof id === 'string' ? id : '');
+  });
+
+  ipcMain.handle('history-clear', async () => {
+    return clearHistory();
   });
 }
 
@@ -384,6 +411,12 @@ function setupWindowControlsHandlers() {
     return win.isMaximized();
   });
 
+  ipcMain.handle('window-is-fullscreen', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return false;
+    return win.isFullScreen();
+  });
+
   ipcMain.handle('window-close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return false;
@@ -393,10 +426,12 @@ function setupWindowControlsHandlers() {
 }
 
 function createWindow(): BrowserWindow {
+  const isMacOS = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
-    frame: false,
+    frame: !isMacOS ? false : true,
+    titleBarStyle: isMacOS ? 'hiddenInset' : undefined,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -407,6 +442,10 @@ function createWindow(): BrowserWindow {
     },
   });
 
+  if (isMacOS) {
+    win.setWindowButtonVisibility(true);
+  }
+
   if (!app.isPackaged) {
     win.loadURL('http://localhost:5173');
   } else {
@@ -416,6 +455,7 @@ function createWindow(): BrowserWindow {
   win.setMenuBarVisibility(false);
   win.removeMenu();
   win.webContents.send('window-maximized-changed', win.isMaximized());
+  win.webContents.send('window-fullscreen-changed', win.isFullScreen());
 
   win.on('maximize', () => {
     if (!win.isDestroyed()) {
@@ -426,6 +466,18 @@ function createWindow(): BrowserWindow {
   win.on('unmaximize', () => {
     if (!win.isDestroyed()) {
       win.webContents.send('window-maximized-changed', false);
+    }
+  });
+
+  win.on('enter-full-screen', () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('window-fullscreen-changed', true);
+    }
+  });
+
+  win.on('leave-full-screen', () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('window-fullscreen-changed', false);
     }
   });
 

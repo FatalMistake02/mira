@@ -68,11 +68,13 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   }, [tabs, activeId]);
 
   const isSupportedProtocol = (url: string) => {
+    const normalized = url.toLowerCase();
     return (
-      url.startsWith('http://') ||
-      url.startsWith('https://') ||
-      url.startsWith('file://') ||
-      url.startsWith('mira://')
+      normalized.startsWith('http://') ||
+      normalized.startsWith('https://') ||
+      normalized.startsWith('file://') ||
+      normalized.startsWith('mira://') ||
+      normalized.startsWith('data:')
     );
   };
 

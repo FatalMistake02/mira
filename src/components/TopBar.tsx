@@ -47,25 +47,34 @@ function CloseIcon() {
   );
 }
 
-function PlusIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path
-        d="M5 1.8v6.4M1.8 5h6.4"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 export default function TopBar({ children }: { children?: React.ReactNode }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isMacOS, setIsMacOS] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    setIsMacOS(/Mac|iPhone|iPad|iPod/.test(navigator.platform));
+    const platformFromUAData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+      ?.platform;
+    const platform = (platformFromUAData || navigator.platform || navigator.userAgent || '').toLowerCase();
+    const isMac = platform.includes('mac');
+    setIsMacOS(isMac);
+
+    electron?.ipcRenderer
+      .invoke<boolean>('window-is-fullscreen')
+      .then((value) => setIsFullscreen(!!value))
+      .catch(() => undefined);
+
+    const onFullscreenChanged = (_event: unknown, value: boolean) => {
+      setIsFullscreen(!!value);
+    };
+
+    electron?.ipcRenderer.on('window-fullscreen-changed', onFullscreenChanged);
+
+    if (isMac) {
+      return () => {
+        electron?.ipcRenderer.off('window-fullscreen-changed', onFullscreenChanged);
+      };
+    }
 
     electron?.ipcRenderer
       .invoke<boolean>('window-is-maximized')
@@ -78,6 +87,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
 
     electron?.ipcRenderer.on('window-maximized-changed', onMaximizedChanged);
     return () => {
+      electron?.ipcRenderer.off('window-fullscreen-changed', onFullscreenChanged);
       electron?.ipcRenderer.off('window-maximized-changed', onMaximizedChanged);
     };
   }, []);
@@ -87,6 +97,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
   };
 
   const onToggleMaximize = () => {
+    if (isMacOS) return;
     electron?.ipcRenderer.invoke('window-maximize-toggle').catch(() => undefined);
   };
 
@@ -116,71 +127,11 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
   const controlsSection = isMacOS ? (
     <div
       style={{
-        display: 'flex',
-        gap: 8,
-        alignItems: 'center',
-        paddingLeft: 10,
-        WebkitAppRegion: 'no-drag' as const,
+        width: isFullscreen ? 0 : 76,
+        flexShrink: 0,
+        transition: 'width 140ms ease',
       }}
-    >
-      <button
-        title="Close"
-        onClick={onClose}
-        style={{
-          width: 12,
-          height: 12,
-          borderRadius: '50%',
-          border: '1px solid #d84a3a',
-          background: '#ff5f57',
-          color: '#7a2019',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 0,
-          cursor: 'pointer',
-        }}
-      >
-        <CloseIcon />
-      </button>
-      <button
-        title="Minimize"
-        onClick={onMinimize}
-        style={{
-          width: 12,
-          height: 12,
-          borderRadius: '50%',
-          border: '1px solid #c99b22',
-          background: '#ffbd2e',
-          color: '#6c4f06',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 0,
-          cursor: 'pointer',
-        }}
-      >
-        <MinimizeIcon />
-      </button>
-      <button
-        title={isMaximized ? 'Restore' : 'Maximize'}
-        onClick={onToggleMaximize}
-        style={{
-          width: 12,
-          height: 12,
-          borderRadius: '50%',
-          border: '1px solid #2f9f46',
-          background: '#28c840',
-          color: '#0f4a1c',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 0,
-          cursor: 'pointer',
-        }}
-      >
-        {isMaximized ? <RestoreIcon /> : <PlusIcon />}
-      </button>
-    </div>
+    />
   ) : (
     <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' as const }}>
       <button
@@ -233,7 +184,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
 
   return (
     <div
-      onDoubleClick={onToggleMaximize}
+      onDoubleClick={isMacOS ? undefined : onToggleMaximize}
       style={{
         height: 38,
         display: 'flex',

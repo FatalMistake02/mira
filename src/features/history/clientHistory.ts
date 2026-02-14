@@ -69,3 +69,29 @@ export async function listHistoryEntries(): Promise<HistoryEntry[]> {
   saveLocal(entries);
   return entries;
 }
+
+export async function deleteHistoryEntry(id: string): Promise<boolean> {
+  const normalizedId = id.trim();
+  if (!normalizedId) return false;
+
+  if (electron?.ipcRenderer) {
+    return !!(await electron.ipcRenderer.invoke<boolean>('history-delete', normalizedId));
+  }
+
+  const entries = loadLocal();
+  const next = entries.filter((entry) => entry.id !== normalizedId);
+  if (next.length === entries.length) return false;
+  saveLocal(next);
+  return true;
+}
+
+export async function clearHistoryEntries(): Promise<boolean> {
+  if (electron?.ipcRenderer) {
+    return !!(await electron.ipcRenderer.invoke<boolean>('history-clear'));
+  }
+
+  const entries = loadLocal();
+  if (!entries.length) return false;
+  saveLocal([]);
+  return true;
+}
