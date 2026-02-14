@@ -42,5 +42,8 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# build files
+build/
+
 # Build output
 release/
