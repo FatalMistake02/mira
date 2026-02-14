@@ -1,5 +1,5 @@
-name: Build Windows
-run-name: Build Windows ${{ github.ref_name }}
+name: Build Release
+run-name: Build Release ${{ github.ref_name }}
 on:
   push:
     tags:
@@ -31,5 +31,33 @@ jobs:
         with:
           draft: true
           files: release/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    needs: build-windows
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build -- --publish never
+
+      - name: Upload macOS Assets to Existing Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            release/*.dmg
+            release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
