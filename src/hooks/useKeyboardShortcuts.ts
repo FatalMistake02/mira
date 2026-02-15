@@ -3,7 +3,8 @@ import { useEffect, type RefObject } from 'react';
 import { electron } from '../electronBridge';
 
 interface UseKeyboardShortcutsProps {
-  newTab: () => void;
+  newTab: (url?: string) => void;
+  openHistory: () => void;
   openNewWindow: () => void;
   closeTab: (id: string) => void;
   reload: () => void;
@@ -15,6 +16,7 @@ interface UseKeyboardShortcutsProps {
 
 export function useKeyboardShortcuts({
   newTab,
+  openHistory,
   openNewWindow,
   closeTab,
   reload,
@@ -50,6 +52,16 @@ export function useKeyboardShortcuts({
         newTab();
         return;
       }
+
+      const historyKey = isMacOS ? e.key.toLowerCase() === 'y' : e.key.toLowerCase() === 'h';
+
+      if (isPrimaryModifier && !e.shiftKey && historyKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        openHistory();
+        return;
+      }
+
 
       if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
@@ -96,7 +108,7 @@ export function useKeyboardShortcuts({
     // Use capture phase (true) to intercept events before they reach the iframe
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newTab, openNewWindow, closeTab, reload, findInPage, toggleDevTools, activeId, addressInputRef]);
+  }, [newTab, openHistory, openNewWindow, closeTab, reload, findInPage, toggleDevTools, activeId, addressInputRef]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;

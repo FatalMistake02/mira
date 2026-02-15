@@ -18,7 +18,7 @@ import { getThemeById } from './features/themes/themeLoader';
 
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const { newTab, closeTab, reload, findInPage, toggleDevTools, activeId } = useTabs();
+  const { newTab, openHistory, closeTab, reload, findInPage, toggleDevTools, activeId } = useTabs();
   const openNewWindow = () => {
     if (electron?.ipcRenderer) {
       electron.ipcRenderer.invoke('window-new').catch(() => undefined);
@@ -29,6 +29,7 @@ function Browser() {
 
   useKeyboardShortcuts({
     newTab,
+    openHistory,
     openNewWindow,
     closeTab,
     reload,

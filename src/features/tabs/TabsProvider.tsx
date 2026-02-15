@@ -31,6 +31,7 @@ type TabsContextType = {
   tabs: Tab[];
   activeId: string;
   newTab: (url?: string) => void;
+  openHistory: () => void;
   closeTab: (id: string) => void;
   moveTabToNewWindow: (id: string) => void;
   navigate: (url: string, tabId?: string) => void;
@@ -234,6 +235,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  function miraUrlToName(url?: string) {
+    if (!url?.startsWith('mira://')) {
+      throw new Error(`Invalid mira url: '${url}'`);
+    }
+    const sanitized = url.slice(7);
+    switch (sanitized.toLowerCase()) {
+      case 'newtab':
+        return 'New Tab';
+      default:
+        // return a capitalized version of the url
+        return sanitized.charAt(0).toUpperCase() + sanitized.slice(1);
+    }
+  }
+
   const newTab = useCallback((url?: string) => {
     const defaultNewTabUrl = getBrowserSettings().newTabPage;
     const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
@@ -242,7 +257,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     const newEntry: Tab = {
       id,
       url: targetUrl,
-      title: targetUrl.startsWith('mira://') ? 'New Tab' : targetUrl,
+      title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
       favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
       history: [targetUrl],
       historyIndex: 0,
@@ -257,6 +272,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     );
     setActiveId(id);
   }, [activeId]);
+
+const openHistory = () => {
+  const activeTab = tabs.find((t) => t.id === activeId);
+  const newTabUrl = getBrowserSettings().newTabPage;
+  const isNewTab =
+    !!activeTab &&
+    (activeTab.url === newTabUrl || activeTab.url.toLowerCase() === 'mira://newtab');
+
+  if (isNewTab && activeTab) {
+    navigate('mira://history', activeTab.id); // reuse current tab
+  } else {
+    newTab('mira://history'); // open separate tab
+  }
+}
 
   const closeTab = (id: string) => {
     setTabs((t) => {
@@ -392,7 +421,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         }
 
         const newHistory = tab.history.slice(0, tab.historyIndex + 1).concat(normalized);
-        const defaultTitle = normalized.startsWith('mira://') ? 'New Tab' : normalized;
+        const defaultTitle = normalized.startsWith('mira://') ? miraUrlToName(normalized) : normalized;
         return {
           ...tab,
           url: normalized,
@@ -583,6 +612,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         tabs,
         activeId,
         newTab,
+        openHistory,
         closeTab,
         moveTabToNewWindow,
         navigate,
