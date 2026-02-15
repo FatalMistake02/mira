@@ -79,9 +79,22 @@ export async function updateHistoryEntryTitle(url: string, title: string): Promi
 
   const entries = loadLocal();
   const match = entries.find((entry) => entry.url === normalizedUrl);
-  if (!match || match.title === normalizedTitle) return false;
-  match.title = normalizedTitle;
-  saveLocal(entries);
+  if (match) {
+    if (match.title === normalizedTitle) return false;
+    match.title = normalizedTitle;
+    saveLocal(entries);
+  } else {
+    saveLocal([
+      {
+        id: crypto.randomUUID(),
+        url: normalizedUrl,
+        title: normalizedTitle,
+        visitedAt: Date.now(),
+      },
+      ...entries,
+    ]);
+  }
+
   return true;
 }
 

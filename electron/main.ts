@@ -281,9 +281,21 @@ async function updateHistoryEntryTitle(payload: { url?: string; title?: string }
   if (!url || !title || title === url) return false;
 
   const match = historyCache.find((entry) => entry.url === url);
-  if (!match || match.title === title) return false;
+  if (match) {
+    if (match.title === title) return false;
+    match.title = title;
+  } else {
+    historyCache = pruneHistory([
+      {
+        id: uuidv4(),
+        url,
+        title,
+        visitedAt: Date.now(),
+      },
+      ...historyCache,
+    ]);
+  }
 
-  match.title = title;
   await persistHistory();
   return true;
 }
