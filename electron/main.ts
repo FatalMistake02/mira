@@ -42,6 +42,31 @@ interface PersistedSessionSnapshot {
   savedAt: number;
 }
 
+interface GitHubReleaseAsset {
+  name?: string;
+  browser_download_url?: string;
+}
+
+interface GitHubRelease {
+  tag_name?: string;
+  name?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  published_at?: string;
+  assets?: GitHubReleaseAsset[];
+}
+
+interface UpdateCheckResult {
+  mode: 'portable' | 'installer';
+  currentVersion: string;
+  latestVersion: string;
+  latestIsPrerelease: boolean;
+  hasUpdate: boolean;
+  releaseName: string;
+  assetName: string;
+  downloadUrl: string;
+}
+
 let historyCache: HistoryEntry[] = [];
 const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
@@ -54,6 +79,8 @@ let sessionPersistTimer: NodeJS.Timeout | null = null;
 let isQuitting = false;
 let adBlockEnabled = true;
 let quitOnLastWindowClose = false;
+const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/FatalMistake02/mira/releases?per_page=40';
+const isPortableBuild = process.platform === 'win32' && !!process.env.PORTABLE_EXECUTABLE_FILE;
 const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
 const AD_BLOCK_FETCH_TIMEOUT_MS = 15000;
 const AD_BLOCK_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -414,6 +441,176 @@ async function clearPersistedSessionSnapshot(): Promise<void> {
   }
 }
 
+function normalizeSemver(rawVersion: string): string {
+  return rawVersion.trim().replace(/^[vV]/, '');
+}
+
+function parseSemverParts(rawVersion: string): {
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: string | null;
+} | null {
+  const normalized = normalizeSemver(rawVersion);
+  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
+  if (!match) return null;
+
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] ?? null,
+  };
+}
+
+function compareSemver(left: string, right: string): number {
+  const a = parseSemverParts(left);
+  const b = parseSemverParts(right);
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+
+  if (a.major !== b.major) return a.major > b.major ? 1 : -1;
+  if (a.minor !== b.minor) return a.minor > b.minor ? 1 : -1;
+  if (a.patch !== b.patch) return a.patch > b.patch ? 1 : -1;
+
+  if (!a.prerelease && !b.prerelease) return 0;
+  if (!a.prerelease) return 1;
+  if (!b.prerelease) return -1;
+  if (a.prerelease === b.prerelease) return 0;
+  return a.prerelease > b.prerelease ? 1 : -1;
+}
+
+function pickInstallerAsset(release: GitHubRelease): GitHubReleaseAsset | null {
+  const assets = Array.isArray(release.assets) ? release.assets : [];
+  if (!assets.length) return null;
+
+  if (process.platform === 'win32') {
+    const setup = assets.find(
+      (asset) =>
+        typeof asset.name === 'string' &&
+        asset.name.toLowerCase().includes('-win-setup.') &&
+        asset.name.toLowerCase().endsWith('.exe'),
+    );
+    return setup ?? null;
+  }
+
+  if (process.platform === 'darwin') {
+    const dmg = assets.find(
+      (asset) => typeof asset.name === 'string' && asset.name.toLowerCase().endsWith('.dmg'),
+    );
+    if (dmg) return dmg;
+    const zip = assets.find(
+      (asset) => typeof asset.name === 'string' && asset.name.toLowerCase().endsWith('.zip'),
+    );
+    return zip ?? null;
+  }
+
+  return null;
+}
+
+function pickPortableAsset(release: GitHubRelease): GitHubReleaseAsset | null {
+  const assets = Array.isArray(release.assets) ? release.assets : [];
+  if (!assets.length) return null;
+
+  if (process.platform === 'win32') {
+    const portable = assets.find(
+      (asset) =>
+        typeof asset.name === 'string' &&
+        asset.name.toLowerCase().includes('-win.') &&
+        !asset.name.toLowerCase().includes('-win-setup.') &&
+        asset.name.toLowerCase().endsWith('.exe'),
+    );
+    return portable ?? null;
+  }
+
+  return null;
+}
+
+async function fetchReleases(includePrerelease: boolean): Promise<GitHubRelease[]> {
+  const response = await fetch(GITHUB_RELEASES_API_URL, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'mira-updater',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to check updates (HTTP ${response.status}).`);
+  }
+
+  const payload = (await response.json()) as unknown;
+  if (!Array.isArray(payload)) return [];
+
+  const releases = payload.filter((entry): entry is GitHubRelease => typeof entry === 'object' && !!entry);
+  return releases
+    .filter((release) => !release.draft)
+    .filter((release) => includePrerelease || !release.prerelease);
+}
+
+function pickLatestRelease(releases: GitHubRelease[]): GitHubRelease | null {
+  if (!releases.length) return null;
+
+  const sorted = [...releases].sort((left, right) => {
+    const leftTag = typeof left.tag_name === 'string' ? left.tag_name : '';
+    const rightTag = typeof right.tag_name === 'string' ? right.tag_name : '';
+    const semverComparison = compareSemver(leftTag, rightTag);
+    if (semverComparison !== 0) return -semverComparison;
+
+    const leftPublished = Date.parse(left.published_at ?? '');
+    const rightPublished = Date.parse(right.published_at ?? '');
+    return Number.isFinite(rightPublished) && Number.isFinite(leftPublished)
+      ? rightPublished - leftPublished
+      : 0;
+  });
+  return sorted[0] ?? null;
+}
+
+async function checkForUpdates(includePrerelease: boolean): Promise<UpdateCheckResult | null> {
+  const releases = await fetchReleases(includePrerelease);
+  const latestRelease = pickLatestRelease(releases);
+  if (!latestRelease) return null;
+
+  const latestTag = typeof latestRelease.tag_name === 'string' ? latestRelease.tag_name : '';
+  const latestVersion = normalizeSemver(latestTag);
+  const currentVersion = normalizeSemver(app.getVersion());
+  const hasUpdate = compareSemver(latestVersion, currentVersion) > 0;
+
+  const mode: 'portable' | 'installer' = isPortableBuild ? 'portable' : 'installer';
+  const asset = mode === 'portable' ? pickPortableAsset(latestRelease) : pickInstallerAsset(latestRelease);
+  if (!asset?.name || !asset.browser_download_url) {
+    return null;
+  }
+
+  return {
+    mode,
+    currentVersion,
+    latestVersion,
+    latestIsPrerelease: latestRelease.prerelease === true,
+    hasUpdate,
+    releaseName: latestRelease.name?.trim() || latestTag || latestVersion,
+    assetName: asset.name,
+    downloadUrl: asset.browser_download_url,
+  };
+}
+
+async function downloadAssetToDownloads(downloadUrl: string, assetName: string): Promise<string> {
+  const response = await fetch(downloadUrl, {
+    headers: {
+      Accept: 'application/octet-stream',
+      'User-Agent': 'mira-updater',
+    },
+    redirect: 'follow',
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to download update (HTTP ${response.status}).`);
+  }
+
+  const fileBuffer = Buffer.from(await response.arrayBuffer());
+  const targetPath = path.join(app.getPath('downloads'), assetName);
+  await fs.writeFile(targetPath, fileBuffer);
+  return targetPath;
+}
+
 function setupHistoryHandlers() {
   ipcMain.handle('history-add', async (_, payload: { url?: string; title?: string }) => {
     await addHistoryEntry(payload ?? {});
@@ -640,6 +837,75 @@ function setupSessionHandlers() {
     bootRestoreByWindowId.delete(sourceWindow.id);
     return snapshot;
   });
+}
+
+function setupUpdateHandlers() {
+  ipcMain.handle('updates-check', async (_event, options: { includePrerelease?: boolean } | undefined) => {
+    try {
+      const result = await checkForUpdates(options?.includePrerelease === true);
+      if (!result) {
+        return {
+          ok: false,
+          error: 'No compatible update asset was found for this operating system.',
+        };
+      }
+
+      return {
+        ok: true,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to check for updates.',
+      };
+    }
+  });
+
+  ipcMain.handle('updates-open-download', async (_event, downloadUrl: unknown) => {
+    const url = typeof downloadUrl === 'string' ? downloadUrl.trim() : '';
+    if (!url) return false;
+    await shell.openExternal(url);
+    return true;
+  });
+
+  ipcMain.handle(
+    'updates-download-and-install',
+    async (_event, payload: { downloadUrl?: unknown; assetName?: unknown } | undefined) => {
+      const downloadUrl = typeof payload?.downloadUrl === 'string' ? payload.downloadUrl.trim() : '';
+      const assetName = typeof payload?.assetName === 'string' ? payload.assetName.trim() : '';
+      if (!downloadUrl || !assetName) {
+        return {
+          ok: false,
+          error: 'Invalid update payload.',
+        };
+      }
+
+      try {
+        const downloadedPath = await downloadAssetToDownloads(downloadUrl, assetName);
+        const openError = await shell.openPath(downloadedPath);
+        if (openError) {
+          return {
+            ok: false,
+            error: openError,
+          };
+        }
+
+        if (process.platform === 'win32') {
+          setTimeout(() => app.quit(), 1000).unref();
+        }
+
+        return {
+          ok: true,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to download and launch update.',
+        };
+      }
+    },
+  );
 }
 
 function triggerNewWindowFromShortcut(sourceWindow: BrowserWindow): void {
@@ -877,6 +1143,7 @@ app.whenReady().then(async () => {
   await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
   setupSessionHandlers();
+  setupUpdateHandlers();
   setupWebviewTabOpenHandler();
   setupAdBlocker();
   setupWindowControlsHandlers();

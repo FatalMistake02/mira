@@ -4,6 +4,7 @@
 
 - History shows site title
 - Restoring tabs will restore all windows
+- Work on updates
 
 ## v0.7.0 - 2026-02-15
 

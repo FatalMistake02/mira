@@ -12,6 +12,7 @@ export type BrowserSettings = {
   adBlockEnabled: boolean;
   quitOnLastWindowClose: boolean;
   disableNewTabIntro: boolean;
+  includePrereleaseUpdates: boolean;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -23,6 +24,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   adBlockEnabled: false,
   quitOnLastWindowClose: false,
   disableNewTabIntro: false,
+  includePrereleaseUpdates: false,
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
@@ -101,6 +103,14 @@ function normalizeDisableNewTabIntro(value: unknown): boolean {
   return value;
 }
 
+function normalizeIncludePrereleaseUpdates(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.includePrereleaseUpdates;
+  }
+
+  return value;
+}
+
 export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   if (typeof value !== 'object' || value === null) {
     return DEFAULT_BROWSER_SETTINGS;
@@ -116,6 +126,9 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     adBlockEnabled: normalizeAdBlockEnabled(candidate.adBlockEnabled),
     quitOnLastWindowClose: normalizeQuitOnLastWindowClose(candidate.quitOnLastWindowClose),
     disableNewTabIntro: normalizeDisableNewTabIntro(candidate.disableNewTabIntro),
+    includePrereleaseUpdates: normalizeIncludePrereleaseUpdates(
+      candidate.includePrereleaseUpdates,
+    ),
   };
 }
 

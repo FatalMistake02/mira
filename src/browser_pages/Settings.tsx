@@ -16,6 +16,21 @@ import {
 } from '../features/themes/themeLoader';
 import { electron } from '../electronBridge';
 
+type UpdateCheckPayload = {
+  mode: 'portable' | 'installer';
+  currentVersion: string;
+  latestVersion: string;
+  latestIsPrerelease: boolean;
+  hasUpdate: boolean;
+  releaseName: string;
+  assetName: string;
+  downloadUrl: string;
+};
+
+type UpdateCheckResponse =
+  | { ok: true; data: UpdateCheckPayload }
+  | { ok: false; error: string };
+
 export default function Settings() {
   const AUTO_SAVE_DELAY_MS = 300;
   const SAVED_BADGE_MS = 1600;
@@ -33,11 +48,18 @@ export default function Settings() {
   const [disableNewTabIntro, setDisableNewTabIntro] = useState(
     () => initialSettings.disableNewTabIntro,
   );
+  const [includePrereleaseUpdates, setIncludePrereleaseUpdates] = useState(
+    () => initialSettings.includePrereleaseUpdates,
+  );
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [updateStatus, setUpdateStatus] = useState('');
+  const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckPayload | null>(null);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const isFirstAutoSaveRef = useRef(true);
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { navigate } = useTabs();
@@ -51,6 +73,7 @@ export default function Settings() {
     setAdBlockEnabled(DEFAULT_BROWSER_SETTINGS.adBlockEnabled);
     setQuitOnLastWindowClose(DEFAULT_BROWSER_SETTINGS.quitOnLastWindowClose);
     setDisableNewTabIntro(DEFAULT_BROWSER_SETTINGS.disableNewTabIntro);
+    setIncludePrereleaseUpdates(DEFAULT_BROWSER_SETTINGS.includePrereleaseUpdates);
     applyTheme(getThemeById(DEFAULT_BROWSER_SETTINGS.themeId));
     setThemes(getAllThemes());
     setImportMessage('');
@@ -118,6 +141,7 @@ export default function Settings() {
         adBlockEnabled,
         quitOnLastWindowClose,
         disableNewTabIntro,
+        includePrereleaseUpdates,
       });
       setSaveStatus('saved');
 
@@ -139,6 +163,7 @@ export default function Settings() {
     adBlockEnabled,
     quitOnLastWindowClose,
     disableNewTabIntro,
+    includePrereleaseUpdates,
   ]);
 
   useEffect(() => {
@@ -153,6 +178,73 @@ export default function Settings() {
   const formatThemeLabel = (entry: ThemeEntry) => {
     const modeLabel = entry.theme.mode === 'light' ? 'Light' : 'Dark';
     return `${entry.theme.name} - ${entry.theme.author} (${modeLabel})`;
+  };
+
+  const checkForUpdates = async () => {
+    if (!electron?.ipcRenderer) {
+      setUpdateStatus('Update checks are only available in the desktop app.');
+      return;
+    }
+
+    setIsCheckingUpdates(true);
+    setUpdateStatus('');
+    setUpdateCheckResult(null);
+    try {
+      const response = await electron.ipcRenderer.invoke<UpdateCheckResponse>('updates-check', {
+        includePrerelease: includePrereleaseUpdates,
+      });
+
+      if (!response.ok) {
+        setUpdateStatus(response.error);
+        return;
+      }
+
+      const result = response.data;
+      setUpdateCheckResult(result);
+
+      if (!result.hasUpdate) {
+        setUpdateStatus(`You are up to date (v${result.currentVersion}).`);
+        return;
+      }
+
+      const prereleaseLabel = result.latestIsPrerelease ? ' (pre-release)' : '';
+      setUpdateStatus(`Update available: v${result.latestVersion}${prereleaseLabel}.`);
+    } catch {
+      setUpdateStatus('Failed to check for updates.');
+    } finally {
+      setIsCheckingUpdates(false);
+    }
+  };
+
+  const runUpdateAction = async () => {
+    if (!electron?.ipcRenderer || !updateCheckResult || !updateCheckResult.hasUpdate) return;
+
+    setIsRunningUpdateAction(true);
+    try {
+      if (updateCheckResult.mode === 'portable') {
+        await electron.ipcRenderer.invoke('updates-open-download', updateCheckResult.downloadUrl);
+        setUpdateStatus('Opened update download in your browser.');
+        return;
+      }
+
+      const response = await electron.ipcRenderer.invoke<{ ok: boolean; error?: string }>(
+        'updates-download-and-install',
+        {
+          downloadUrl: updateCheckResult.downloadUrl,
+          assetName: updateCheckResult.assetName,
+        },
+      );
+      if (!response.ok) {
+        setUpdateStatus(response.error || 'Failed to download update.');
+        return;
+      }
+
+      setUpdateStatus('Update downloaded. Installer launched.');
+    } catch {
+      setUpdateStatus('Failed to run update action.');
+    } finally {
+      setIsRunningUpdateAction(false);
+    }
   };
 
   return (
@@ -292,6 +384,58 @@ export default function Settings() {
           />
           Enabled
         </label>
+      </div>
+
+      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="include-prerelease-updates" style={{ fontWeight: 600 }}>
+          Updates
+        </label>
+        <label
+          htmlFor="include-prerelease-updates"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        >
+          <input
+            id="include-prerelease-updates"
+            type="checkbox"
+            checked={includePrereleaseUpdates}
+            onChange={(e) => {
+              setIncludePrereleaseUpdates(e.currentTarget.checked);
+              setSaveStatus('saving');
+            }}
+          />
+          Include pre-release versions when checking for updates
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={checkForUpdates}
+            className="theme-btn theme-btn-nav"
+            style={{ padding: '8px 12px' }}
+            disabled={isCheckingUpdates}
+          >
+            {isCheckingUpdates ? 'Checking...' : 'Check for Updates'}
+          </button>
+          {updateCheckResult?.hasUpdate && (
+            <button
+              type="button"
+              onClick={runUpdateAction}
+              className="theme-btn theme-btn-go"
+              style={{ padding: '8px 12px' }}
+              disabled={isRunningUpdateAction}
+            >
+              {isRunningUpdateAction
+                ? 'Working...'
+                : updateCheckResult.mode === 'portable'
+                  ? 'Download'
+                  : 'Download and Install'}
+            </button>
+          )}
+        </div>
+        {!!updateStatus && (
+          <div className="theme-text2" style={{ fontSize: 13 }}>
+            {updateStatus}
+          </div>
+        )}
       </div>
 
       {electron?.isMacOS && (
