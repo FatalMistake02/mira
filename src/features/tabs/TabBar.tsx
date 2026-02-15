@@ -126,171 +126,106 @@ export default function TabBar() {
           }}
         >
 
-      {tabs.map((tab) => {
-        const displayFavicon = getDisplayFavicon(tab.url, tab.favicon);
-        const displayTitle = getDisplayTitle(tab.url, tab.title);
-        const isInternalTab = tab.url.startsWith('mira://');
-        const faviconSize = isInternalTab ? 22 : 16;
+          {tabs.map((tab) => {
+            const displayFavicon = getDisplayFavicon(tab.url, tab.favicon);
+            const displayTitle = getDisplayTitle(tab.url, tab.title);
+            const isInternalTab = tab.url.startsWith('mira://');
+            const faviconSize = isInternalTab ? 22 : 16;
 
-        return (
-          <div
-            key={tab.id}
-            onClick={() => setActive(tab.id)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setMenuTabId(tab.id);
-              setMenuPos({ x: event.clientX, y: event.clientY });
-            }}
-            className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
-            style={{
-              padding: '6px 10px',
-              cursor: 'pointer',
-              borderRadius:
-                tab.id === activeId
-                  ? 'var(--layoutTabRadius, 8px) var(--layoutTabRadius, 8px) 0 0'
-                  : 'var(--layoutTabRadius, 8px)',
-              display: 'flex',
-              gap: 6,
-              alignItems: 'center',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-              position: 'relative',
-              zIndex: tab.id === activeId ? 2 : 1,
-              marginBottom: tab.id === activeId ? -1 : 1,
-              background:
-                tab.id === activeId
-                  ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                  : undefined,
-              borderBottomColor:
-                tab.id === activeId
-                  ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                  : undefined,
-            }}
-          >
-            {displayFavicon ? (
-              <img
-                src={displayFavicon}
-                alt=""
-                style={{ width: faviconSize, height: faviconSize, borderRadius: 3, flexShrink: 0 }}
-              />
-            ) : (
-              <span
-                aria-hidden={true}
-                style={{
-                  width: 16,
-                  height: 16,
-                  borderRadius: 3,
-                  display: 'inline-block',
-                  background: 'var(--borderColor, rgba(255,255,255,0.2))',
-                  flexShrink: 0,
+            return (
+              <div
+                key={tab.id}
+                onClick={() => setActive(tab.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenuTabId(tab.id);
+                  setMenuPos({ x: event.clientX, y: event.clientY });
                 }}
-              />
-            )}
-            <span
-              title={displayTitle}
-              style={{
-                maxWidth: 180,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {displayTitle}
-            </span>
-            {tab.isSleeping ? (
-              <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
-                zz
-              </span>
-            ) : null}
-            <button
-              type="button"
-              aria-label="Close tab"
-              onClick={(e) => {
-                e.stopPropagation();
-                closeTab(tab.id);
-              }}
-              className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
-              style={{
-                padding: '6px 10px',
-                cursor: 'pointer',
-                borderRadius: tab.id === activeId ? '8px 8px 0 0' : '8px',
-                display: 'flex',
-                gap: 6,
-                alignItems: 'center',
-                whiteSpace: 'nowrap',
-                flex: `1 1 ${TAB_TARGET_WIDTH_PX}px`,
-                minWidth: TAB_MIN_WIDTH_PX,
-                maxWidth: TAB_TARGET_WIDTH_PX,
-                position: 'relative',
-                zIndex: tab.id === activeId ? 2 : 1,
-                marginBottom: tab.id === activeId ? -1 : 1,
-                background:
-                  tab.id === activeId
-                    ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                    : undefined,
-                borderBottomColor:
-                  tab.id === activeId
-                    ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                    : undefined,
-              }}
-            >
-              {displayFavicon ? (
-                <img
-                  src={displayFavicon}
-                  alt=""
-                  style={{ width: faviconSize, height: faviconSize, borderRadius: 3, flexShrink: 0 }}
-                />
-              ) : (
-                <span
-                  aria-hidden={true}
-                  style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 3,
-                    display: 'inline-block',
-                    background: 'var(--borderColor, rgba(255,255,255,0.2))',
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-              <span
-                title={displayTitle}
+                className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
                 style={{
-                  flex: 1,
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {displayTitle}
-              </span>
-              {tab.isSleeping ? (
-                <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
-                  zz
-                </span>
-              ) : null}
-              <button
-                type="button"
-                aria-label="Close tab"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTab(tab.id);
-                }}
-                className="theme-btn tab-close-btn"
-                style={{
-                  opacity: 0.8,
-                  padding: 2,
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  borderRadius:
+                    tab.id === activeId
+                      ? 'var(--layoutTabRadius, 8px) var(--layoutTabRadius, 8px) 0 0'
+                      : 'var(--layoutTabRadius, 8px)',
                   display: 'flex',
+                  gap: 6,
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  whiteSpace: 'nowrap',
+                  flex: `1 1 ${TAB_TARGET_WIDTH_PX}px`,
+                  minWidth: TAB_MIN_WIDTH_PX,
+                  maxWidth: TAB_TARGET_WIDTH_PX,
+                  position: 'relative',
+                  zIndex: tab.id === activeId ? 2 : 1,
+                  marginBottom: tab.id === activeId ? -1 : 1,
+                  background:
+                    tab.id === activeId
+                      ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                      : undefined,
+                  borderBottomColor:
+                    tab.id === activeId
+                      ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                      : undefined,
                 }}
               >
-                <X size={12} strokeWidth={2.2} aria-hidden="true" />
-              </button>
-            </div>
-          );
-        })}
+                {displayFavicon ? (
+                  <img
+                    src={displayFavicon}
+                    alt=""
+                    style={{ width: faviconSize, height: faviconSize, borderRadius: 3, flexShrink: 0 }}
+                  />
+                ) : (
+                  <span
+                    aria-hidden={true}
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 3,
+                      display: 'inline-block',
+                      background: 'var(--borderColor, rgba(255,255,255,0.2))',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <span
+                  title={displayTitle}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {displayTitle}
+                </span>
+                {tab.isSleeping ? (
+                  <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
+                    zz
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label="Close tab"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                  className="theme-btn tab-close-btn"
+                  style={{
+                    opacity: 0.8,
+                    padding: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={12} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+              </div>
+            );
+          })}
         </div>
         <div
           aria-hidden={true}
