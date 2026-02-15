@@ -1,0 +1,17 @@
+{
+  "name": "Standard Layout",
+  "author": "Mira",
+  "values": {
+    "layoutControlRadius": "6px",
+    "layoutInputRadius": "6px",
+    "layoutPanelRadius": "8px",
+    "layoutTabRadius": "8px",
+    "layoutBorderWidth": "1px",
+    "layoutTopBarHeight": "38px",
+    "layoutAddressBarPaddingY": "6px",
+    "layoutNavButtonHeight": "30px",
+    "layoutDownloadButtonSize": "34px",
+    "layoutDownloadIndicatorVisibility": "sometimes"
+  }
+}
+

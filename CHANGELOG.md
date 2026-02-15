@@ -6,6 +6,7 @@
 - Restoring tabs will restore all windows
 - Work on updates
 - Use real Windows window controls 
+- Added layouts, similar to themes
 
 ## v0.7.0 - 2026-02-15
 

@@ -150,7 +150,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
     <div
       onDoubleClick={isMacOS ? undefined : onToggleMaximize}
       style={{
-        height: 38,
+        height: 'var(--layoutTopBarHeight, 38px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

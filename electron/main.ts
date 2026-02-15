@@ -1,12 +1,13 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, Menu, shell, session } from 'electron';
 import { v4 as uuidv4 } from 'uuid'; // install uuid ^9
-import type { DownloadItem } from 'electron';
+import type { DownloadItem, WebContents } from 'electron';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Store active downloads by ID
 const downloadMap = new Map<string, DownloadItem>();
+const downloadWindowById = new Map<string, number>();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -653,40 +654,67 @@ function setupHistoryHandlers() {
 function setupDownloadHandlers() {
   const ses = session.defaultSession;
 
-  const sendToItemWindow = (item: DownloadItem, channel: string, payload: Record<string, unknown>) => {
-    const sourceContents = item.getWebContents();
-    const sourceWindow = sourceContents ? BrowserWindow.fromWebContents(sourceContents) : null;
-    const targetWindow = sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow : null;
+  const pickTargetWindow = (downloadId: string, sourceContents?: WebContents | null): BrowserWindow | null => {
+    const sourceWindowId = downloadWindowById.get(downloadId);
+    const sourceWindow = sourceWindowId ? BrowserWindow.fromId(sourceWindowId) : null;
+    if (sourceWindow && !sourceWindow.isDestroyed()) return sourceWindow;
+
+    const sourceFromContents = sourceContents ? BrowserWindow.fromWebContents(sourceContents) : null;
+    if (sourceFromContents && !sourceFromContents.isDestroyed()) return sourceFromContents;
+
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    if (focusedWindow && !focusedWindow.isDestroyed()) return focusedWindow;
+
+    const firstAliveWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null;
+    return firstAliveWindow;
+  };
+
+  const sendDownloadEvent = (
+    downloadId: string,
+    channel: string,
+    payload: Record<string, unknown>,
+    sourceContents?: WebContents | null,
+  ) => {
+    const targetWindow = pickTargetWindow(downloadId, sourceContents);
     if (!targetWindow) return;
     targetWindow.webContents.send(channel, payload);
   };
 
   // Every download gets a UUID so the renderer can track it
-  ses.on('will-download', (event, item) => {
+  ses.on('will-download', (event, item, webContents) => {
     const downloadId = uuidv4(); // unique id for this download
     const filename = item.getFilename();
+    const sourceWindow = BrowserWindow.fromWebContents(webContents ?? event.sender);
 
     // Store the download item so we can cancel it later
     downloadMap.set(downloadId, item);
+    if (sourceWindow && !sourceWindow.isDestroyed()) {
+      downloadWindowById.set(downloadId, sourceWindow.id);
+    }
 
     // Tell the renderer a new download started
-    sendToItemWindow(item, 'download-start', {
+    sendDownloadEvent(
+      downloadId,
+      'download-start',
+      {
       id: downloadId,
       url: item.getURL(),
       filename,
       totalBytes: item.getTotalBytes(),
-    });
+      },
+      webContents ?? event.sender,
+    );
 
     // Progress updates
     item.on('updated', (_, state) => {
       if (state === 'interrupted') {
-        sendToItemWindow(item, 'download-error', {
+        sendDownloadEvent(downloadId, 'download-error', {
           id: downloadId,
           error: 'interrupted',
         });
         return;
       }
-      sendToItemWindow(item, 'download-progress', {
+      sendDownloadEvent(downloadId, 'download-progress', {
         id: downloadId,
         receivedBytes: item.getReceivedBytes(),
         totalBytes: item.getTotalBytes(),
@@ -697,14 +725,15 @@ function setupDownloadHandlers() {
     item.once('done', (e, state) => {
       // Clean up the map
       downloadMap.delete(downloadId);
+      downloadWindowById.delete(downloadId);
 
       if (state === 'completed') {
-        sendToItemWindow(item, 'download-done', {
+        sendDownloadEvent(downloadId, 'download-done', {
           id: downloadId,
           savePath: item.getSavePath(),
         });
       } else {
-        sendToItemWindow(item, 'download-error', {
+        sendDownloadEvent(downloadId, 'download-error', {
           id: downloadId,
           error: state,
         });
@@ -721,6 +750,7 @@ function setupDownloadHandlers() {
     if (item && item.getState() === 'progressing') {
       item.cancel();
       downloadMap.delete(id);
+      downloadWindowById.delete(id);
       return true;
     }
     return false;

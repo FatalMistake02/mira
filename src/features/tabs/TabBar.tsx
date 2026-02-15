@@ -87,7 +87,10 @@ export default function TabBar() {
             style={{
               padding: '6px 10px',
               cursor: 'pointer',
-              borderRadius: tab.id === activeId ? '8px 8px 0 0' : '8px',
+              borderRadius:
+                tab.id === activeId
+                  ? 'var(--layoutTabRadius, 8px) var(--layoutTabRadius, 8px) 0 0'
+                  : 'var(--layoutTabRadius, 8px)',
               display: 'flex',
               gap: 6,
               alignItems: 'center',

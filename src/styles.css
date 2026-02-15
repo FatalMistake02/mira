@@ -70,6 +70,16 @@ body {
   --surfaceBorder: var(--tabBorder);
   --surfaceBorderHover: var(--tabBorderHover);
   --surfaceBorderActive: var(--tabBorderActive);
+  --layoutControlRadius: 6px;
+  --layoutInputRadius: 6px;
+  --layoutPanelRadius: 8px;
+  --layoutTabRadius: 8px;
+  --layoutBorderWidth: 1px;
+  --layoutTopBarHeight: 38px;
+  --layoutAddressBarPaddingY: 6px;
+  --layoutNavButtonHeight: 30px;
+  --layoutDownloadButtonSize: 34px;
+  --layoutDownloadIndicatorVisibility: always;
 }
 
 body {
@@ -101,15 +111,16 @@ body {
 
 .theme-panel {
   background: var(--surfaceBg, var(--tabBg));
-  border: 1px solid var(--surfaceBorder, var(--tabBorder));
+  border: var(--layoutBorderWidth, 1px) solid var(--surfaceBorder, var(--tabBorder));
+  border-radius: var(--layoutPanelRadius, 8px);
   color: var(--surfaceText, var(--text1));
 }
 
 .theme-input {
   background: var(--urlBarBg, var(--fieldBg));
-  border: 1px solid var(--urlBarBorder, var(--fieldBorder));
+  border: var(--layoutBorderWidth, 1px) solid var(--urlBarBorder, var(--fieldBorder));
   color: var(--urlBarText, var(--fieldText));
-  border-radius: 6px;
+  border-radius: var(--layoutInputRadius, 6px);
 }
 
 .theme-input::placeholder {
@@ -128,7 +139,8 @@ body {
 }
 
 .theme-btn {
-  border-radius: 6px;
+  border-radius: var(--layoutControlRadius, 6px);
+  border-width: var(--layoutBorderWidth, 1px);
   cursor: pointer;
 }
 
@@ -219,7 +231,7 @@ body {
 
 .theme-tab {
   background: var(--tabBg, var(--surfaceBg));
-  border: 1px solid var(--tabBorder, var(--surfaceBorder));
+  border: var(--layoutBorderWidth, 1px) solid var(--tabBorder, var(--surfaceBorder));
   color: var(--tabText, var(--surfaceText));
 }
 
