@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { Tab } from './types';
-import { addHistoryEntry } from '../history/clientHistory';
+import { addHistoryEntry, updateHistoryEntryTitle } from '../history/clientHistory';
 import { electron } from '../../electronBridge';
 import miraLogo from '../../assets/mira_logo.png';
 import {
@@ -456,6 +456,7 @@ const openHistory = () => {
 
   const updateTabMetadata = useCallback(
     (id: string, metadata: { title?: string; favicon?: string | null }) => {
+      const historyTitleUpdates: Array<{ url: string; title: string }> = [];
       setTabs((currentTabs) => {
         let changed = false;
         const nextTabs = currentTabs.map((tab) => {
@@ -468,6 +469,9 @@ const openHistory = () => {
             const normalizedTitle = metadata.title.trim();
             if (normalizedTitle) {
               nextTitle = normalizedTitle;
+              if (!tab.url.startsWith('mira://') && normalizedTitle !== tab.url) {
+                historyTitleUpdates.push({ url: tab.url, title: normalizedTitle });
+              }
             }
           }
 
@@ -493,6 +497,9 @@ const openHistory = () => {
 
         return changed ? nextTabs : currentTabs;
       });
+      for (const update of historyTitleUpdates) {
+        updateHistoryEntryTitle(update.url, update.title).catch(() => undefined);
+      }
     },
     [],
   );

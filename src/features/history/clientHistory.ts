@@ -62,6 +62,29 @@ export async function addHistoryEntry(url: string, title: string): Promise<void>
   ]);
 }
 
+export async function updateHistoryEntryTitle(url: string, title: string): Promise<boolean> {
+  const normalizedUrl = url.trim();
+  const normalizedTitle = title.trim();
+  if (!normalizedUrl || normalizedUrl.startsWith('mira://') || !normalizedTitle) return false;
+  if (normalizedTitle === normalizedUrl) return false;
+
+  if (electron?.ipcRenderer) {
+    return !!(
+      await electron.ipcRenderer.invoke<boolean>('history-update-title', {
+        url: normalizedUrl,
+        title: normalizedTitle,
+      })
+    );
+  }
+
+  const entries = loadLocal();
+  const match = entries.find((entry) => entry.url === normalizedUrl);
+  if (!match || match.title === normalizedTitle) return false;
+  match.title = normalizedTitle;
+  saveLocal(entries);
+  return true;
+}
+
 export async function listHistoryEntries(): Promise<HistoryEntry[]> {
   if (electron?.ipcRenderer) {
     const list = await electron.ipcRenderer.invoke<HistoryEntry[]>('history-list');

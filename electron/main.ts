@@ -275,6 +275,19 @@ async function addHistoryEntry(payload: { url?: string; title?: string }) {
   await persistHistory();
 }
 
+async function updateHistoryEntryTitle(payload: { url?: string; title?: string }): Promise<boolean> {
+  const url = payload.url?.trim();
+  const title = payload.title?.trim();
+  if (!url || !title || title === url) return false;
+
+  const match = historyCache.find((entry) => entry.url === url);
+  if (!match || match.title === title) return false;
+
+  match.title = title;
+  await persistHistory();
+  return true;
+}
+
 async function deleteHistoryEntry(id: string): Promise<boolean> {
   const normalizedId = id.trim();
   if (!normalizedId) return false;
@@ -424,6 +437,10 @@ function setupHistoryHandlers() {
     historyCache = pruneHistory(historyCache);
     await persistHistory();
     return historyCache;
+  });
+
+  ipcMain.handle('history-update-title', async (_, payload: { url?: string; title?: string }) => {
+    return updateHistoryEntryTitle(payload ?? {});
   });
 
   ipcMain.handle('history-delete', async (_, id: string) => {
