@@ -45,7 +45,6 @@ export default function TabBar() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const tabElementRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const prevTabCountRef = useRef(tabs.length);
 
   useEffect(() => {
@@ -75,14 +74,10 @@ export default function TabBar() {
     prevTabCountRef.current = tabs.length;
     if (tabs.length <= previousCount) return;
 
-    const activeTabEl = tabElementRefs.current[activeId];
-    if (!activeTabEl) return;
-    activeTabEl.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-      inline: 'nearest',
-    });
-  }, [tabs.length, activeId]);
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = el.scrollWidth;
+  }, [tabs.length]);
 
   useEffect(() => {
     if (!menuPos) return;
@@ -139,9 +134,6 @@ export default function TabBar() {
           return (
             <div
               key={tab.id}
-              ref={(el) => {
-                tabElementRefs.current[tab.id] = el;
-              }}
               onClick={() => setActive(tab.id)}
               onContextMenu={(event) => {
                 event.preventDefault();
