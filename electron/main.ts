@@ -1008,6 +1008,37 @@ function setupWindowControlsHandlers() {
     win.close();
     return true;
   });
+
+  ipcMain.handle(
+    'window-set-titlebar-symbol-color',
+    (
+      event,
+      payload: unknown,
+    ) => {
+    if (!isWindows) return false;
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return false;
+
+      let normalizedSymbolColor = '';
+      let normalizedOverlayColor = '';
+      if (typeof payload === 'string') {
+        normalizedSymbolColor = payload.trim();
+      } else if (typeof payload === 'object' && payload) {
+        const candidate = payload as { symbolColor?: unknown; color?: unknown };
+        normalizedSymbolColor =
+          typeof candidate.symbolColor === 'string' ? candidate.symbolColor.trim() : '';
+        normalizedOverlayColor = typeof candidate.color === 'string' ? candidate.color.trim() : '';
+      }
+
+      if (!normalizedSymbolColor) return false;
+    win.setTitleBarOverlay({
+      color: normalizedOverlayColor || '#00000000',
+      symbolColor: normalizedSymbolColor,
+      height: 38,
+    });
+    return true;
+    },
+  );
 }
 
 function setupGlobalShortcuts() {

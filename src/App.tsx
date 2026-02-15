@@ -47,12 +47,20 @@ function Browser() {
       applyTheme(getThemeById(settings.themeId));
       if (!electron?.ipcRenderer) return;
 
+      const rootStyles = getComputedStyle(document.documentElement);
+      const symbolColor = rootStyles.getPropertyValue('--text1').trim() || '#e8edf5';
+      const overlayColor = rootStyles.getPropertyValue('--surfaceBg').trim() || '#1a2029';
+
       void Promise.allSettled([
         electron.ipcRenderer.invoke('settings-set-ad-block-enabled', settings.adBlockEnabled),
         electron.ipcRenderer.invoke(
           'settings-set-quit-on-last-window-close',
           settings.quitOnLastWindowClose,
         ),
+        electron.ipcRenderer.invoke('window-set-titlebar-symbol-color', {
+          symbolColor,
+          color: overlayColor,
+        }),
       ]);
     };
 
