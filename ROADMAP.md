@@ -11,6 +11,7 @@
 - [ ] Clean UI
 - [ ] Improve performance
 - [ ] Fix bugs/issues
+- [ ] Auto update
  
 ## v1.1.0
 - [ ] Bookmarks and favorites
