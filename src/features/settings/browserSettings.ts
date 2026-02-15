@@ -1,4 +1,5 @@
 import { DEFAULT_THEME_ID } from '../themes/themeLoader';
+import { DEFAULT_LAYOUT_ID } from '../layouts/layoutLoader';
 
 export type TabSleepUnit = 'seconds' | 'minutes' | 'hours';
 export type TabSleepMode = 'freeze' | 'discard';
@@ -6,6 +7,7 @@ export type TabSleepMode = 'freeze' | 'discard';
 export type BrowserSettings = {
   newTabPage: string;
   themeId: string;
+  layoutId: string;
   tabSleepValue: number;
   tabSleepUnit: TabSleepUnit;
   tabSleepMode: TabSleepMode;
@@ -18,6 +20,7 @@ export type BrowserSettings = {
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   newTabPage: 'mira://NewTab',
   themeId: DEFAULT_THEME_ID,
+  layoutId: DEFAULT_LAYOUT_ID,
   tabSleepValue: 10,
   tabSleepUnit: 'minutes',
   tabSleepMode: 'freeze',
@@ -95,6 +98,15 @@ function normalizeQuitOnLastWindowClose(value: unknown): boolean {
   return value;
 }
 
+function normalizeLayoutId(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_BROWSER_SETTINGS.layoutId;
+
+  const normalized = value.trim();
+  if (!normalized) return DEFAULT_BROWSER_SETTINGS.layoutId;
+
+  return normalized;
+}
+
 function normalizeDisableNewTabIntro(value: unknown): boolean {
   if (typeof value !== 'boolean') {
     return DEFAULT_BROWSER_SETTINGS.disableNewTabIntro;
@@ -120,6 +132,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   return {
     newTabPage: normalizeNewTabPage(candidate.newTabPage),
     themeId: normalizeThemeId(candidate.themeId),
+    layoutId: normalizeLayoutId(candidate.layoutId),
     tabSleepValue: normalizeTabSleepValue(candidate.tabSleepValue),
     tabSleepUnit: normalizeTabSleepUnit(candidate.tabSleepUnit),
     tabSleepMode: normalizeTabSleepMode(candidate.tabSleepMode),

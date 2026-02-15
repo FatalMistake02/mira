@@ -6,15 +6,19 @@ import DownloadPopup from './DownloadPopup';
 export default function DownloadButton() {
   const { downloads } = useDownloads();
   const [show, setShow] = useState(false);
+  const [visibilityMode, setVisibilityMode] = useState<'always' | 'sometimes' | 'never'>('always');
+  const [sometimesVisible, setSometimesVisible] = useState(false);
   const [indicatorPhase, setIndicatorPhase] = useState<'idle' | 'active' | 'complete' | 'fading'>(
     'idle',
   );
   const prevPendingRef = useRef(0);
   const completionHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completionFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sometimesHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const COMPLETION_HOLD_MS = 1200;
   const COMPLETION_FADE_MS = 600;
+  const SOMETIMES_HIDE_AFTER_INTERACTION_MS = 10000;
 
   const pendingCount = downloads.filter(
     (d) => d.status !== 'completed' && d.status !== 'canceled' && d.status !== 'error',
@@ -36,6 +40,28 @@ export default function DownloadButton() {
 
     return Math.max(0, Math.min(receivedBytes / totalBytes, 1));
   }, [activeDownloads]);
+
+  useEffect(() => {
+    const readMode = () => {
+      const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue('--layoutDownloadIndicatorVisibility')
+        .trim()
+        .toLowerCase();
+      if (raw === 'never' || raw === 'sometimes' || raw === 'always') {
+        setVisibilityMode(raw);
+        return;
+      }
+      setVisibilityMode('always');
+    };
+
+    readMode();
+    const observer = new MutationObserver(readMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style'],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (completionHoldTimerRef.current) {
@@ -76,8 +102,75 @@ export default function DownloadButton() {
       if (completionFadeTimerRef.current) {
         clearTimeout(completionFadeTimerRef.current);
       }
+      if (sometimesHideTimerRef.current) {
+        clearTimeout(sometimesHideTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    const clearHideTimer = () => {
+      if (!sometimesHideTimerRef.current) return;
+      clearTimeout(sometimesHideTimerRef.current);
+      sometimesHideTimerRef.current = null;
+    };
+
+    if (visibilityMode !== 'sometimes') {
+      clearHideTimer();
+      setSometimesVisible(false);
+      return;
+    }
+
+    const hasHistory = downloads.length > 0;
+    const hasActiveDownload = pendingCount > 0;
+
+    if (show || hasActiveDownload) {
+      clearHideTimer();
+      setSometimesVisible(true);
+      return;
+    }
+
+    if (!hasHistory) {
+      clearHideTimer();
+      setSometimesVisible(false);
+      return;
+    }
+
+    setSometimesVisible(true);
+
+    const hideNow = () => {
+      clearHideTimer();
+      setSometimesVisible(false);
+    };
+
+    const scheduleHideAfterInteraction = () => {
+      if (!document.hasFocus()) {
+        hideNow();
+        return;
+      }
+      clearHideTimer();
+      sometimesHideTimerRef.current = setTimeout(() => {
+        setSometimesVisible(false);
+      }, SOMETIMES_HIDE_AFTER_INTERACTION_MS);
+    };
+
+    const onBlur = () => {
+      hideNow();
+    };
+
+    window.addEventListener('mousedown', scheduleHideAfterInteraction, true);
+    window.addEventListener('keydown', scheduleHideAfterInteraction, true);
+    window.addEventListener('touchstart', scheduleHideAfterInteraction, true);
+    window.addEventListener('blur', onBlur);
+
+    return () => {
+      window.removeEventListener('mousedown', scheduleHideAfterInteraction, true);
+      window.removeEventListener('keydown', scheduleHideAfterInteraction, true);
+      window.removeEventListener('touchstart', scheduleHideAfterInteraction, true);
+      window.removeEventListener('blur', onBlur);
+      clearHideTimer();
+    };
+  }, [visibilityMode, show, downloads.length, pendingCount]);
 
   const ringVisible = indicatorPhase !== 'idle';
   const ringOpacity = indicatorPhase === 'fading' ? 0 : 1;
@@ -86,6 +179,10 @@ export default function DownloadButton() {
   const radius = 11;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - progressRatio);
+  const shouldShowButton =
+    visibilityMode === 'always' ||
+    (visibilityMode === 'sometimes' && sometimesVisible);
+  if (!shouldShowButton) return null;
 
   return (
     <div style={{ position: 'relative' }}>
@@ -94,8 +191,8 @@ export default function DownloadButton() {
         title="Downloads"
         className="theme-btn theme-btn-download"
         style={{
-          width: 34,
-          height: 30,
+          width: 'var(--layoutDownloadButtonSize, 34px)',
+          height: 'var(--layoutNavButtonHeight, 30px)',
           padding: 0,
           fontSize: 15,
           marginLeft: 4,

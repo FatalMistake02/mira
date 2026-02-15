@@ -128,7 +128,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        padding: 6,
+        padding: 'var(--layoutAddressBarPaddingY, 6px)',
         gap: 4,
         background: 'var(--surfaceBgHover, var(--tabBgHover))',
         borderTop: '1px solid var(--surfaceBorder, var(--tabBorder))',
@@ -141,6 +141,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         className="theme-btn theme-btn-nav"
         style={{
           padding: '4px 8px',
+          height: 'var(--layoutNavButtonHeight, 30px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -156,6 +157,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         className="theme-btn theme-btn-nav"
         style={{
           padding: '4px 8px',
+          height: 'var(--layoutNavButtonHeight, 30px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -170,6 +172,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         className="theme-btn theme-btn-nav"
         style={{
           padding: '4px 8px',
+          height: 'var(--layoutNavButtonHeight, 30px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -192,6 +195,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         style={{
           flex: 1,
           padding: '6px 10px',
+          minHeight: 'var(--layoutNavButtonHeight, 30px)',
           fontSize: 16,
         }}
       />
@@ -205,6 +209,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
           className="theme-btn theme-btn-nav"
           style={{
             padding: '4px 8px',
+            height: 'var(--layoutNavButtonHeight, 30px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

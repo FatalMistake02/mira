@@ -125,20 +125,89 @@ export default function TabBar() {
             alignItems: 'center',
           }}
         >
-        {tabs.map((tab) => {
-          const displayFavicon = getDisplayFavicon(tab.url, tab.favicon);
-          const displayTitle = getDisplayTitle(tab.url, tab.title);
-          const isInternalTab = tab.url.startsWith('mira://');
-          const faviconSize = isInternalTab ? 22 : 16;
 
-          return (
-            <div
-              key={tab.id}
-              onClick={() => setActive(tab.id)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setMenuTabId(tab.id);
-                setMenuPos({ x: event.clientX, y: event.clientY });
+      {tabs.map((tab) => {
+        const displayFavicon = getDisplayFavicon(tab.url, tab.favicon);
+        const displayTitle = getDisplayTitle(tab.url, tab.title);
+        const isInternalTab = tab.url.startsWith('mira://');
+        const faviconSize = isInternalTab ? 22 : 16;
+
+        return (
+          <div
+            key={tab.id}
+            onClick={() => setActive(tab.id)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setMenuTabId(tab.id);
+              setMenuPos({ x: event.clientX, y: event.clientY });
+            }}
+            className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
+            style={{
+              padding: '6px 10px',
+              cursor: 'pointer',
+              borderRadius:
+                tab.id === activeId
+                  ? 'var(--layoutTabRadius, 8px) var(--layoutTabRadius, 8px) 0 0'
+                  : 'var(--layoutTabRadius, 8px)',
+              display: 'flex',
+              gap: 6,
+              alignItems: 'center',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              position: 'relative',
+              zIndex: tab.id === activeId ? 2 : 1,
+              marginBottom: tab.id === activeId ? -1 : 1,
+              background:
+                tab.id === activeId
+                  ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                  : undefined,
+              borderBottomColor:
+                tab.id === activeId
+                  ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                  : undefined,
+            }}
+          >
+            {displayFavicon ? (
+              <img
+                src={displayFavicon}
+                alt=""
+                style={{ width: faviconSize, height: faviconSize, borderRadius: 3, flexShrink: 0 }}
+              />
+            ) : (
+              <span
+                aria-hidden={true}
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 3,
+                  display: 'inline-block',
+                  background: 'var(--borderColor, rgba(255,255,255,0.2))',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <span
+              title={displayTitle}
+              style={{
+                maxWidth: 180,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {displayTitle}
+            </span>
+            {tab.isSleeping ? (
+              <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
+                zz
+              </span>
+            ) : null}
+            <button
+              type="button"
+              aria-label="Close tab"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTab(tab.id);
               }}
               className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
               style={{

@@ -15,6 +15,8 @@ import {
 } from './features/settings/browserSettings';
 import { applyTheme } from './features/themes/applyTheme';
 import { getThemeById } from './features/themes/themeLoader';
+import { applyLayout } from './features/layouts/applyLayout';
+import { getLayoutById } from './features/layouts/layoutLoader';
 
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
@@ -45,6 +47,7 @@ function Browser() {
     const applyRuntimeSettings = () => {
       const settings = getBrowserSettings();
       applyTheme(getThemeById(settings.themeId));
+      applyLayout(getLayoutById(settings.layoutId));
       if (!electron?.ipcRenderer) return;
 
       const rootStyles = getComputedStyle(document.documentElement);

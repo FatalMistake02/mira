@@ -1,0 +1,17 @@
+{
+  "name": "Compact Layout",
+  "author": "Mira",
+  "values": {
+    "layoutControlRadius": "4px",
+    "layoutInputRadius": "4px",
+    "layoutPanelRadius": "6px",
+    "layoutTabRadius": "6px",
+    "layoutBorderWidth": "1px",
+    "layoutTopBarHeight": "34px",
+    "layoutAddressBarPaddingY": "4px",
+    "layoutNavButtonHeight": "28px",
+    "layoutDownloadButtonSize": "30px",
+    "layoutDownloadIndicatorVisibility": "sometimes"
+  }
+}
+

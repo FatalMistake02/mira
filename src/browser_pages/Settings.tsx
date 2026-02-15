@@ -14,6 +14,14 @@ import {
   importThemeFromJson,
   type ThemeEntry,
 } from '../features/themes/themeLoader';
+import { applyLayout } from '../features/layouts/applyLayout';
+import {
+  deleteCustomLayout,
+  getAllLayouts,
+  getLayoutById,
+  importLayoutFromJson,
+  type LayoutEntry,
+} from '../features/layouts/layoutLoader';
 import { electron } from '../electronBridge';
 
 type UpdateCheckPayload = {
@@ -38,6 +46,7 @@ export default function Settings() {
   const initialSettings = getBrowserSettings();
   const [newTabPage, setNewTabPage] = useState(() => initialSettings.newTabPage);
   const [themeId, setThemeId] = useState(() => initialSettings.themeId);
+  const [layoutId, setLayoutId] = useState(() => initialSettings.layoutId);
   const [tabSleepValue, setTabSleepValue] = useState(() => initialSettings.tabSleepValue);
   const [tabSleepUnit, setTabSleepUnit] = useState(() => initialSettings.tabSleepUnit);
   const [tabSleepMode, setTabSleepMode] = useState(() => initialSettings.tabSleepMode);
@@ -52,9 +61,12 @@ export default function Settings() {
     () => initialSettings.includePrereleaseUpdates,
   );
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
+  const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
+  const [layoutDropdownOpen, setLayoutDropdownOpen] = useState(false);
   const [importMessage, setImportMessage] = useState('');
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const themeFileInputRef = useRef<HTMLInputElement | null>(null);
+  const layoutFileInputRef = useRef<HTMLInputElement | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [updateStatus, setUpdateStatus] = useState('');
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckPayload | null>(null);
@@ -67,6 +79,7 @@ export default function Settings() {
   const handleReset = () => {
     setNewTabPage(DEFAULT_BROWSER_SETTINGS.newTabPage);
     setThemeId(DEFAULT_BROWSER_SETTINGS.themeId);
+    setLayoutId(DEFAULT_BROWSER_SETTINGS.layoutId);
     setTabSleepValue(DEFAULT_BROWSER_SETTINGS.tabSleepValue);
     setTabSleepUnit(DEFAULT_BROWSER_SETTINGS.tabSleepUnit);
     setTabSleepMode(DEFAULT_BROWSER_SETTINGS.tabSleepMode);
@@ -75,7 +88,9 @@ export default function Settings() {
     setDisableNewTabIntro(DEFAULT_BROWSER_SETTINGS.disableNewTabIntro);
     setIncludePrereleaseUpdates(DEFAULT_BROWSER_SETTINGS.includePrereleaseUpdates);
     applyTheme(getThemeById(DEFAULT_BROWSER_SETTINGS.themeId));
+    applyLayout(getLayoutById(DEFAULT_BROWSER_SETTINGS.layoutId));
     setThemes(getAllThemes());
+    setLayouts(getAllLayouts());
     setImportMessage('');
     setSaveStatus('saving');
   };
@@ -84,6 +99,12 @@ export default function Settings() {
     setThemeId(nextThemeId);
     setSaveStatus('saving');
     applyTheme(getThemeById(nextThemeId));
+  };
+
+  const handleLayoutChange = (nextLayoutId: string) => {
+    setLayoutId(nextLayoutId);
+    setSaveStatus('saving');
+    applyLayout(getLayoutById(nextLayoutId));
   };
 
   const handleDeleteTheme = (deleteThemeId: string) => {
@@ -101,6 +122,23 @@ export default function Settings() {
     }
 
     setImportMessage('Theme deleted.');
+  };
+
+  const handleDeleteLayout = (deleteLayoutId: string) => {
+    const deleted = deleteCustomLayout(deleteLayoutId);
+    if (!deleted) return;
+
+    const updatedLayouts = getAllLayouts();
+    setLayouts(updatedLayouts);
+    setSaveStatus('saving');
+
+    if (layoutId === deleteLayoutId) {
+      const fallbackLayoutId = updatedLayouts[0]?.id ?? DEFAULT_BROWSER_SETTINGS.layoutId;
+      setLayoutId(fallbackLayoutId);
+      applyLayout(getLayoutById(fallbackLayoutId));
+    }
+
+    setImportMessage('Layout deleted.');
   };
 
   const handleImportTheme = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -135,6 +173,7 @@ export default function Settings() {
       saveBrowserSettings({
         newTabPage,
         themeId,
+        layoutId,
         tabSleepValue,
         tabSleepUnit,
         tabSleepMode,
@@ -157,6 +196,7 @@ export default function Settings() {
   }, [
     newTabPage,
     themeId,
+    layoutId,
     tabSleepValue,
     tabSleepUnit,
     tabSleepMode,
@@ -175,10 +215,33 @@ export default function Settings() {
   }, []);
 
   const selectedTheme = themes.find((entry) => entry.id === themeId) ?? themes[0] ?? null;
+  const selectedLayout = layouts.find((entry) => entry.id === layoutId) ?? layouts[0] ?? null;
   const formatThemeLabel = (entry: ThemeEntry) => {
     const modeLabel = entry.theme.mode === 'light' ? 'Light' : 'Dark';
     return `${entry.theme.name} - ${entry.theme.author} (${modeLabel})`;
   };
+
+  const handleImportLayout = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const imported = importLayoutFromJson(text);
+      const updatedLayouts = getAllLayouts();
+
+      setLayouts(updatedLayouts);
+      setLayoutId(imported.id);
+      applyLayout(imported.layout);
+      setSaveStatus('saving');
+      setImportMessage(`Imported layout: ${imported.layout.name} by ${imported.layout.author}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to import layout JSON.';
+      setImportMessage(message);
+    }
+  };
+  const formatLayoutLabel = (entry: LayoutEntry) => `${entry.layout.name} - ${entry.layout.author}`;
 
   const checkForUpdates = async () => {
     if (!electron?.ipcRenderer) {
@@ -462,6 +525,105 @@ export default function Settings() {
       )}
 
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="layout-dropdown-button" style={{ fontWeight: 600 }}>
+          Layout
+        </label>
+        <div style={{ position: 'relative', maxWidth: 420 }}>
+          <button
+            id="layout-dropdown-button"
+            type="button"
+            onClick={() => setLayoutDropdownOpen((open) => !open)}
+            className="theme-btn theme-btn-nav"
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '8px 10px',
+            }}
+          >
+            {selectedLayout ? formatLayoutLabel(selectedLayout) : 'No layouts available'}
+          </button>
+
+          {layoutDropdownOpen && (
+            <div
+              className="theme-panel"
+              style={{
+                marginTop: 6,
+                borderRadius: 6,
+                overflow: 'hidden',
+              }}
+            >
+              {layouts.map((entry) => (
+                <div
+                  key={entry.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: 6,
+                    borderBottom: '1px solid var(--tabBorder)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLayoutChange(entry.id);
+                      setLayoutDropdownOpen(false);
+                    }}
+                    className={`theme-btn ${entry.id === layoutId ? 'theme-btn-go' : 'theme-btn-nav'}`}
+                    style={{
+                      flex: 1,
+                      textAlign: 'left',
+                      padding: '6px 8px',
+                    }}
+                  >
+                    {formatLayoutLabel(entry)}
+                  </button>
+
+                  {entry.source === 'custom' && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteLayout(entry.id)}
+                      className="theme-btn theme-btn-nav"
+                      style={{
+                        padding: '6px 10px',
+                      }}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => layoutFileInputRef.current?.click()}
+            type="button"
+            className="theme-btn theme-btn-nav"
+            style={{ padding: '8px 12px' }}
+          >
+            Add Layout JSON
+          </button>
+          <input
+            ref={layoutFileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleImportLayout}
+            style={{ display: 'none' }}
+          />
+          <button
+            type="button"
+            onClick={() => navigate('mira://LayoutCreator')}
+            className="theme-btn theme-btn-nav"
+            style={{ padding: '8px 12px' }}
+          >
+            Open Layout Creator
+          </button>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <label htmlFor="theme-dropdown-button" style={{ fontWeight: 600 }}>
           Theme
         </label>
@@ -535,7 +697,7 @@ export default function Settings() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => themeFileInputRef.current?.click()}
             type="button"
             className="theme-btn theme-btn-nav"
             style={{ padding: '8px 12px' }}
@@ -543,7 +705,7 @@ export default function Settings() {
             Add Theme JSON
           </button>
           <input
-            ref={fileInputRef}
+            ref={themeFileInputRef}
             type="file"
             accept=".json,application/json"
             onChange={handleImportTheme}
