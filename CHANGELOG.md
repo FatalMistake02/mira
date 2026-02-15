@@ -3,7 +3,7 @@
 ## Unreleased
 
 - History shows site title
-- Restoring tabs will restore all windows
+- Restoring tabs will restore all windows and window locations
 - Work on updates
 - Use real Windows window controls 
 - Added layouts, similar to themes
