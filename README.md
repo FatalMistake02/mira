@@ -7,14 +7,15 @@ A desktop browser built with Electron + React.
 
 ## Features
 
-- Tabbed browsing with quick open/(close WIP) shortcuts
-- Address bar with search support
-- Session restore on startup
-- Tab sleeping to reduce memory usage
-- Light, dark, and custom themes 
-- Downloads manager
-- Browsing history page
-- Built-in ad blocker WIP
+- Tabbed browsing
+- Address/search bar
+- Session restore
+- Memory-saving tab management
+- Browsing history
+- Download manager
+- Customizable themes
+- Customizable layouts
+
 
 ## Dev setup
 
