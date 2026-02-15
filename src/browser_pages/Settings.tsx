@@ -14,6 +14,7 @@ import {
   importThemeFromJson,
   type ThemeEntry,
 } from '../features/themes/themeLoader';
+import { electron } from '../electronBridge';
 
 export default function Settings() {
   const AUTO_SAVE_DELAY_MS = 300;
@@ -26,6 +27,9 @@ export default function Settings() {
   const [tabSleepUnit, setTabSleepUnit] = useState(() => initialSettings.tabSleepUnit);
   const [tabSleepMode, setTabSleepMode] = useState(() => initialSettings.tabSleepMode);
   const [adBlockEnabled, setAdBlockEnabled] = useState(() => initialSettings.adBlockEnabled);
+  const [quitOnLastWindowClose, setQuitOnLastWindowClose] = useState(
+    () => initialSettings.quitOnLastWindowClose,
+  );
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [importMessage, setImportMessage] = useState('');
@@ -42,6 +46,7 @@ export default function Settings() {
     setTabSleepUnit(DEFAULT_BROWSER_SETTINGS.tabSleepUnit);
     setTabSleepMode(DEFAULT_BROWSER_SETTINGS.tabSleepMode);
     setAdBlockEnabled(DEFAULT_BROWSER_SETTINGS.adBlockEnabled);
+    setQuitOnLastWindowClose(DEFAULT_BROWSER_SETTINGS.quitOnLastWindowClose);
     applyTheme(getThemeById(DEFAULT_BROWSER_SETTINGS.themeId));
     setThemes(getAllThemes());
     setImportMessage('');
@@ -107,6 +112,7 @@ export default function Settings() {
         tabSleepUnit,
         tabSleepMode,
         adBlockEnabled,
+        quitOnLastWindowClose,
       });
       setSaveStatus('saved');
 
@@ -119,7 +125,7 @@ export default function Settings() {
     }, AUTO_SAVE_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [newTabPage, themeId, tabSleepValue, tabSleepUnit, tabSleepMode, adBlockEnabled]);
+  }, [newTabPage, themeId, tabSleepValue, tabSleepUnit, tabSleepMode, adBlockEnabled, quitOnLastWindowClose]);
 
   useEffect(() => {
     return () => {
@@ -252,6 +258,29 @@ export default function Settings() {
           Enabled
         </label>
       </div>
+
+      {electron?.isMacOS && (
+        <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label htmlFor="quit-on-last-window-close" style={{ fontWeight: 600 }}>
+            App Lifecycle
+          </label>
+          <label
+            htmlFor="quit-on-last-window-close"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          >
+            <input
+              id="quit-on-last-window-close"
+              type="checkbox"
+              checked={quitOnLastWindowClose}
+              onChange={(e) => {
+                setQuitOnLastWindowClose(e.currentTarget.checked);
+                setSaveStatus('saving');
+              }}
+            />
+            Quit app when last window closes
+          </label>
+        </div>
+      )}
 
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <label htmlFor="theme-dropdown-button" style={{ fontWeight: 600 }}>

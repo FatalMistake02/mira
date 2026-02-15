@@ -5,6 +5,8 @@ interface RendererIpcBridge {
 }
 
 interface ElectronBridge {
+  platform: string;
+  isMacOS: boolean;
   ipcRenderer: RendererIpcBridge;
 }
 

@@ -4,7 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: './', 
+  base: './',
   resolve: {
     alias: {
       electron: path.resolve(__dirname, 'src/electronStub.ts'), // optional stub

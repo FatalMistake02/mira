@@ -7,12 +7,21 @@ interface WebviewNavigationEvent extends Event {
   url: string;
 }
 
+interface WebviewPageTitleUpdatedEvent extends Event {
+  title: string;
+}
+
+interface WebviewPageFaviconUpdatedEvent extends Event {
+  favicons: string[];
+}
+
 interface WebviewElement extends HTMLElement {
   src: string;
   reload: () => void;
   findInPage: (text: string) => void;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
-  didNavigateInPageHandler?: (e: WebviewNavigationEvent) => void;
+  didPageTitleUpdatedHandler?: (e: WebviewPageTitleUpdatedEvent) => void;
+  pageFaviconUpdatedHandler?: (e: WebviewPageFaviconUpdatedEvent) => void;
 }
 
 // Load all internal pages (unchanged)
@@ -47,7 +56,7 @@ function renderInternal(url: string, reloadToken: number) {
 }
 
 export default function TabView() {
-  const { tabs, activeId, navigate, registerWebview } = useTabs();
+  const { tabs, activeId, navigate, updateTabMetadata, registerWebview } = useTabs();
   const [tabSleepMode, setTabSleepMode] = useState(() => getBrowserSettings().tabSleepMode);
 
   useEffect(() => {
@@ -100,28 +109,42 @@ export default function TabView() {
                   if (wv.didNavigateHandler) {
                     wv.removeEventListener('did-navigate', wv.didNavigateHandler as EventListener);
                   }
-                  if (wv.didNavigateInPageHandler) {
+                  if (wv.didPageTitleUpdatedHandler) {
                     wv.removeEventListener(
-                      'did-navigate-in-page',
-                      wv.didNavigateInPageHandler as EventListener,
+                      'page-title-updated',
+                      wv.didPageTitleUpdatedHandler as EventListener,
+                    );
+                  }
+                  if (wv.pageFaviconUpdatedHandler) {
+                    wv.removeEventListener(
+                      'page-favicon-updated',
+                      wv.pageFaviconUpdatedHandler as EventListener,
                     );
                   }
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     navigate(ev.url, tab.id);
                   };
-                  const didNavigateInPageHandler = (e: Event) => {
-                    const ev = e as WebviewNavigationEvent;
-                    navigate(ev.url, tab.id);
+                  const didPageTitleUpdatedHandler = (e: Event) => {
+                    const ev = e as WebviewPageTitleUpdatedEvent;
+                    updateTabMetadata(tab.id, { title: ev.title });
+                  };
+                  const pageFaviconUpdatedHandler = (e: Event) => {
+                    const ev = e as WebviewPageFaviconUpdatedEvent;
+                    updateTabMetadata(tab.id, { favicon: ev.favicons?.[0] ?? null });
                   };
 
                   wv.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
-                  wv.didNavigateInPageHandler = didNavigateInPageHandler as (
-                    e: WebviewNavigationEvent,
+                  wv.didPageTitleUpdatedHandler = didPageTitleUpdatedHandler as (
+                    e: WebviewPageTitleUpdatedEvent,
+                  ) => void;
+                  wv.pageFaviconUpdatedHandler = pageFaviconUpdatedHandler as (
+                    e: WebviewPageFaviconUpdatedEvent,
                   ) => void;
 
                   wv.addEventListener('did-navigate', didNavigateHandler);
-                  wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
+                  wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
+                  wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
                 }}
                 src={tab.url}
                 allowpopups={true}

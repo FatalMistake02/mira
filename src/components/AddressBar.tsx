@@ -59,8 +59,8 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     } else if (raw.includes('.')) {
       finalUrl = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
     } else {
-      const query = encodeURIComponent(raw);
-      finalUrl = `https://www.google.com/search?q=${query}`;
+      const query = new URLSearchParams({ q: raw }).toString();
+      finalUrl = `https://www.google.com/search?${query}`;
     }
 
     navigate(finalUrl);
@@ -143,7 +143,11 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         ref={inputRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && go()}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          go();
+          e.currentTarget.blur();
+        }}
         placeholder="Enter URL"
         className="theme-input"
         style={{

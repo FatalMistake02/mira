@@ -8,7 +8,10 @@
     "dev:react": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
-    "build": "vite build && electron-builder",
+    "build:web": "vite build",
+    "build:app": "electron-builder --dir",
+    "build": "npm run build:web && npm run build:app",
+    "dist": "npm run build:web && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""

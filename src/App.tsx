@@ -18,14 +18,24 @@ import { getThemeById } from './features/themes/themeLoader';
 
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const { newTab, closeTab, reload, findInPage, printPage, activeId } = useTabs();
+  const { newTab, openHistory, closeTab, reload, findInPage, toggleDevTools, activeId } = useTabs();
+  const openNewWindow = () => {
+    if (electron?.ipcRenderer) {
+      electron.ipcRenderer.invoke('window-new').catch(() => undefined);
+      return;
+    }
+    window.open(window.location.href, '_blank', 'noopener,noreferrer');
+  };
 
   useKeyboardShortcuts({
     newTab,
+    openHistory,
+    openNewWindow,
     closeTab,
     reload,
     findInPage,
     printPage,
+    toggleDevTools,
     activeId,
     addressInputRef,
   });
@@ -34,9 +44,15 @@ function Browser() {
     const applyRuntimeSettings = () => {
       const settings = getBrowserSettings();
       applyTheme(getThemeById(settings.themeId));
-      electron?.ipcRenderer
-        .invoke('settings-set-ad-block-enabled', settings.adBlockEnabled)
-        .catch(() => undefined);
+      if (!electron?.ipcRenderer) return;
+
+      void Promise.allSettled([
+        electron.ipcRenderer.invoke('settings-set-ad-block-enabled', settings.adBlockEnabled),
+        electron.ipcRenderer.invoke(
+          'settings-set-quit-on-last-window-close',
+          settings.quitOnLastWindowClose,
+        ),
+      ]);
     };
 
     applyRuntimeSettings();

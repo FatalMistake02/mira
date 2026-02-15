@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { Tab } from './types';
 import { addHistoryEntry } from '../history/clientHistory';
 import { electron } from '../../electronBridge';
+import miraLogo from '../../assets/mira_logo.png';
 import {
   BROWSER_SETTINGS_CHANGED_EVENT,
   getBrowserSettings,
@@ -10,10 +11,14 @@ import {
 
 const SESSION_STORAGE_KEY = 'mira.session.tabs.v1';
 const IPC_OPEN_TAB_DEDUPE_WINDOW_MS = 500;
+const INTERNAL_FAVICON_URL = miraLogo;
 
 type WebviewElement = {
   reload: () => void;
   findInPage: (text: string) => void;
+  openDevTools: () => void;
+  closeDevTools: () => void;
+  isDevToolsOpened: () => boolean;
   print?: (options?: unknown, callback?: (success: boolean, failureReason: string) => void) => void;
 } | null;
 
@@ -27,12 +32,19 @@ type TabsContextType = {
   tabs: Tab[];
   activeId: string;
   newTab: (url?: string) => void;
+  openHistory: () => void;
   closeTab: (id: string) => void;
+  moveTabToNewWindow: (id: string) => void;
   navigate: (url: string, tabId?: string) => void;
   goBack: () => void;
   goForward: () => void;
   reload: () => void;
   findInPage: () => void;
+  toggleDevTools: () => void;
+  updateTabMetadata: (
+    id: string,
+    metadata: { title?: string; favicon?: string | null },
+  ) => void;
   printPage: () => void;
   registerWebview: (id: string, el: WebviewElement) => void;
   setActive: (id: string) => void;
@@ -50,6 +62,8 @@ function createInitialTab(url: string): Tab {
   return {
     id: crypto.randomUUID(),
     url,
+    title: url.startsWith('mira://') ? 'New Tab' : url,
+    favicon: url.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
     history: [url],
     historyIndex: 0,
     reloadToken: 0,
@@ -67,6 +81,17 @@ function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
 
   const id = typeof value.id === 'string' ? value.id : crypto.randomUUID();
   const url = typeof value.url === 'string' && value.url.trim() ? value.url : defaultTabUrl;
+  const title =
+    typeof value.title === 'string' && value.title.trim()
+      ? value.title.trim()
+      : url.startsWith('mira://')
+        ? 'New Tab'
+        : url;
+  const favicon = url.startsWith('mira://')
+    ? INTERNAL_FAVICON_URL
+    : typeof value.favicon === 'string' && value.favicon.trim()
+      ? value.favicon.trim()
+      : undefined;
   const historyRaw = Array.isArray(value.history) ? value.history : [url];
   const history = historyRaw.filter(
     (entry): entry is string => typeof entry === 'string' && !!entry.trim(),
@@ -91,6 +116,8 @@ function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
   return {
     id,
     url,
+    title,
+    favicon,
     history: normalizedHistory,
     historyIndex,
     reloadToken,
@@ -210,30 +237,57 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const newTab = useCallback(
-    (url?: string) => {
-      const defaultNewTabUrl = getBrowserSettings().newTabPage;
-      const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
-      const now = Date.now();
-      const id = crypto.randomUUID();
-      const newEntry: Tab = {
-        id,
-        url: targetUrl,
-        history: [targetUrl],
-        historyIndex: 0,
-        reloadToken: 0,
-        isSleeping: false,
-        lastActiveAt: now,
-      };
-      setTabs((t) =>
-        t
-          .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
-          .concat(newEntry),
-      );
-      setActiveId(id);
-    },
-    [activeId],
-  );
+  function miraUrlToName(url?: string) {
+    if (!url?.startsWith('mira://')) {
+      throw new Error(`Invalid mira url: '${url}'`);
+    }
+    const sanitized = url.slice(7);
+    switch (sanitized.toLowerCase()) {
+      case 'newtab':
+        return 'New Tab';
+      default:
+        // return a capitalized version of the url
+        return sanitized.charAt(0).toUpperCase() + sanitized.slice(1);
+    }
+  }
+
+  const newTab = useCallback((url?: string) => {
+    const defaultNewTabUrl = getBrowserSettings().newTabPage;
+    const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    const newEntry: Tab = {
+      id,
+      url: targetUrl,
+      title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
+      favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+      history: [targetUrl],
+      historyIndex: 0,
+      reloadToken: 0,
+      isSleeping: false,
+      lastActiveAt: now,
+    };
+    setTabs((t) =>
+      t
+        .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
+        .concat(newEntry),
+    );
+    setActiveId(id);
+  }, [activeId]);
+
+const openHistory = () => {
+  const activeTab = tabs.find((t) => t.id === activeId);
+  const newTabUrl = getBrowserSettings().newTabPage;
+  const isNewTab =
+    !!activeTab &&
+    (activeTab.url === newTabUrl || activeTab.url.toLowerCase() === 'mira://newtab');
+
+  if (isNewTab && activeTab) {
+    navigate('mira://history', activeTab.id); // reuse current tab
+  } else {
+    newTab('mira://history'); // open separate tab
+  }
+}
 
   const closeTab = (id: string) => {
     setTabs((t) => {
@@ -248,6 +302,39 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       );
     });
   };
+
+  const moveTabToNewWindow = useCallback(
+    (id: string) => {
+      const tabToMove = tabs.find((tab) => tab.id === id);
+      if (!tabToMove) return;
+
+      const url = tabToMove.url.trim();
+      if (electron?.ipcRenderer) {
+        electron.ipcRenderer.invoke('window-new-with-url', url).catch(() => undefined);
+      } else {
+        window.open(url || window.location.href, '_blank', 'noopener,noreferrer');
+      }
+
+      setTabs((currentTabs) => {
+        const nextTabs = currentTabs.filter((tab) => tab.id !== id);
+        if (!nextTabs.length) {
+          const replacement = createInitialTab(getBrowserSettings().newTabPage);
+          setActiveId(replacement.id);
+          return [replacement];
+        }
+
+        if (id !== activeId) return nextTabs;
+
+        const now = Date.now();
+        const nextActiveId = nextTabs[0].id;
+        setActiveId(nextActiveId);
+        return nextTabs.map((tab) =>
+          tab.id === nextActiveId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+        );
+      });
+    },
+    [tabs, activeId],
+  );
 
   const setActive = useCallback(
     (id: string) => {
@@ -276,6 +363,49 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     [activeId],
   );
 
+  const updateTabMetadata = useCallback(
+    (id: string, metadata: { title?: string; favicon?: string | null }) => {
+      setTabs((currentTabs) => {
+        let changed = false;
+        const nextTabs = currentTabs.map((tab) => {
+          if (tab.id !== id) return tab;
+
+          let nextTitle = tab.title;
+          let nextFavicon = tab.favicon;
+
+          if (typeof metadata.title === 'string') {
+            const normalizedTitle = metadata.title.trim();
+            if (normalizedTitle) {
+              nextTitle = normalizedTitle;
+            }
+          }
+
+          if (metadata.favicon !== undefined) {
+            const normalizedFavicon =
+              typeof metadata.favicon === 'string' && metadata.favicon.trim()
+                ? metadata.favicon.trim()
+                : undefined;
+            nextFavicon = normalizedFavicon;
+          }
+
+          if (nextTitle === tab.title && nextFavicon === tab.favicon) {
+            return tab;
+          }
+
+          changed = true;
+          return {
+            ...tab,
+            title: nextTitle,
+            favicon: nextFavicon,
+          };
+        });
+
+        return changed ? nextTabs : currentTabs;
+      });
+    },
+    [],
+  );
+
   const navigate = (url: string, tabId?: string) => {
     const targetTabId = tabId ?? activeId;
     const normalized = url.trim();
@@ -293,9 +423,12 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         }
 
         const newHistory = tab.history.slice(0, tab.historyIndex + 1).concat(normalized);
+        const defaultTitle = normalized.startsWith('mira://') ? miraUrlToName(normalized) : normalized;
         return {
           ...tab,
           url: normalized,
+          title: defaultTitle,
+          favicon: normalized.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
           history: newHistory,
           historyIndex: newHistory.length - 1,
           reloadToken: tab.reloadToken,
@@ -355,6 +488,21 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     wv.findInPage(query);
   };
 
+  const toggleDevTools = () => {
+    const wv = webviewMap.current[activeId];
+    if (!wv) return;
+
+    if (typeof wv.isDevToolsOpened === 'function' && wv.isDevToolsOpened()) {
+      if (typeof wv.closeDevTools === 'function') {
+        wv.closeDevTools();
+      }
+      return;
+    }
+
+    if (typeof wv.openDevTools === 'function') {
+      wv.openDevTools();
+    }
+  };
   const printPage = useCallback(() => {
     const activeTab = tabs.find((tab) => tab.id === activeId);
     if (activeTab?.url.startsWith('mira://')) {
@@ -457,18 +605,37 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
   }, [newTab]);
 
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onOpenUrlInCurrentTab = (_event: unknown, url: string) => {
+      if (typeof url !== 'string') return;
+      const normalized = url.trim();
+      if (!normalized) return;
+      navigate(normalized);
+    };
+
+    ipc.on('open-url-in-current-tab', onOpenUrlInCurrentTab);
+    return () => ipc.off('open-url-in-current-tab', onOpenUrlInCurrentTab);
+  }, [navigate]);
+
   return (
     <TabsContext.Provider
       value={{
         tabs,
         activeId,
         newTab,
+        openHistory,
         closeTab,
+        moveTabToNewWindow,
         navigate,
         goBack,
         goForward,
         reload,
         findInPage,
+        toggleDevTools,
+        updateTabMetadata,
         printPage,
         registerWebview,
         setActive,

@@ -10,6 +10,7 @@ export type BrowserSettings = {
   tabSleepUnit: TabSleepUnit;
   tabSleepMode: TabSleepMode;
   adBlockEnabled: boolean;
+  quitOnLastWindowClose: boolean;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -19,6 +20,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   tabSleepUnit: 'minutes',
   tabSleepMode: 'freeze',
   adBlockEnabled: false,
+  quitOnLastWindowClose: false,
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
@@ -81,6 +83,14 @@ function normalizeAdBlockEnabled(value: unknown): boolean {
   return value;
 }
 
+function normalizeQuitOnLastWindowClose(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.quitOnLastWindowClose;
+  }
+
+  return value;
+}
+
 export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   if (typeof value !== 'object' || value === null) {
     return DEFAULT_BROWSER_SETTINGS;
@@ -94,6 +104,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     tabSleepUnit: normalizeTabSleepUnit(candidate.tabSleepUnit),
     tabSleepMode: normalizeTabSleepMode(candidate.tabSleepMode),
     adBlockEnabled: normalizeAdBlockEnabled(candidate.adBlockEnabled),
+    quitOnLastWindowClose: normalizeQuitOnLastWindowClose(candidate.quitOnLastWindowClose),
   };
 }
 
