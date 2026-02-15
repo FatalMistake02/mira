@@ -1,8 +1,13 @@
 import { useTabs } from '../features/tabs/TabsProvider';
 
 export default function RestoreTabsPrompt() {
-  const { restorePromptOpen, restoreTabCount, restorePreviousSession, discardPreviousSession } =
-    useTabs();
+  const {
+    restorePromptOpen,
+    restoreTabCount,
+    restoreWindowCount,
+    restorePreviousSession,
+    discardPreviousSession,
+  } = useTabs();
 
   if (!restorePromptOpen) return null;
 
@@ -31,7 +36,8 @@ export default function RestoreTabsPrompt() {
           Restore Previous Session?
         </h3>
         <p style={{ margin: '0 0 14px 0', fontSize: 13, lineHeight: 1.4 }} className="theme-text2">
-          Mira found {restoreTabCount} tab{restoreTabCount === 1 ? '' : 's'} from your last session.
+          Mira found {restoreTabCount} tab{restoreTabCount === 1 ? '' : 's'} across{' '}
+          {restoreWindowCount} window{restoreWindowCount === 1 ? '' : 's'} from your last session.
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button

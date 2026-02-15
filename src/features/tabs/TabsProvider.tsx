@@ -28,6 +28,12 @@ type SessionSnapshot = {
   savedAt: number;
 };
 
+type SessionRestoreState = {
+  hasPendingRestore: boolean;
+  tabCount: number;
+  windowCount: number;
+};
+
 type TabsContextType = {
   tabs: Tab[];
   activeId: string;
@@ -50,6 +56,7 @@ type TabsContextType = {
   setActive: (id: string) => void;
   restorePromptOpen: boolean;
   restoreTabCount: number;
+  restoreWindowCount: number;
   restorePreviousSession: () => void;
   discardPreviousSession: () => void;
 };
@@ -166,6 +173,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   );
   const [restorePromptOpen, setRestorePromptOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState<SessionSnapshot | null>(null);
+  const [restoreTabCountState, setRestoreTabCountState] = useState(0);
+  const [restoreWindowCount, setRestoreWindowCount] = useState(1);
 
   const webviewMap = useRef<Record<string, WebviewElement>>({});
   const hydratedRef = useRef(false);
@@ -173,12 +182,18 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const tabSleepTimerRef = useRef<number | null>(null);
 
   const persistSession = (nextTabs: Tab[], nextActiveId: string) => {
+    const snapshot: SessionSnapshot = {
+      tabs: nextTabs,
+      activeId: nextActiveId,
+      savedAt: Date.now(),
+    };
+
+    if (electron?.ipcRenderer) {
+      electron.ipcRenderer.invoke('session-save-window', snapshot).catch(() => undefined);
+      return;
+    }
+
     try {
-      const snapshot: SessionSnapshot = {
-        tabs: nextTabs,
-        activeId: nextActiveId,
-        savedAt: Date.now(),
-      };
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(snapshot));
     } catch {
       // Ignore storage failures (quota/private mode).
@@ -196,16 +211,84 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    const currentDefaultTabUrl = getBrowserSettings().newTabPage;
-    const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY), currentDefaultTabUrl);
-    if (snapshot && !isDefaultSnapshot(snapshot, currentDefaultTabUrl)) {
-      setPendingSession(snapshot);
-      setRestorePromptOpen(true);
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) {
+      const currentDefaultTabUrl = getBrowserSettings().newTabPage;
+      const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY), currentDefaultTabUrl);
+      if (snapshot && !isDefaultSnapshot(snapshot, currentDefaultTabUrl)) {
+        setPendingSession(snapshot);
+        setRestoreTabCountState(snapshot.tabs.length);
+        setRestorePromptOpen(true);
+      }
+      hydratedRef.current = true;
+      return;
     }
-    hydratedRef.current = true;
+
+    let cancelled = false;
+    const bootstrapSessionRestore = async () => {
+      const windowRestore = await ipc.invoke<SessionSnapshot | null>('session-take-window-restore');
+      if (cancelled) return;
+
+      if (windowRestore && windowRestore.tabs.length > 0) {
+        const now = Date.now();
+        const nextTabs = windowRestore.tabs.map((tab) =>
+          tab.id === windowRestore.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+        );
+        setTabs(nextTabs);
+        setActiveId(windowRestore.activeId);
+        setPendingSession(null);
+        setRestoreTabCountState(0);
+        setRestorePromptOpen(false);
+        setRestoreWindowCount(1);
+        hydratedRef.current = true;
+        return;
+      }
+
+      const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
+      if (cancelled) return;
+
+      if (restoreState?.hasPendingRestore) {
+        setRestorePromptOpen(true);
+        setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
+        setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
+      }
+      hydratedRef.current = true;
+    };
+
+    void bootstrapSessionRestore();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const restorePreviousSession = () => {
+    const ipc = electron?.ipcRenderer;
+    if (ipc) {
+      ipc.invoke<SessionSnapshot | null>('session-accept-restore')
+        .then((snapshot) => {
+          if (!snapshot || !snapshot.tabs.length) {
+            setRestorePromptOpen(false);
+            return;
+          }
+
+          const now = Date.now();
+          const restoredTabs = snapshot.tabs.map((tab) =>
+            tab.id === snapshot.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+          );
+          setTabs(restoredTabs);
+          setActiveId(snapshot.activeId);
+          setRestorePromptOpen(false);
+          setPendingSession(null);
+          setRestoreTabCountState(0);
+          setRestoreWindowCount(1);
+          persistSession(restoredTabs, snapshot.activeId);
+        })
+        .catch(() => {
+          setRestorePromptOpen(false);
+        });
+      return;
+    }
+
     if (!pendingSession) {
       setRestorePromptOpen(false);
       return;
@@ -223,9 +306,17 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   };
 
   const discardPreviousSession = () => {
+    const ipc = electron?.ipcRenderer;
+    if (ipc) {
+      ipc.invoke('session-discard-restore').catch(() => undefined);
+    }
     setRestorePromptOpen(false);
     setPendingSession(null);
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setRestoreTabCountState(0);
+    setRestoreWindowCount(1);
+    if (!ipc) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
     persistSession(tabs, activeId);
   };
 
@@ -640,7 +731,8 @@ const openHistory = () => {
         registerWebview,
         setActive,
         restorePromptOpen,
-        restoreTabCount: pendingSession?.tabs.length ?? 0,
+        restoreTabCount: pendingSession?.tabs.length ?? restoreTabCountState,
+        restoreWindowCount,
         restorePreviousSession,
         discardPreviousSession,
       }}

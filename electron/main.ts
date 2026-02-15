@@ -19,11 +19,39 @@ interface HistoryEntry {
   visitedAt: number;
 }
 
+interface TabSessionSnapshot {
+  id: string;
+  url: string;
+  title: string;
+  favicon?: string;
+  history: string[];
+  historyIndex: number;
+  reloadToken: number;
+  isSleeping: boolean;
+  lastActiveAt: number;
+}
+
+interface WindowSessionSnapshot {
+  tabs: TabSessionSnapshot[];
+  activeId: string;
+  savedAt: number;
+}
+
+interface PersistedSessionSnapshot {
+  windows: WindowSessionSnapshot[];
+  savedAt: number;
+}
+
 let historyCache: HistoryEntry[] = [];
 const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
 const NEW_WINDOW_SHORTCUT_DEDUPE_MS = 250;
 const recentNewWindowShortcutByWindow = new Map<number, number>();
+const windowSessionCache = new Map<number, WindowSessionSnapshot>();
+const bootRestoreByWindowId = new Map<number, WindowSessionSnapshot>();
+let pendingRestoreSession: PersistedSessionSnapshot | null = null;
+let sessionPersistTimer: NodeJS.Timeout | null = null;
+let isQuitting = false;
 let adBlockEnabled = true;
 let quitOnLastWindowClose = false;
 const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
@@ -196,6 +224,10 @@ function getHistoryFilePath() {
   return path.join(app.getPath('userData'), 'history.json');
 }
 
+function getSessionFilePath() {
+  return path.join(app.getPath('userData'), 'session.json');
+}
+
 function pruneHistory(entries: HistoryEntry[]): HistoryEntry[] {
   const cutoff = Date.now() - HISTORY_RETENTION_MS;
   return entries
@@ -260,6 +292,126 @@ async function clearHistory(): Promise<boolean> {
   historyCache = [];
   await persistHistory();
   return true;
+}
+
+function normalizeTabSessionSnapshot(value: unknown): TabSessionSnapshot | null {
+  if (typeof value !== 'object' || !value) return null;
+  const candidate = value as Record<string, unknown>;
+
+  const id = typeof candidate.id === 'string' ? candidate.id : '';
+  const url = typeof candidate.url === 'string' ? candidate.url.trim() : '';
+  const title = typeof candidate.title === 'string' ? candidate.title.trim() : url;
+  const historyRaw = Array.isArray(candidate.history) ? candidate.history : [];
+  const history = historyRaw
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (!id || !url || !history.length) return null;
+
+  const historyIndexRaw =
+    typeof candidate.historyIndex === 'number' && Number.isFinite(candidate.historyIndex)
+      ? Math.floor(candidate.historyIndex)
+      : history.length - 1;
+  const historyIndex = Math.min(Math.max(historyIndexRaw, 0), history.length - 1);
+
+  return {
+    id,
+    url,
+    title: title || url,
+    favicon:
+      typeof candidate.favicon === 'string' && candidate.favicon.trim()
+        ? candidate.favicon.trim()
+        : undefined,
+    history,
+    historyIndex,
+    reloadToken:
+      typeof candidate.reloadToken === 'number' && Number.isFinite(candidate.reloadToken)
+        ? candidate.reloadToken
+        : 0,
+    isSleeping: candidate.isSleeping === true,
+    lastActiveAt:
+      typeof candidate.lastActiveAt === 'number' && Number.isFinite(candidate.lastActiveAt)
+        ? candidate.lastActiveAt
+        : Date.now(),
+  };
+}
+
+function normalizeWindowSessionSnapshot(value: unknown): WindowSessionSnapshot | null {
+  if (typeof value !== 'object' || !value) return null;
+  const candidate = value as Record<string, unknown>;
+  const tabsRaw = Array.isArray(candidate.tabs) ? candidate.tabs : [];
+  const tabs = tabsRaw
+    .map((tab) => normalizeTabSessionSnapshot(tab))
+    .filter((tab): tab is TabSessionSnapshot => tab !== null);
+  if (!tabs.length) return null;
+
+  const activeIdRaw = typeof candidate.activeId === 'string' ? candidate.activeId : tabs[0].id;
+  const activeId = tabs.some((tab) => tab.id === activeIdRaw) ? activeIdRaw : tabs[0].id;
+
+  return {
+    tabs,
+    activeId,
+    savedAt:
+      typeof candidate.savedAt === 'number' && Number.isFinite(candidate.savedAt)
+        ? candidate.savedAt
+        : Date.now(),
+  };
+}
+
+function collectPersistedSessionSnapshot(): PersistedSessionSnapshot | null {
+  const windows = Array.from(windowSessionCache.values())
+    .filter((entry) => entry.tabs.length > 0)
+    .sort((a, b) => b.savedAt - a.savedAt);
+  if (!windows.length) return null;
+  return { windows, savedAt: Date.now() };
+}
+
+async function persistSessionSnapshot(): Promise<void> {
+  const snapshot = collectPersistedSessionSnapshot();
+  if (!snapshot) return;
+  await fs.writeFile(getSessionFilePath(), JSON.stringify(snapshot, null, 2), 'utf-8');
+}
+
+function scheduleSessionPersist(): void {
+  if (sessionPersistTimer) {
+    clearTimeout(sessionPersistTimer);
+  }
+  sessionPersistTimer = setTimeout(() => {
+    void persistSessionSnapshot();
+    sessionPersistTimer = null;
+  }, 300);
+  sessionPersistTimer.unref();
+}
+
+async function loadPersistedSessionSnapshot(): Promise<void> {
+  try {
+    const raw = await fs.readFile(getSessionFilePath(), 'utf-8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || !parsed) return;
+    const candidate = parsed as Record<string, unknown>;
+    const windowsRaw = Array.isArray(candidate.windows) ? candidate.windows : [];
+    const windows = windowsRaw
+      .map((entry) => normalizeWindowSessionSnapshot(entry))
+      .filter((entry): entry is WindowSessionSnapshot => entry !== null);
+    if (!windows.length) return;
+    pendingRestoreSession = {
+      windows,
+      savedAt:
+        typeof candidate.savedAt === 'number' && Number.isFinite(candidate.savedAt)
+          ? candidate.savedAt
+          : Date.now(),
+    };
+  } catch {
+    pendingRestoreSession = null;
+  }
+}
+
+async function clearPersistedSessionSnapshot(): Promise<void> {
+  try {
+    await fs.unlink(getSessionFilePath());
+  } catch {
+    // Ignore missing session snapshot file.
+  }
 }
 
 function setupHistoryHandlers() {
@@ -430,6 +582,66 @@ function setupWebviewTabOpenHandler() {
   });
 }
 
+function setupSessionHandlers() {
+  ipcMain.handle('session-save-window', async (event, payload: unknown) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return false;
+
+    const normalized = normalizeWindowSessionSnapshot(payload);
+    if (!normalized) return false;
+
+    windowSessionCache.set(sourceWindow.id, normalized);
+    scheduleSessionPersist();
+    return true;
+  });
+
+  ipcMain.handle('session-get-restore-state', () => {
+    if (!pendingRestoreSession) {
+      return {
+        hasPendingRestore: false,
+        tabCount: 0,
+        windowCount: 0,
+      };
+    }
+
+    const tabCount = pendingRestoreSession.windows.reduce((sum, item) => sum + item.tabs.length, 0);
+    return {
+      hasPendingRestore: tabCount > 0,
+      tabCount,
+      windowCount: pendingRestoreSession.windows.length,
+    };
+  });
+
+  ipcMain.handle('session-accept-restore', (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return null;
+    if (!pendingRestoreSession?.windows.length) return null;
+
+    const [primaryWindow, ...otherWindows] = pendingRestoreSession.windows;
+    pendingRestoreSession = null;
+
+    for (const snapshot of otherWindows) {
+      createWindow(undefined, undefined, snapshot);
+    }
+
+    return primaryWindow;
+  });
+
+  ipcMain.handle('session-discard-restore', async () => {
+    pendingRestoreSession = null;
+    await clearPersistedSessionSnapshot();
+    return true;
+  });
+
+  ipcMain.handle('session-take-window-restore', (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return null;
+    const snapshot = bootRestoreByWindowId.get(sourceWindow.id) ?? null;
+    bootRestoreByWindowId.delete(sourceWindow.id);
+    return snapshot;
+  });
+}
+
 function triggerNewWindowFromShortcut(sourceWindow: BrowserWindow): void {
   if (sourceWindow.isDestroyed()) return;
 
@@ -539,7 +751,11 @@ function setupMacDockMenu() {
   app.dock.setMenu(dockMenu);
 }
 
-function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): BrowserWindow {
+function createWindow(
+  sourceWindow?: BrowserWindow,
+  initialUrl?: string,
+  restoreSnapshot?: WindowSessionSnapshot,
+): BrowserWindow {
   const sourceBounds = sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow.getBounds() : null;
   const win = new BrowserWindow({
     x: sourceBounds ? sourceBounds.x + 24 : undefined,
@@ -567,6 +783,10 @@ function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): Browse
     win.loadURL('http://localhost:5173');
   } else {
     win.loadFile('dist/index.html');
+  }
+
+  if (restoreSnapshot) {
+    bootRestoreByWindowId.set(win.id, restoreSnapshot);
   }
 
   const normalizedInitialUrl = initialUrl?.trim();
@@ -603,6 +823,14 @@ function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): Browse
   win.on('leave-full-screen', () => {
     if (!win.isDestroyed()) {
       win.webContents.send('window-fullscreen-changed', false);
+    }
+  });
+
+  win.on('closed', () => {
+    bootRestoreByWindowId.delete(win.id);
+    if (!isQuitting) {
+      windowSessionCache.delete(win.id);
+      scheduleSessionPersist();
     }
   });
 
@@ -646,7 +874,9 @@ function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): Browse
 app.whenReady().then(async () => {
   await loadHistory().catch(() => undefined);
   await loadCachedAdBlockHosts().catch(() => undefined);
+  await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
+  setupSessionHandlers();
   setupWebviewTabOpenHandler();
   setupAdBlocker();
   setupWindowControlsHandlers();
@@ -672,4 +902,13 @@ app.on('window-all-closed', () => {
   if (quitOnLastWindowClose) {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
+  if (sessionPersistTimer) {
+    clearTimeout(sessionPersistTimer);
+    sessionPersistTimer = null;
+  }
+  void persistSessionSnapshot();
 });
