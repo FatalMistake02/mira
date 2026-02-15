@@ -8,7 +8,7 @@ const INTRO_BLOCK_HEIGHT = 300;
 
 export default function NewTab() {
   const [query, setQuery] = useState('');
-  const [showIntro] = useState(() => {
+  const [animateIntro] = useState(() => {
     try {
       if (getBrowserSettings().disableNewTabIntro) return false;
       const alreadyShown = sessionStorage.getItem(NEW_TAB_INTRO_SHOWN_KEY) === '1';
@@ -54,9 +54,7 @@ export default function NewTab() {
           justifyContent: 'flex-start',
         }}
       >
-        {showIntro ? (
-          <>
-            <style>{`
+        <style>{`
               @keyframes miraLogoFadeIn {
                 from { opacity: 0; transform: translateY(10px); }
                 to { opacity: 1; transform: translateY(0); }
@@ -80,43 +78,42 @@ export default function NewTab() {
                 90% { border-color: transparent; }
                 100% { border-color: transparent; }
               }
-            `}</style>
-            <img
-              src={miraLogo}
-              alt="Mira logo"
+        `}</style>
+        <img
+          src={miraLogo}
+          alt="Mira logo"
+          style={{
+            width: 220,
+            height: 220,
+            objectFit: 'contain',
+            opacity: animateIntro ? 0 : 1,
+            animation: animateIntro ? 'miraLogoFadeIn 900ms ease-out forwards' : 'none',
+          }}
+        />
+        <div style={{ width: '100%', textAlign: 'center', marginTop: 20 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 34,
+              fontWeight: 700,
+              letterSpacing: 0.3,
+            }}
+          >
+            <span
               style={{
-                width: 220,
-                height: 220,
-                objectFit: 'contain',
-                opacity: 0,
-                animation: 'miraLogoFadeIn 900ms ease-out forwards',
+                display: 'inline-block',
+                whiteSpace: 'nowrap',
+                clipPath: animateIntro ? 'inset(0 100% 0 0)' : 'inset(0 0 0 0)',
+                borderRight: animateIntro ? '2px solid currentColor' : 'none',
+                animation: animateIntro
+                  ? 'miraTypewriter 1.6s steps(15, end) 400ms forwards, miraCaretBlink 1.8s step-end 400ms forwards'
+                  : 'none',
               }}
-            />
-            <div style={{ width: '100%', textAlign: 'center', marginTop: 20 }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: 34,
-                  fontWeight: 700,
-                  letterSpacing: 0.3,
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-block',
-                    whiteSpace: 'nowrap',
-                    clipPath: 'inset(0 100% 0 0)',
-                    borderRight: '2px solid currentColor',
-                    animation:
-                      'miraTypewriter 1.6s steps(15, end) 400ms forwards, miraCaretBlink 1.8s step-end 400ms forwards',
-                  }}
-                >
-                  Welcome to Mira
-                </span>
-              </h1>
-            </div>
-          </>
-        ) : null}
+            >
+              Welcome to Mira
+            </span>
+          </h1>
+        </div>
       </div>
       <form
         onSubmit={handleSearch}
