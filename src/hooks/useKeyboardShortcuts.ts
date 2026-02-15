@@ -10,6 +10,7 @@ interface UseKeyboardShortcutsProps {
   reload: () => void;
   findInPage: () => void;
   toggleDevTools: () => void;
+  printPage: () => void;
   activeId: string | null;
   addressInputRef: RefObject<HTMLInputElement | null>;
 }
@@ -22,6 +23,7 @@ export function useKeyboardShortcuts({
   reload,
   findInPage,
   toggleDevTools,
+  printPage,
   activeId,
   addressInputRef,
 }: UseKeyboardShortcutsProps) {
@@ -91,13 +93,18 @@ export function useKeyboardShortcuts({
         e.preventDefault();
         e.stopPropagation();
         toggleDevTools();
+      if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        e.stopPropagation();
+        printPage();
+        return;
       }
     };
 
     // Use capture phase (true) to intercept events before they reach the iframe
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newTab, openHistory, openNewWindow, closeTab, reload, findInPage, toggleDevTools, activeId, addressInputRef]);
+  }, [newTab, openHistory, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
@@ -118,10 +125,12 @@ export function useKeyboardShortcuts({
       }
       if (action === 'toggle-devtools') {
         toggleDevTools();
+      if (action === 'print-page') {
+        printPage();
       }
     };
 
     ipc.on('app-shortcut', onShortcut);
     return () => ipc.off('app-shortcut', onShortcut);
-  }, [reload, findInPage, openNewWindow, toggleDevTools]);
+  }, [reload, findInPage, openNewWindow, toggleDevTools, printPage]);
 }

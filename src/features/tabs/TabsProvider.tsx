@@ -19,6 +19,7 @@ type WebviewElement = {
   openDevTools: () => void;
   closeDevTools: () => void;
   isDevToolsOpened: () => boolean;
+  print?: (options?: unknown, callback?: (success: boolean, failureReason: string) => void) => void;
 } | null;
 
 type SessionSnapshot = {
@@ -44,6 +45,7 @@ type TabsContextType = {
     id: string,
     metadata: { title?: string; favicon?: string | null },
   ) => void;
+  printPage: () => void;
   registerWebview: (id: string, el: WebviewElement) => void;
   setActive: (id: string) => void;
   restorePromptOpen: boolean;
@@ -501,6 +503,18 @@ const openHistory = () => {
       wv.openDevTools();
     }
   };
+  const printPage = useCallback(() => {
+    const activeTab = tabs.find((tab) => tab.id === activeId);
+    if (activeTab?.url.startsWith('mira://')) {
+      window.print();
+      return;
+    }
+
+    const wv = webviewMap.current[activeId];
+    if (!wv || typeof wv.print !== 'function') return;
+
+    wv.print({ printBackground: true });
+  }, [tabs, activeId]);
 
   useEffect(() => {
     const sleepInactiveTabs = () => {
@@ -622,6 +636,7 @@ const openHistory = () => {
         findInPage,
         toggleDevTools,
         updateTabMetadata,
+        printPage,
         registerWebview,
         setActive,
         restorePromptOpen,

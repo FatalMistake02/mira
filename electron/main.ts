@@ -597,6 +597,7 @@ function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): Browse
     const isReloadChord = isPrimaryChord && key === 'r';
     const isFindChord = isPrimaryChord && key === 'f';
     const isNewWindowChord = isPrimaryChord && key === 'n';
+    const isPrintChord = isPrimaryChord && key === 'p';
     const isReloadKey = key === 'f5';
 
     if (isReloadChord || isReloadKey) {
@@ -614,6 +615,12 @@ function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): Browse
     if (isFindChord) {
       event.preventDefault();
       win.webContents.send('app-shortcut', 'find-in-page');
+      return;
+    }
+
+    if (isPrintChord) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'print-page');
     }
   });
 

@@ -1,51 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import DownloadButton from './DownloadButton';
 import { getBrowserSettings } from '../features/settings/browserSettings';
 
 function ReloadIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M13 3v4H9M3 13v-4h4M4.2 6.1A5 5 0 0 1 13 7M12 9a5 5 0 0 1-8.8 2.9"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <RotateCw size={16} strokeWidth={1.9} aria-hidden="true" />;
 }
 
 function BackIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M10.5 3.5L5.5 8l5 4.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ChevronLeft size={16} strokeWidth={2.1} aria-hidden="true" />;
 }
 
 function ForwardIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M5.5 3.5L10.5 8l-5 4.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ChevronRight size={16} strokeWidth={2.1} aria-hidden="true" />;
 }
 
 type AddressBarProps = {
@@ -53,8 +21,11 @@ type AddressBarProps = {
 };
 
 export default function AddressBar({ inputRef }: AddressBarProps) {
-  const { tabs, activeId, navigate, goBack, goForward, reload } = useTabs();
+  const { tabs, activeId, navigate, goBack, goForward, reload, newTab, setActive, printPage } =
+    useTabs();
   const [input, setInput] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const activeTab = tabs.find((t) => t.id === activeId);
@@ -98,6 +69,20 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   const activeTab = tabs.find((t) => t.id === activeId);
   const canGoBack = activeTab && activeTab.historyIndex > 0;
   const canGoForward = activeTab && activeTab.historyIndex < activeTab.history.length - 1;
+  const newTabPage = getBrowserSettings().newTabPage;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (!menuRef.current) return;
+      if (menuRef.current.contains(event.target as Node)) return;
+      setMenuOpen(false);
+    };
+
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [menuOpen]);
 
   return (
     <div
@@ -172,18 +157,71 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         }}
       />
 
-      <button
-        onClick={go}
-        className="theme-btn theme-btn-go"
-        style={{
-          padding: '6px 12px',
-          fontSize: 16,
-        }}
-      >
-        Go
-      </button>
-
       <DownloadButton />
+
+      <div ref={menuRef} style={{ position: 'relative' }}>
+        <button
+          onClick={() => setMenuOpen((prev) => !prev)}
+          title="Menu"
+          className="theme-btn theme-btn-nav"
+          style={{
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: 2,
+          }}
+        >
+          <ChevronDown size={16} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+
+        {menuOpen && (
+          <div
+            className="theme-panel"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              right: 0,
+              minWidth: 160,
+              borderRadius: 8,
+              overflow: 'hidden',
+              zIndex: 1200,
+              padding: 6,
+            }}
+          >
+            <button
+              type="button"
+              className="theme-btn theme-btn-nav"
+              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
+              onClick={() => {
+                printPage();
+                setMenuOpen(false);
+              }}
+            >
+              Print... (Ctrl+P)
+            </button>
+            <button
+              type="button"
+              className="theme-btn theme-btn-nav"
+              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
+              onClick={() => {
+                const existingSettingsTab = tabs.find((tab) => tab.url === 'mira://Settings');
+
+                if (existingSettingsTab) {
+                  setActive(existingSettingsTab.id);
+                } else if (activeTab?.url === newTabPage) {
+                  navigate('mira://Settings');
+                } else {
+                  newTab('mira://Settings');
+                }
+                setMenuOpen(false);
+              }}
+            >
+              Settings
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

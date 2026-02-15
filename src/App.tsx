@@ -34,6 +34,7 @@ function Browser() {
     closeTab,
     reload,
     findInPage,
+    printPage,
     toggleDevTools,
     activeId,
     addressInputRef,
