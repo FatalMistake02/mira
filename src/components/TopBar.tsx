@@ -209,7 +209,15 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
           WebkitAppRegion: 'drag',
         }}
       >
-        <div style={{ WebkitAppRegion: 'no-drag', minWidth: 0, display: 'flex', maxWidth: '100%' }}>
+        <div
+          style={{
+            WebkitAppRegion: 'no-drag',
+            minWidth: 0,
+            display: 'flex',
+            maxWidth: '100%',
+            flex: 1,
+          }}
+        >
           {children}
         </div>
       </div>

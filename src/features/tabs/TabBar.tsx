@@ -3,6 +3,9 @@ import { X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
 
+const TAB_TARGET_WIDTH_PX = 220;
+const TAB_MIN_WIDTH_PX = 110;
+
 function getDisplayTitle(url: string, title?: string): string {
   const normalizedTitle = title?.trim();
   if (normalizedTitle) return normalizedTitle;
@@ -59,6 +62,8 @@ export default function TabBar() {
   return (
     <div
       style={{
+        flex: 1,
+        width: '100%',
         display: 'flex',
         gap: 6,
         padding: '4px 0',
@@ -92,7 +97,9 @@ export default function TabBar() {
               gap: 6,
               alignItems: 'center',
               whiteSpace: 'nowrap',
-              flexShrink: 0,
+              flex: `1 1 ${TAB_TARGET_WIDTH_PX}px`,
+              minWidth: TAB_MIN_WIDTH_PX,
+              maxWidth: TAB_TARGET_WIDTH_PX,
               position: 'relative',
               zIndex: tab.id === activeId ? 2 : 1,
               marginBottom: tab.id === activeId ? -1 : 1,
@@ -128,7 +135,8 @@ export default function TabBar() {
             <span
               title={displayTitle}
               style={{
-                maxWidth: 180,
+                flex: 1,
+                minWidth: 0,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
