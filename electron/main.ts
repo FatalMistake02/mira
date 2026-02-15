@@ -22,6 +22,8 @@ interface HistoryEntry {
 let historyCache: HistoryEntry[] = [];
 const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
+const NEW_WINDOW_SHORTCUT_DEDUPE_MS = 250;
+const recentNewWindowShortcutByWindow = new Map<number, number>();
 let adBlockEnabled = true;
 let quitOnLastWindowClose = false;
 const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
@@ -377,6 +379,7 @@ function setupWebviewTabOpenHandler() {
     if (!host) return;
 
     contents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || input.isAutoRepeat) return;
       const key = input.key.toLowerCase();
       const isPrimaryChord = (input.control || input.meta) && !input.shift;
       const isNewWindowChord = isPrimaryChord && key === 'n';
@@ -386,7 +389,7 @@ function setupWebviewTabOpenHandler() {
       event.preventDefault();
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
-      createWindow(hostWindow);
+      triggerNewWindowFromShortcut(hostWindow);
     });
 
     contents.on('context-menu', (event, params) => {
@@ -425,6 +428,18 @@ function setupWebviewTabOpenHandler() {
       return { action: 'deny' };
     });
   });
+}
+
+function triggerNewWindowFromShortcut(sourceWindow: BrowserWindow): void {
+  if (sourceWindow.isDestroyed()) return;
+
+  const now = Date.now();
+  const windowId = sourceWindow.id;
+  const lastTriggeredAt = recentNewWindowShortcutByWindow.get(windowId) ?? 0;
+  if (now - lastTriggeredAt < NEW_WINDOW_SHORTCUT_DEDUPE_MS) return;
+
+  recentNewWindowShortcutByWindow.set(windowId, now);
+  createWindow(sourceWindow);
 }
 
 function setupAdBlocker() {
@@ -592,6 +607,7 @@ function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): Browse
   });
 
   win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.isAutoRepeat) return;
     const key = input.key.toLowerCase();
     const isPrimaryChord = (input.control || input.meta) && !input.shift;
     const isReloadChord = isPrimaryChord && key === 'r';
@@ -608,7 +624,7 @@ function createWindow(sourceWindow?: BrowserWindow, initialUrl?: string): Browse
 
     if (isNewWindowChord) {
       event.preventDefault();
-      createWindow(win);
+      triggerNewWindowFromShortcut(win);
       return;
     }
 
