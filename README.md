@@ -5,6 +5,8 @@ A desktop browser built with Electron + React.
 **Roadmap: [ROADMAP.md](./ROADMAP.md)**
 **Changelog: [CHANGELOG.md](./CHANGELOG.md)**
 
+**[Download here](https://mira.fatalmistake02.com/downloads)**
+
 ## Features
 
 - Tabbed browsing
