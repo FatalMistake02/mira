@@ -4,7 +4,7 @@ import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
 
 const TAB_TARGET_WIDTH_PX = 220;
-const TAB_MIN_WIDTH_PX = 110;
+const TAB_MIN_WIDTH_PX = 50;
 
 function getDisplayTitle(url: string, title?: string): string {
   const normalizedTitle = title?.trim();
