@@ -137,6 +137,21 @@ body {
   cursor: default;
 }
 
+.tab-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--tabText, var(--textColor));
+  border-radius: 999px;
+}
+
+.tab-close-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tabText, var(--textColor)) 14%, transparent);
+}
+
+.tab-close-btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--tabText, var(--textColor)) 20%, transparent);
+}
+
 .theme-btn-nav {
   background: var(--navButtonBg, var(--buttonBg));
   border: 1px solid var(--navButtonBorder, var(--buttonBorder));

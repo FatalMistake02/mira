@@ -148,7 +148,7 @@ export default function TabBar() {
                 e.stopPropagation();
                 closeTab(tab.id);
               }}
-              className="theme-btn theme-btn-nav"
+              className="theme-btn tab-close-btn"
               style={{
                 opacity: 0.8,
                 padding: 2,
