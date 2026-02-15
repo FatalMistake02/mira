@@ -1,0 +1,181 @@
+name: Test Build Artifacts
+run-name: Test Build ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app (no publish)
+        run: npm run build -- --publish never
+
+      - name: Rename Windows artifacts
+        shell: pwsh
+        run: |
+          function Move-WithOldName {
+            param(
+              [Parameter(Mandatory = $true)][string]$SourcePath,
+              [Parameter(Mandatory = $true)][string]$TargetPath
+            )
+
+            if (Test-Path $TargetPath) {
+              $targetName = [System.IO.Path]::GetFileName($TargetPath)
+              $dir = [System.IO.Path]::GetDirectoryName($TargetPath)
+              $oldPath = Join-Path $dir ("old-" + $targetName)
+              $counter = 1
+              while (Test-Path $oldPath) {
+                $oldPath = Join-Path $dir ("old-$counter-" + $targetName)
+                $counter += 1
+              }
+              Move-Item -Path $TargetPath -Destination $oldPath -Force
+            }
+
+            Move-Item -Path $SourcePath -Destination $TargetPath -Force
+          }
+
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          $commitTimeRaw = "${{ github.event.head_commit.timestamp }}"
+          if ([string]::IsNullOrWhiteSpace($commitTimeRaw)) {
+            $commitTimeRaw = (Get-Date).ToString("o")
+          }
+          $stamp = (Get-Date -Date $commitTimeRaw).ToUniversalTime().ToString("yyyyMMddHHmmss")
+
+          $releaseDir = "release"
+          if (!(Test-Path $releaseDir)) {
+            throw "release directory not found"
+          }
+
+          $portableFiles = Get-ChildItem -Path $releaseDir -File -Filter *.exe | Where-Object {
+            $_.Name -notmatch "setup"
+          }
+          for ($i = 0; $i -lt $portableFiles.Count; $i++) {
+            $suffix = if ($portableFiles.Count -gt 1) { "-$($i + 1)" } else { "" }
+            $target = Join-Path $releaseDir ("test-$shortSha-$stamp-win-portable$suffix.exe")
+            Move-WithOldName -SourcePath $portableFiles[$i].FullName -TargetPath $target
+          }
+
+          $setupFiles = Get-ChildItem -Path $releaseDir -File -Filter *.exe | Where-Object {
+            $_.Name -match "setup"
+          }
+          for ($i = 0; $i -lt $setupFiles.Count; $i++) {
+            $suffix = if ($setupFiles.Count -gt 1) { "-$($i + 1)" } else { "" }
+            $target = Join-Path $releaseDir ("test-$shortSha-$stamp-win-setup$suffix.exe")
+            Move-WithOldName -SourcePath $setupFiles[$i].FullName -TargetPath $target
+          }
+
+      - name: Upload Windows test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-${{ github.sha }}-${{ github.run_id }}
+          path: release/test-*-win-*.exe
+          if-no-files-found: error
+
+  build-macos-test:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app (no publish)
+        run: npm run build -- --publish never
+
+      - name: Rename macOS artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          move_with_old_name() {
+            local source_path="$1"
+            local target_path="$2"
+            local target_dir
+            local target_name
+            target_dir="$(dirname "$target_path")"
+            target_name="$(basename "$target_path")"
+
+            if [[ -f "$target_path" ]]; then
+              local old_path="$target_dir/old-$target_name"
+              local counter=1
+              while [[ -f "$old_path" ]]; do
+                old_path="$target_dir/old-$counter-$target_name"
+                counter=$((counter + 1))
+              done
+              mv "$target_path" "$old_path"
+            fi
+
+            mv "$source_path" "$target_path"
+          }
+
+          short_sha="${GITHUB_SHA:0:7}"
+          commit_time_raw="${{ github.event.head_commit.timestamp }}"
+          if [[ -z "$commit_time_raw" ]]; then
+            commit_time_raw="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          fi
+          stamp="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$commit_time_raw" +"%Y%m%d%H%M%S" 2>/dev/null || date -u +"%Y%m%d%H%M%S")"
+
+          release_dir="release"
+          if [[ ! -d "$release_dir" ]]; then
+            echo "release directory not found"
+            exit 1
+          fi
+
+          dmg_count="$(find "$release_dir" -maxdepth 1 -type f -name "*.dmg" | wc -l | tr -d ' ')"
+          dmg_index=0
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            dmg_index=$((dmg_index + 1))
+            suffix=""
+            if [[ "$dmg_count" -gt 1 ]]; then
+              suffix="-$dmg_index"
+            fi
+            target="$release_dir/test-$short_sha-$stamp-mac$suffix.dmg"
+            move_with_old_name "$file" "$target"
+          done < <(find "$release_dir" -maxdepth 1 -type f -name "*.dmg" | sort)
+
+          zip_count="$(find "$release_dir" -maxdepth 1 -type f -name "*.zip" | wc -l | tr -d ' ')"
+          zip_index=0
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            zip_index=$((zip_index + 1))
+            suffix=""
+            if [[ "$zip_count" -gt 1 ]]; then
+              suffix="-$zip_index"
+            fi
+            target="$release_dir/test-$short_sha-$stamp-mac$suffix.zip"
+            move_with_old_name "$file" "$target"
+          done < <(find "$release_dir" -maxdepth 1 -type f -name "*.zip" | sort)
+
+      - name: Upload macOS test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-test-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            release/test-*-mac*.dmg
+            release/test-*-mac*.zip
+          if-no-files-found: error
