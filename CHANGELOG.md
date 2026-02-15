@@ -5,6 +5,7 @@
 - History shows site title
 - Restoring tabs will restore all windows
 - Work on updates
+- Use real Windows window controls 
 
 ## v0.7.0 - 2026-02-15
 

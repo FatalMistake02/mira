@@ -188,6 +188,35 @@ body {
   color: var(--downloadButtonTextActive, var(--buttonTextActive));
 }
 
+.topbar-window-btn {
+  background: var(--surfaceBg, var(--tabBg));
+  border-left: 1px solid color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 45%, transparent);
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  color: var(--surfaceText, var(--tabText));
+}
+
+.topbar-window-btn:hover:not(:disabled) {
+  background: var(--surfaceBgHover, var(--tabBgHover));
+  color: var(--surfaceTextHover, var(--tabTextHover));
+}
+
+.topbar-window-btn:active:not(:disabled) {
+  background: var(--surfaceBgActive, var(--tabBgActive));
+  color: var(--surfaceTextActive, var(--tabTextActive));
+}
+
+.topbar-window-btn-close:hover:not(:disabled) {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.topbar-window-btn-close:active:not(:disabled) {
+  background: #c50f1f;
+  color: #ffffff;
+}
+
 .theme-tab {
   background: var(--tabBg, var(--surfaceBg));
   border: 1px solid var(--tabBorder, var(--surfaceBorder));

@@ -1,64 +1,14 @@
 import { useEffect, useState } from 'react';
+import { Copy, Minus, Square, X } from 'lucide-react';
 import { electron } from '../electronBridge';
 import appIcon from '../assets/mira_icon.png';
 import appWordmark from '../assets/mira.png';
-
-function MinimizeIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path d="M1 5.5h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MaximizeIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <rect
-        x="1.5"
-        y="1.5"
-        width="7"
-        height="7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-    </svg>
-  );
-}
-
-function RestoreIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path
-        d="M3 1.5h5.5V7M1.5 3h5.5v5.5H1.5z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path
-        d="M2 2l6 6M8 2L2 8"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 export default function TopBar({ children }: { children?: React.ReactNode }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const isMacOS = electron?.isMacOS ?? false;
+  const isWindows = electron?.platform === 'win32';
 
   useEffect(() => {
     electron?.ipcRenderer
@@ -134,12 +84,20 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
         transition: 'width 140ms ease',
       }}
     />
+  ) : isWindows ? (
+    <div
+      style={{
+        width: isFullscreen ? 0 : 138,
+        flexShrink: 0,
+        transition: 'width 140ms ease',
+      }}
+    />
   ) : (
     <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' as const }}>
       <button
         title="Minimize"
         onClick={onMinimize}
-        className="theme-btn theme-btn-nav"
+        className="theme-btn topbar-window-btn"
         style={{
           width: 44,
           height: 38,
@@ -149,12 +107,12 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
           borderRight: 'none',
         }}
       >
-        <MinimizeIcon />
+        <Minus size={14} strokeWidth={2.1} aria-hidden="true" />
       </button>
       <button
         title={isMaximized ? 'Restore' : 'Maximize'}
         onClick={onToggleMaximize}
-        className="theme-btn theme-btn-nav"
+        className="theme-btn topbar-window-btn"
         style={{
           width: 44,
           height: 38,
@@ -164,12 +122,16 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
           borderRight: 'none',
         }}
       >
-        {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
+        {isMaximized ? (
+          <Copy size={13} strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <Square size={12} strokeWidth={2} aria-hidden="true" />
+        )}
       </button>
       <button
         title="Close"
         onClick={onClose}
-        className="theme-btn theme-btn-nav"
+        className="theme-btn topbar-window-btn topbar-window-btn-close"
         style={{
           width: 48,
           height: 38,
@@ -179,7 +141,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
           borderRight: 'none',
         }}
       >
-        <CloseIcon />
+        <X size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
     </div>
   );

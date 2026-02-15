@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const isMacOS = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
 
 interface HistoryEntry {
   id: string;
@@ -1045,8 +1046,15 @@ function createWindow(
     y: sourceBounds ? sourceBounds.y + 24 : undefined,
     width: 1200,
     height: 800,
-    frame: !isMacOS ? false : true,
-    titleBarStyle: isMacOS ? 'hiddenInset' : undefined,
+    frame: isMacOS,
+    titleBarStyle: isMacOS ? 'hiddenInset' : isWindows ? 'hidden' : undefined,
+    titleBarOverlay: isWindows
+      ? {
+          color: '#00000000',
+          symbolColor: '#e8edf5',
+          height: 38,
+        }
+      : undefined,
     autoHideMenuBar: true,
     webPreferences: {
       // devTools: false,
