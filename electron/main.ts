@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const isMacOS = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
+const incomingBrowserUrlQueue: string[] = [];
 
 interface HistoryEntry {
   id: string;
@@ -343,6 +344,92 @@ function shouldBlockRequest(url: string, resourceType: string): boolean {
 
 function getHistoryFilePath() {
   return path.join(app.getPath('userData'), 'history.json');
+}
+
+function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol !== 'http:' && protocol !== 'https:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractIncomingBrowserUrlFromArgv(argv: string[]): string | null {
+  for (let i = argv.length - 1; i >= 0; i -= 1) {
+    const candidate = normalizeIncomingBrowserUrl(argv[i] ?? '');
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+function enqueueIncomingBrowserUrl(rawUrl: string): void {
+  const normalized = normalizeIncomingBrowserUrl(rawUrl);
+  if (!normalized) return;
+  incomingBrowserUrlQueue.push(normalized);
+}
+
+function dequeueIncomingBrowserUrl(): string | undefined {
+  return incomingBrowserUrlQueue.shift();
+}
+
+function getDefaultProtocolRegistrationContext():
+  | {
+      executable: string;
+      args: string[];
+    }
+  | null {
+  if (!process.defaultApp) return null;
+  const appEntrypoint = process.argv[1];
+  if (!appEntrypoint) return null;
+
+  return {
+    executable: process.execPath,
+    args: [path.resolve(appEntrypoint)],
+  };
+}
+
+function isDefaultForProtocol(protocol: string): boolean {
+  try {
+    const registrationContext = getDefaultProtocolRegistrationContext();
+    if (!registrationContext) {
+      return app.isDefaultProtocolClient(protocol);
+    }
+
+    return app.isDefaultProtocolClient(
+      protocol,
+      registrationContext.executable,
+      registrationContext.args,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function setAsDefaultForProtocol(protocol: string): boolean {
+  try {
+    const registrationContext = getDefaultProtocolRegistrationContext();
+    if (!registrationContext) {
+      return app.setAsDefaultProtocolClient(protocol);
+    }
+
+    return app.setAsDefaultProtocolClient(
+      protocol,
+      registrationContext.executable,
+      registrationContext.args,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isDefaultBrowser(): boolean {
+  return isDefaultForProtocol('http') && isDefaultForProtocol('https');
 }
 
 function getSessionFilePath() {
@@ -1387,6 +1474,23 @@ function setupWindowControlsHandlers() {
   );
 }
 
+function setupDefaultBrowserHandlers() {
+  ipcMain.handle('default-browser-status', () => {
+    return {
+      isDefault: isDefaultBrowser(),
+    };
+  });
+
+  ipcMain.handle('default-browser-set', () => {
+    const didSetHttp = setAsDefaultForProtocol('http');
+    const didSetHttps = setAsDefaultForProtocol('https');
+    return {
+      ok: didSetHttp && didSetHttps && isDefaultBrowser(),
+      isDefault: isDefaultBrowser(),
+    };
+  });
+}
+
 function setupMacDockMenu() {
   if (!isMacOS) return;
   const dockMenu = Menu.buildFromTemplate([
@@ -1672,7 +1776,65 @@ function createWindow(
   return win;
 }
 
+function routeIncomingBrowserUrl(rawUrl: string): void {
+  const normalized = normalizeIncomingBrowserUrl(rawUrl);
+  if (!normalized) return;
+
+  const focusedWindow = BrowserWindow.getFocusedWindow();
+  const fallbackWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+  const targetWindow = focusedWindow && !focusedWindow.isDestroyed() ? focusedWindow : fallbackWindow;
+
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    if (targetWindow.isMinimized()) targetWindow.restore();
+    targetWindow.focus();
+    targetWindow.webContents.send('open-url-in-current-tab', normalized);
+    return;
+  }
+
+  createWindow(undefined, normalized);
+}
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  const launchUrlFromArgs = extractIncomingBrowserUrlFromArgv(process.argv);
+  if (launchUrlFromArgs) {
+    enqueueIncomingBrowserUrl(launchUrlFromArgs);
+  }
+
+  app.on('second-instance', (_event, commandLine) => {
+    const incomingUrl = extractIncomingBrowserUrlFromArgv(commandLine);
+    if (incomingUrl) {
+      if (app.isReady()) {
+        routeIncomingBrowserUrl(incomingUrl);
+      } else {
+        enqueueIncomingBrowserUrl(incomingUrl);
+      }
+      return;
+    }
+
+    const firstWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+    if (!firstWindow) return;
+    if (firstWindow.isMinimized()) firstWindow.restore();
+    firstWindow.focus();
+  });
+
+  if (isMacOS) {
+    app.on('open-url', (event, url) => {
+      event.preventDefault();
+      if (app.isReady()) {
+        routeIncomingBrowserUrl(url);
+        return;
+      }
+      enqueueIncomingBrowserUrl(url);
+    });
+  }
+}
+
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) return;
+
   await loadHistory().catch(() => undefined);
   await loadCachedAdBlockHosts().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
@@ -1682,11 +1844,20 @@ app.whenReady().then(async () => {
   setupWebviewTabOpenHandler();
   setupAdBlocker();
   setupWindowControlsHandlers();
+  setupDefaultBrowserHandlers();
   setupApplicationMenu();
   setupMacDockMenu();
   scheduleAdBlockListRefresh();
   setupDownloadHandlers();
-  createWindow();
+
+  const initialUrl = dequeueIncomingBrowserUrl();
+  createWindow(undefined, initialUrl);
+
+  let nextQueuedUrl = dequeueIncomingBrowserUrl();
+  while (nextQueuedUrl) {
+    routeIncomingBrowserUrl(nextQueuedUrl);
+    nextQueuedUrl = dequeueIncomingBrowserUrl();
+  }
 });
 
 app.on('activate', () => {

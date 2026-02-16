@@ -41,6 +41,15 @@ type UpdateCheckResponse =
   | { ok: true; data: UpdateCheckPayload }
   | { ok: false; error: string };
 
+type DefaultBrowserStatusResponse = {
+  isDefault: boolean;
+};
+
+type SetDefaultBrowserResponse = {
+  ok: boolean;
+  isDefault: boolean;
+};
+
 type SettingsSectionId = 'general' | 'customization' | 'app';
 
 const SETTINGS_SECTION_TABS: Array<{
@@ -101,6 +110,10 @@ export default function Settings() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
+  const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
+  const [defaultBrowserStatus, setDefaultBrowserStatus] = useState('');
+  const [isCheckingDefaultBrowser, setIsCheckingDefaultBrowser] = useState(false);
+  const [isSettingDefaultBrowser, setIsSettingDefaultBrowser] = useState(false);
   const isFirstAutoSaveRef = useRef(true);
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { navigate } = useTabs();
@@ -366,6 +379,56 @@ export default function Settings() {
       setIsRunningUpdateAction(false);
     }
   };
+
+  const refreshDefaultBrowserStatus = async () => {
+    if (!electron?.ipcRenderer) {
+      setDefaultBrowserStatus('Default browser controls are only available in the desktop app.');
+      return;
+    }
+
+    setIsCheckingDefaultBrowser(true);
+    setDefaultBrowserStatus('');
+    try {
+      const response =
+        await electron.ipcRenderer.invoke<DefaultBrowserStatusResponse>('default-browser-status');
+      setIsDefaultBrowser(response.isDefault);
+      setDefaultBrowserStatus(response.isDefault ? 'Mira is already your default browser.' : '');
+    } catch {
+      setDefaultBrowserStatus('Failed to check default browser status.');
+    } finally {
+      setIsCheckingDefaultBrowser(false);
+    }
+  };
+
+  const setAsDefaultBrowser = async () => {
+    if (!electron?.ipcRenderer) {
+      setDefaultBrowserStatus('Default browser controls are only available in the desktop app.');
+      return;
+    }
+
+    setIsSettingDefaultBrowser(true);
+    setDefaultBrowserStatus('');
+    try {
+      const response =
+        await electron.ipcRenderer.invoke<SetDefaultBrowserResponse>('default-browser-set');
+      setIsDefaultBrowser(response.isDefault);
+      setDefaultBrowserStatus(
+        response.ok
+          ? 'Mira is now set as your default browser.'
+          : 'Could not set Mira as default browser. Check your OS default apps settings.',
+      );
+    } catch {
+      setDefaultBrowserStatus('Failed to set default browser.');
+    } finally {
+      setIsSettingDefaultBrowser(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDefaultBrowserStatus();
+    // Run once on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="settings-page">
@@ -895,6 +958,45 @@ export default function Settings() {
                 </label>
               </section>
             )}
+
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Default Browser</h2>
+              </div>
+              <div className="settings-setting-row">
+                <div className="settings-setting-meta">
+                  <span className="settings-setting-label">System default app for links</span>
+                  <span className="settings-setting-description">
+                    Register Mira to open `http` and `https` links by default.
+                  </span>
+                </div>
+                <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                  <button
+                    type="button"
+                    onClick={refreshDefaultBrowserStatus}
+                    className="theme-btn theme-btn-nav settings-btn-pad"
+                    disabled={isCheckingDefaultBrowser}
+                  >
+                    {isCheckingDefaultBrowser ? 'Checking...' : 'Refresh Status'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={setAsDefaultBrowser}
+                    className="theme-btn theme-btn-go settings-btn-pad"
+                    disabled={isSettingDefaultBrowser || isDefaultBrowser === true}
+                  >
+                    {isSettingDefaultBrowser
+                      ? 'Setting...'
+                      : isDefaultBrowser
+                        ? 'Already Default'
+                        : 'Make Default'}
+                  </button>
+                </div>
+              </div>
+              {!!defaultBrowserStatus && (
+                <div className="theme-text2 settings-status">{defaultBrowserStatus}</div>
+              )}
+            </section>
 
             <section className="theme-panel settings-card">
               <div className="settings-card-header">
