@@ -301,7 +301,7 @@ export default function TabBar() {
                 style={{
                   height: TAB_ROW_HEIGHT,
                   padding: '0 10px',
-                  cursor: draggingTabId === tab.id ? 'grabbing' : 'pointer',
+                  cursor: 'default',
                   WebkitAppRegion: 'no-drag',
                   borderRadius:
                     tab.id === activeId
@@ -392,6 +392,7 @@ export default function TabBar() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    cursor: 'default',
                     WebkitAppRegion: 'no-drag',
                   }}
                 >
