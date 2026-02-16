@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - "**"
+    paths:
+      - "src/**"
+      - "electron/**"
   workflow_dispatch:
 
 permissions:
