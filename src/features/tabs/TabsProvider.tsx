@@ -205,6 +205,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const hydratedRef = useRef(false);
   const recentIpcTabOpenRef = useRef<{ url: string; openedAt: number } | null>(null);
   const didConsumeIncomingUrlsRef = useRef(false);
+  const startupIncomingUrlsRef = useRef<string[]>([]);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
 
@@ -258,6 +259,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
     if (!ipc) {
+      startupIncomingUrlsRef.current = [];
       const currentDefaultTabUrl = getBrowserSettings().newTabPage;
       const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY), currentDefaultTabUrl);
       if (snapshot && !isDefaultSnapshot(snapshot, currentDefaultTabUrl)) {
@@ -273,6 +275,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     const bootstrapSessionRestore = async () => {
       try {
+        const queuedUrls = await ipc
+          .invoke<string[]>('incoming-urls-consume')
+          .then((urls) =>
+            Array.isArray(urls)
+              ? urls
+                  .filter((candidate): candidate is string => typeof candidate === 'string')
+                  .map((candidate) => candidate.trim())
+                  .filter(Boolean)
+              : [],
+          )
+          .catch(() => []);
+        if (cancelled) return;
+        startupIncomingUrlsRef.current = queuedUrls;
+
         const windowRestore = await ipc.invoke<SessionSnapshot | null>('session-take-window-restore');
         if (cancelled) return;
 
@@ -293,7 +309,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
         if (cancelled) return;
 
-        if (restoreState?.hasPendingRestore) {
+        if (restoreState?.hasPendingRestore && queuedUrls.length === 0) {
           setRestorePromptOpen(true);
           setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
           setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
@@ -888,34 +904,18 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
     if (!didConsumeIncomingUrlsRef.current && isBootstrapReady) {
       didConsumeIncomingUrlsRef.current = true;
-      ipc
-        .invoke<string[]>('incoming-urls-consume')
-        .then((queuedUrls) => {
-          if (!Array.isArray(queuedUrls) || queuedUrls.length === 0) return;
-
-          const incomingUrls = queuedUrls
-            .filter((candidate): candidate is string => typeof candidate === 'string')
-            .map((candidate) => candidate.trim())
-            .filter(Boolean);
-          if (!incomingUrls.length) return;
-
-          const activeTab = tabs.find((tab) => tab.id === activeId);
-          const canReuseCurrentTab =
-            !!activeTab && isNewTabUrl(activeTab.url, getBrowserSettings().newTabPage);
-
-          incomingUrls.forEach((incomingUrl, index) => {
-            if (index === 0 && canReuseCurrentTab) {
-              navigate(incomingUrl);
-              return;
-            }
-            newTab(incomingUrl);
-          });
-        })
-        .catch(() => undefined);
+      const incomingUrls = startupIncomingUrlsRef.current;
+      startupIncomingUrlsRef.current = [];
+      if (incomingUrls.length > 0) {
+        navigate(incomingUrls[0], activeId);
+        incomingUrls.slice(1).forEach((incomingUrl) => {
+          newTab(incomingUrl);
+        });
+      }
     }
 
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
-  }, [activeId, isBootstrapReady, navigate, newTab, tabs]);
+  }, [activeId, isBootstrapReady, navigate, newTab]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
