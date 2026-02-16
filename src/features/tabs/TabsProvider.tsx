@@ -315,9 +315,10 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
         }
       } finally {
-        if (cancelled) return;
-        hydratedRef.current = true;
-        setIsBootstrapReady(true);
+        if (!cancelled) {
+          hydratedRef.current = true;
+          setIsBootstrapReady(true);
+        }
       }
     };
 
