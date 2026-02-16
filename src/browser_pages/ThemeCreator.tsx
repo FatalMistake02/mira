@@ -79,7 +79,8 @@ function downloadTextFile(filename: string, content: string) {
 export default function ThemeCreator() {
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const fallbackTheme = themes.find((entry) => entry.id === 'default_dark')?.theme ?? themes[0]?.theme;
-  const initialThemeEntry = themes[0] ?? null;
+  const settingsThemeId = getBrowserSettings().themeId;
+  const initialThemeEntry = themes.find((entry) => entry.id === settingsThemeId) ?? themes[0] ?? null;
 
   const [baseThemeId, setBaseThemeId] = useState<string>(initialThemeEntry?.id ?? '');
   const [themeName, setThemeName] = useState('My Theme');
@@ -165,169 +166,157 @@ export default function ThemeCreator() {
 
   if (!themes.length || !fallbackTheme) {
     return (
-      <div style={{ padding: 20, color: 'var(--text1)', background: 'var(--bg)', minHeight: '100%' }}>
+      <div className="settings-page creator-page">
         No themes are available to use as a base.
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        padding: 20,
-        maxWidth: 960,
-        margin: '0 auto',
-        background: 'var(--bg)',
-        color: 'var(--text1)',
-        minHeight: '100%',
-      }}
-    >
-      <h1 style={{ marginTop: 0 }}>Theme Creator</h1>
-      <p className="theme-text2" style={{ marginTop: 0 }}>
-        Pick a base theme, tweak colors, and export JSON.
-      </p>
+    <div className="settings-page creator-page">
+      <header className="settings-header">
+        <div>
+          <h1 className="settings-title">Theme Creator</h1>
+          <p className="settings-subtitle">Pick a base theme, tweak colors, and export JSON.</p>
+        </div>
+      </header>
 
-      <div style={{ marginTop: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button type="button" onClick={handleExport} className="theme-btn theme-btn-go" style={{ padding: '8px 12px' }}>
-          Export JSON
-        </button>
-        <button
-          type="button"
-          onClick={handleExportLoadAndSelect}
-          className="theme-btn theme-btn-nav"
-          style={{ padding: '8px 12px' }}
-        >
-          Export, Load, and Select
-        </button>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 6, userSelect: 'none' }}>
-          <input
-            type="checkbox"
-            checked={livePreviewEnabled}
-            onChange={(e) => setLivePreviewEnabled(e.currentTarget.checked)}
-          />
-          <span className="theme-text2">Live Preview</span>
-        </label>
-        {!!exportMessage && <span className="theme-text2">{exportMessage}</span>}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>Base Theme</span>
-          <select
-            value={baseThemeId}
-            onChange={(e) => {
-              setBaseThemeId(e.currentTarget.value);
-              setExportMessage('');
-            }}
-            className="theme-input"
-            style={{ padding: '8px 10px' }}
+      <section className="theme-panel settings-card">
+        <div className="settings-card-header">
+          <h2 className="settings-card-title">Actions</h2>
+        </div>
+        <div className="settings-actions-row">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="theme-btn theme-btn-go settings-btn-pad"
           >
-            {themes.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.theme.name} - {entry.theme.author} ({entry.theme.mode})
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>Name</span>
-          <input
-            value={themeName}
-            onChange={(e) => {
-              setThemeName(e.currentTarget.value);
-              setExportMessage('');
-            }}
-            className="theme-input"
-            style={{ padding: '8px 10px' }}
-          />
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>Author</span>
-          <input
-            value={themeAuthor}
-            onChange={(e) => {
-              setThemeAuthor(e.currentTarget.value);
-              setExportMessage('');
-            }}
-            className="theme-input"
-            style={{ padding: '8px 10px' }}
-          />
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>Mode</span>
-          <select
-            value={themeMode}
-            onChange={(e) => {
-              const nextMode = e.currentTarget.value;
-              if (nextMode === 'light' || nextMode === 'dark') {
-                setThemeMode(nextMode);
-                setExportMessage('');
-              }
-            }}
-            className="theme-input"
-            style={{ padding: '8px 10px' }}
+            Export JSON
+          </button>
+          <button
+            type="button"
+            onClick={handleExportLoadAndSelect}
+            className="theme-btn theme-btn-nav settings-btn-pad"
           >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
-      </div>
-
-      <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
-        {editableKeys.map((key) => (
-          <label
-            key={key}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(180px, 1fr) auto minmax(120px, 180px)',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 10px',
-              border: '1px solid var(--tabBorder)',
-              borderRadius: 6,
-              background: 'var(--surfaceBg)',
-            }}
-          >
-            <span
-              style={{
-                display: 'inline-flex',
-                flexDirection: 'column',
-                gap: 2,
-              }}
-            >
-              <span>{getThemeColorDisplayName(key)}</span>
-              <span className="theme-text3" style={{ fontFamily: 'monospace', fontSize: 12 }}>
-                {key}
-              </span>
-            </span>
+            Export, Load, and Select
+          </button>
+          <label className="creator-live-preview">
             <input
-              type="color"
-              value={colors[key]}
-              onChange={(e) => {
-                const next = e.currentTarget.value;
-                setColors((prev) => ({ ...prev, [key]: next }));
-                setExportMessage('');
-              }}
-              style={{ width: 40, height: 30, border: 0, background: 'transparent', padding: 0 }}
+              type="checkbox"
+              checked={livePreviewEnabled}
+              onChange={(e) => setLivePreviewEnabled(e.currentTarget.checked)}
+              className="settings-toggle"
             />
-            <input
-              value={colors[key]}
+            <span className="theme-text2">Live Preview</span>
+          </label>
+        </div>
+        {!!exportMessage && <div className="theme-text2 settings-inline-message">{exportMessage}</div>}
+      </section>
+
+      <section className="theme-panel settings-card">
+        <div className="settings-card-header">
+          <h2 className="settings-card-title">Theme Details</h2>
+        </div>
+        <div className="creator-meta-grid">
+          <label className="creator-meta-field">
+            <span className="settings-setting-label">Base Theme</span>
+            <select
+              value={baseThemeId}
               onChange={(e) => {
-                const normalized = normalizeHexColor(e.currentTarget.value);
-                if (!normalized) return;
-                setColors((prev) => ({ ...prev, [key]: normalized }));
+                setBaseThemeId(e.currentTarget.value);
                 setExportMessage('');
               }}
-              className="theme-input"
-              style={{ padding: '6px 8px', fontFamily: 'monospace' }}
+              className="theme-input settings-select-input"
+            >
+              {themes.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.theme.name} - {entry.theme.author} ({entry.theme.mode})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="creator-meta-field">
+            <span className="settings-setting-label">Name</span>
+            <input
+              value={themeName}
+              onChange={(e) => {
+                setThemeName(e.currentTarget.value);
+                setExportMessage('');
+              }}
+              className="theme-input settings-text-input"
             />
           </label>
-        ))}
-      </div>
 
+          <label className="creator-meta-field">
+            <span className="settings-setting-label">Author</span>
+            <input
+              value={themeAuthor}
+              onChange={(e) => {
+                setThemeAuthor(e.currentTarget.value);
+                setExportMessage('');
+              }}
+              className="theme-input settings-text-input"
+            />
+          </label>
+
+          <label className="creator-meta-field">
+            <span className="settings-setting-label">Mode</span>
+            <select
+              value={themeMode}
+              onChange={(e) => {
+                const nextMode = e.currentTarget.value;
+                if (nextMode === 'light' || nextMode === 'dark') {
+                  setThemeMode(nextMode);
+                  setExportMessage('');
+                }
+              }}
+              className="theme-input settings-select-input"
+            >
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="theme-panel settings-card">
+        <div className="settings-card-header">
+          <h2 className="settings-card-title">Colors</h2>
+        </div>
+        <div className="creator-values-list">
+          {editableKeys.map((key) => (
+            <div key={key} className="settings-setting-row creator-value-row">
+              <div className="settings-setting-meta">
+                <span className="settings-setting-label">{getThemeColorDisplayName(key)}</span>
+                <span className="settings-setting-description creator-code-text">{key}</span>
+              </div>
+              <div className="creator-color-controls settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                <input
+                  type="color"
+                  value={colors[key]}
+                  onChange={(e) => {
+                    const next = e.currentTarget.value;
+                    setColors((prev) => ({ ...prev, [key]: next }));
+                    setExportMessage('');
+                  }}
+                  className="creator-color-swatch"
+                />
+                <input
+                  value={colors[key]}
+                  onChange={(e) => {
+                    const normalized = normalizeHexColor(e.currentTarget.value);
+                    if (!normalized) return;
+                    setColors((prev) => ({ ...prev, [key]: normalized }));
+                    setExportMessage('');
+                  }}
+                  className="theme-input settings-text-input creator-code-input"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

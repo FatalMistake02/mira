@@ -35,7 +35,8 @@ function createEditableValues(baseLayout: Layout): Record<string, string> {
 
 export default function LayoutCreator() {
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
-  const initialLayoutEntry = layouts[0] ?? null;
+  const settingsLayoutId = getBrowserSettings().layoutId;
+  const initialLayoutEntry = layouts.find((entry) => entry.id === settingsLayoutId) ?? layouts[0] ?? null;
 
   const [baseLayoutId, setBaseLayoutId] = useState<string>(initialLayoutEntry?.id ?? '');
   const [layoutName, setLayoutName] = useState('My Layout');
@@ -111,157 +112,151 @@ export default function LayoutCreator() {
 
   if (!layouts.length) {
     return (
-      <div style={{ padding: 20, color: 'var(--text1)', background: 'var(--bg)', minHeight: '100%' }}>
+      <div className="settings-page creator-page">
         No layouts are available to use as a base.
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        padding: 20,
-        maxWidth: 960,
-        margin: '0 auto',
-        background: 'var(--bg)',
-        color: 'var(--text1)',
-        minHeight: '100%',
-      }}
-    >
-      <h1 style={{ marginTop: 0 }}>Layout Creator</h1>
-      <p className="theme-text2" style={{ marginTop: 0 }}>
-        Pick a base layout, tweak sizing/visibility values, and export JSON.
-      </p>
+    <div className="settings-page creator-page">
+      <header className="settings-header">
+        <div>
+          <h1 className="settings-title">Layout Creator</h1>
+          <p className="settings-subtitle">
+            Pick a base layout, tweak sizing/visibility values, and export JSON.
+          </p>
+        </div>
+      </header>
 
-      <div style={{ marginTop: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button type="button" onClick={handleExport} className="theme-btn theme-btn-go" style={{ padding: '8px 12px' }}>
-          Export JSON
-        </button>
-        <button
-          type="button"
-          onClick={handleExportLoadAndSelect}
-          className="theme-btn theme-btn-nav"
-          style={{ padding: '8px 12px' }}
-        >
-          Export, Load, and Select
-        </button>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 6, userSelect: 'none' }}>
-          <input
-            type="checkbox"
-            checked={livePreviewEnabled}
-            onChange={(e) => setLivePreviewEnabled(e.currentTarget.checked)}
-          />
-          <span className="theme-text2">Live Preview</span>
-        </label>
-        {!!exportMessage && <span className="theme-text2">{exportMessage}</span>}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>Base Layout</span>
-          <select
-            value={baseLayoutId}
-            onChange={(e) => {
-              setBaseLayoutId(e.currentTarget.value);
-              setExportMessage('');
-            }}
-            className="theme-input"
-            style={{ padding: '8px 10px' }}
+      <section className="theme-panel settings-card">
+        <div className="settings-card-header">
+          <h2 className="settings-card-title">Actions</h2>
+        </div>
+        <div className="settings-actions-row">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="theme-btn theme-btn-go settings-btn-pad"
           >
-            {layouts.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.layout.name} - {entry.layout.author}
-              </option>
-            ))}
-          </select>
-        </label>
+            Export JSON
+          </button>
+          <button
+            type="button"
+            onClick={handleExportLoadAndSelect}
+            className="theme-btn theme-btn-nav settings-btn-pad"
+          >
+            Export, Load, and Select
+          </button>
+          <label className="creator-live-preview">
+            <input
+              type="checkbox"
+              checked={livePreviewEnabled}
+              onChange={(e) => setLivePreviewEnabled(e.currentTarget.checked)}
+              className="settings-toggle"
+            />
+            <span className="theme-text2">Live Preview</span>
+          </label>
+        </div>
+        {!!exportMessage && <div className="theme-text2 settings-inline-message">{exportMessage}</div>}
+      </section>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>Name</span>
-          <input
-            value={layoutName}
-            onChange={(e) => {
-              setLayoutName(e.currentTarget.value);
-              setExportMessage('');
-            }}
-            className="theme-input"
-            style={{ padding: '8px 10px' }}
-          />
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>Author</span>
-          <input
-            value={layoutAuthor}
-            onChange={(e) => {
-              setLayoutAuthor(e.currentTarget.value);
-              setExportMessage('');
-            }}
-            className="theme-input"
-            style={{ padding: '8px 10px' }}
-          />
-        </label>
-      </div>
-
-      <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
-        {editableKeys.map((key) => {
-          const definition = LAYOUT_VALUE_DEFINITIONS.find((entry) => entry.key === key);
-          const isChoice = definition?.kind === 'choice';
-          const options = definition?.options ?? [];
-
-          return (
-            <label
-              key={key}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(240px, 1fr) minmax(180px, 260px)',
-                alignItems: 'center',
-                gap: 10,
-                padding: '8px 10px',
-                border: '1px solid var(--tabBorder)',
-                borderRadius: 6,
-                background: 'var(--surfaceBg)',
+      <section className="theme-panel settings-card">
+        <div className="settings-card-header">
+          <h2 className="settings-card-title">Layout Details</h2>
+        </div>
+        <div className="creator-meta-grid">
+          <label className="creator-meta-field">
+            <span className="settings-setting-label">Base Layout</span>
+            <select
+              value={baseLayoutId}
+              onChange={(e) => {
+                setBaseLayoutId(e.currentTarget.value);
+                setExportMessage('');
               }}
+              className="theme-input settings-select-input"
             >
-              <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
-                <span>{getLayoutValueDisplayName(key)}</span>
-                <span className="theme-text3" style={{ fontFamily: 'monospace', fontSize: 12 }}>
-                  {key}
-                </span>
-              </span>
+              {layouts.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.layout.name} - {entry.layout.author}
+                </option>
+              ))}
+            </select>
+          </label>
 
-              {isChoice ? (
-                <select
-                  value={values[key] ?? ''}
-                  onChange={(e) => {
-                    setValues((prev) => ({ ...prev, [key]: e.currentTarget.value }));
-                    setExportMessage('');
-                  }}
-                  className="theme-input"
-                  style={{ padding: '6px 8px' }}
-                >
-                  {options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  value={values[key] ?? ''}
-                  onChange={(e) => {
-                    setValues((prev) => ({ ...prev, [key]: e.currentTarget.value }));
-                    setExportMessage('');
-                  }}
-                  className="theme-input"
-                  style={{ padding: '6px 8px', fontFamily: 'monospace' }}
-                />
-              )}
-            </label>
-          );
-        })}
-      </div>
+          <label className="creator-meta-field">
+            <span className="settings-setting-label">Name</span>
+            <input
+              value={layoutName}
+              onChange={(e) => {
+                setLayoutName(e.currentTarget.value);
+                setExportMessage('');
+              }}
+              className="theme-input settings-text-input"
+            />
+          </label>
+
+          <label className="creator-meta-field">
+            <span className="settings-setting-label">Author</span>
+            <input
+              value={layoutAuthor}
+              onChange={(e) => {
+                setLayoutAuthor(e.currentTarget.value);
+                setExportMessage('');
+              }}
+              className="theme-input settings-text-input"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="theme-panel settings-card">
+        <div className="settings-card-header">
+          <h2 className="settings-card-title">Layout Values</h2>
+        </div>
+        <div className="creator-values-list">
+          {editableKeys.map((key) => {
+            const definition = LAYOUT_VALUE_DEFINITIONS.find((entry) => entry.key === key);
+            const isChoice = definition?.kind === 'choice';
+            const options = definition?.options ?? [];
+
+            return (
+              <div key={key} className="settings-setting-row creator-value-row">
+                <div className="settings-setting-meta">
+                  <span className="settings-setting-label">{getLayoutValueDisplayName(key)}</span>
+                  <span className="settings-setting-description creator-code-text">{key}</span>
+                </div>
+
+                {isChoice ? (
+                  <select
+                    value={values[key] ?? ''}
+                    onChange={(e) => {
+                      setValues((prev) => ({ ...prev, [key]: e.currentTarget.value }));
+                      setExportMessage('');
+                    }}
+                    className="theme-input settings-select-input settings-setting-control creator-value-input"
+                  >
+                    {options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={values[key] ?? ''}
+                    onChange={(e) => {
+                      setValues((prev) => ({ ...prev, [key]: e.currentTarget.value }));
+                      setExportMessage('');
+                    }}
+                    className="theme-input settings-text-input settings-setting-control creator-value-input creator-code-input"
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
-

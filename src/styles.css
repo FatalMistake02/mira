@@ -554,6 +554,74 @@ body {
   font-size: 13px;
 }
 
+.creator-page {
+  max-width: 1060px;
+}
+
+.creator-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.creator-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.creator-meta-field .theme-input {
+  width: 100%;
+  padding: 8px 10px;
+}
+
+.creator-values-list {
+  display: grid;
+  gap: 8px;
+}
+
+.creator-value-row {
+  align-items: center;
+}
+
+.creator-live-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.creator-color-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.creator-color-swatch {
+  width: 40px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.creator-code-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
+.creator-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
+.creator-value-input {
+  width: min(100%, 320px);
+  margin-left: auto;
+  padding: 8px 10px;
+}
+
 .settings-toggle {
   appearance: none;
   -webkit-appearance: none;
@@ -649,6 +717,11 @@ body {
   .settings-text-input,
   .settings-select-limit {
     width: 100%;
+  }
+
+  .creator-value-input {
+    width: 100%;
+    max-width: none;
   }
 }
 
