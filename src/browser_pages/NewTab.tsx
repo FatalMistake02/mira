@@ -137,26 +137,15 @@ export default function NewTab() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search Google..."
+          placeholder="search anything..."
           style={{
             flex: 1,
             padding: '10px 15px',
             fontSize: 18,
-            borderRadius: '6px 0 0 6px',
+            borderRadius: 6,
           }}
           className="theme-input"
         />
-        <button
-          type="submit"
-          className="theme-btn theme-btn-go"
-          style={{
-            padding: '10px 20px',
-            fontSize: 18,
-            borderRadius: '0 6px 6px 0',
-          }}
-        >
-          Search
-        </button>
       </form>
     </div>
   );
