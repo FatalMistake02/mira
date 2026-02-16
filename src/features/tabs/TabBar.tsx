@@ -315,7 +315,6 @@ export default function TabBar() {
                   minWidth: TAB_MIN_WIDTH,
                   maxWidth: TAB_TARGET_WIDTH,
                   position: 'relative',
-                  zIndex: tab.id === activeId ? 2 : 1,
                   marginBottom:
                     tab.id === activeId
                       ? 'calc(-1 * var(--layoutBorderWidth, 1px))'

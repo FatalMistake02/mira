@@ -13,6 +13,7 @@ export type BrowserSettings = {
   tabSleepMode: TabSleepMode;
   adBlockEnabled: boolean;
   quitOnLastWindowClose: boolean;
+  showNewTabBranding: boolean;
   disableNewTabIntro: boolean;
   includePrereleaseUpdates: boolean;
 };
@@ -26,6 +27,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   tabSleepMode: 'freeze',
   adBlockEnabled: false,
   quitOnLastWindowClose: false,
+  showNewTabBranding: true,
   disableNewTabIntro: false,
   includePrereleaseUpdates: false,
 };
@@ -115,6 +117,14 @@ function normalizeDisableNewTabIntro(value: unknown): boolean {
   return value;
 }
 
+function normalizeShowNewTabBranding(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.showNewTabBranding;
+  }
+
+  return value;
+}
+
 function normalizeIncludePrereleaseUpdates(value: unknown): boolean {
   if (typeof value !== 'boolean') {
     return DEFAULT_BROWSER_SETTINGS.includePrereleaseUpdates;
@@ -138,6 +148,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     tabSleepMode: normalizeTabSleepMode(candidate.tabSleepMode),
     adBlockEnabled: normalizeAdBlockEnabled(candidate.adBlockEnabled),
     quitOnLastWindowClose: normalizeQuitOnLastWindowClose(candidate.quitOnLastWindowClose),
+    showNewTabBranding: normalizeShowNewTabBranding(candidate.showNewTabBranding),
     disableNewTabIntro: normalizeDisableNewTabIntro(candidate.disableNewTabIntro),
     includePrereleaseUpdates: normalizeIncludePrereleaseUpdates(
       candidate.includePrereleaseUpdates,

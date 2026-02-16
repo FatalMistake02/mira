@@ -54,6 +54,9 @@ export default function Settings() {
   const [quitOnLastWindowClose, setQuitOnLastWindowClose] = useState(
     () => initialSettings.quitOnLastWindowClose,
   );
+  const [showNewTabBranding, setShowNewTabBranding] = useState(
+    () => initialSettings.showNewTabBranding,
+  );
   const [disableNewTabIntro, setDisableNewTabIntro] = useState(
     () => initialSettings.disableNewTabIntro,
   );
@@ -85,6 +88,7 @@ export default function Settings() {
     setTabSleepMode(DEFAULT_BROWSER_SETTINGS.tabSleepMode);
     setAdBlockEnabled(DEFAULT_BROWSER_SETTINGS.adBlockEnabled);
     setQuitOnLastWindowClose(DEFAULT_BROWSER_SETTINGS.quitOnLastWindowClose);
+    setShowNewTabBranding(DEFAULT_BROWSER_SETTINGS.showNewTabBranding);
     setDisableNewTabIntro(DEFAULT_BROWSER_SETTINGS.disableNewTabIntro);
     setIncludePrereleaseUpdates(DEFAULT_BROWSER_SETTINGS.includePrereleaseUpdates);
     applyTheme(getThemeById(DEFAULT_BROWSER_SETTINGS.themeId));
@@ -179,6 +183,7 @@ export default function Settings() {
         tabSleepMode,
         adBlockEnabled,
         quitOnLastWindowClose,
+        showNewTabBranding,
         disableNewTabIntro,
         includePrereleaseUpdates,
       });
@@ -202,6 +207,7 @@ export default function Settings() {
     tabSleepMode,
     adBlockEnabled,
     quitOnLastWindowClose,
+    showNewTabBranding,
     disableNewTabIntro,
     includePrereleaseUpdates,
   ]);
@@ -410,6 +416,21 @@ export default function Settings() {
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <label htmlFor="disable-new-tab-intro" style={{ fontWeight: 600 }}>
           New Tab Intro
+        </label>
+        <label
+          htmlFor="show-new-tab-branding"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        >
+          <input
+            id="show-new-tab-branding"
+            type="checkbox"
+            checked={showNewTabBranding}
+            onChange={(e) => {
+              setShowNewTabBranding(e.currentTarget.checked);
+              setSaveStatus('saving');
+            }}
+          />
+          Show Mira logo and welcome message on New Tab
         </label>
         <label
           htmlFor="disable-new-tab-intro"
