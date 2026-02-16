@@ -48,6 +48,8 @@ type DefaultBrowserStatusResponse = {
 type SetDefaultBrowserResponse = {
   ok: boolean;
   isDefault: boolean;
+  requiresUserAction?: boolean;
+  message?: string;
 };
 
 type SettingsSectionId = 'general' | 'customization' | 'app';
@@ -413,9 +415,12 @@ export default function Settings() {
         await electron.ipcRenderer.invoke<SetDefaultBrowserResponse>('default-browser-set');
       setIsDefaultBrowser(response.isDefault);
       setDefaultBrowserStatus(
-        response.ok
-          ? 'Mira is now set as your default browser.'
-          : 'Could not set Mira as default browser. Check your OS default apps settings.',
+        response.message
+          || (response.ok
+            ? response.requiresUserAction
+              ? 'Mira was registered for web links. Confirm Mira in your OS default apps settings, then refresh status.'
+              : 'Mira is now set as your default browser.'
+            : 'Could not set Mira as default browser. Check your OS default apps settings.'),
       );
     } catch {
       setDefaultBrowserStatus('Failed to set default browser.');
