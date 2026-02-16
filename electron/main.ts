@@ -1521,9 +1521,23 @@ function setupDefaultBrowserHandlers() {
   ipcMain.handle('default-browser-set', () => {
     const didSetHttp = setAsDefaultForProtocol('http');
     const didSetHttps = setAsDefaultForProtocol('https');
+    const ok = didSetHttp && didSetHttps;
+    const isDefault = isDefaultBrowser();
+    const requiresUserAction = isWindows && ok && !isDefault;
+
+    let message = '';
+    if (!ok) {
+      message = 'Could not register Mira for http/https. Check your OS default apps settings.';
+    } else if (requiresUserAction) {
+      message =
+        'Mira was registered for http/https. Windows may require confirmation in Settings before default status updates. Confirm Mira in Default apps or refresh status in a moment.';
+    }
+
     return {
-      ok: didSetHttp && didSetHttps && isDefaultBrowser(),
-      isDefault: isDefaultBrowser(),
+      ok,
+      isDefault,
+      requiresUserAction,
+      message,
     };
   });
 }
