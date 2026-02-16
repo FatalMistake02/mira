@@ -137,7 +137,7 @@ export default function NewTab() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="search anything..."
+          placeholder="Search anything..."
           style={{
             flex: 1,
             padding: '10px 15px',
