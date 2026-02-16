@@ -280,7 +280,7 @@ function pruneHistory(entries: HistoryEntry[]): HistoryEntry[] {
 }
 
 async function persistHistory() {
-  await fs.writeFile(getHistoryFilePath(), JSON.stringify(historyCache, null, 2), 'utf-8');
+  await fs.writeFile(getHistoryFilePath(), JSON.stringify(historyCache, null, 0), 'utf-8');
 }
 
 async function loadHistory() {
