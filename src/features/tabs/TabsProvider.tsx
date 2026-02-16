@@ -41,6 +41,7 @@ type TabsContextType = {
   tabs: Tab[];
   activeId: string;
   newTab: (url?: string) => void;
+  reopenLastClosedTab: () => void;
   openHistory: () => void;
   closeTab: (id: string) => void;
   moveTab: (fromId: string, toId: string) => void;
@@ -69,6 +70,7 @@ type TabsContextType = {
 
 const TabsContext = createContext<TabsContextType>(null!);
 export const useTabs = () => useContext(TabsContext);
+const MAX_RECENTLY_CLOSED_TABS = 25;
 
 function isNewTabUrl(url: string, defaultTabUrl: string): boolean {
   const normalized = url.trim().toLowerCase();
@@ -202,6 +204,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const hydratedRef = useRef(false);
   const recentIpcTabOpenRef = useRef<{ url: string; openedAt: number } | null>(null);
   const tabSleepTimerRef = useRef<number | null>(null);
+  const recentlyClosedTabsRef = useRef<Tab[]>([]);
 
   const persistSession = (nextTabs: Tab[], nextActiveId: string) => {
     const restorableTabs = filterRestorableTabs(nextTabs);
@@ -449,6 +452,14 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       return;
     }
 
+    const tabToClose = tabs.find((tab) => tab.id === id);
+    if (tabToClose) {
+      recentlyClosedTabsRef.current = [
+        ...recentlyClosedTabsRef.current,
+        { ...tabToClose, history: [...tabToClose.history] },
+      ].slice(-MAX_RECENTLY_CLOSED_TABS);
+    }
+
     setTabs((t) => {
       const next = t.filter((tab) => tab.id !== id);
       if (id !== activeId || !next.length) return next;
@@ -461,6 +472,30 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       );
     });
   };
+
+  const reopenLastClosedTab = useCallback(() => {
+    const lastClosedTab =
+      recentlyClosedTabsRef.current[recentlyClosedTabsRef.current.length - 1];
+    if (!lastClosedTab) return;
+
+    recentlyClosedTabsRef.current = recentlyClosedTabsRef.current.slice(0, -1);
+
+    const now = Date.now();
+    const reopenedTab: Tab = {
+      ...lastClosedTab,
+      id: crypto.randomUUID(),
+      history: [...lastClosedTab.history],
+      isSleeping: false,
+      lastActiveAt: now,
+    };
+
+    setTabs((currentTabs) =>
+      currentTabs
+        .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
+        .concat(reopenedTab),
+    );
+    setActiveId(reopenedTab.id);
+  }, [activeId]);
 
   const moveTab = useCallback((fromId: string, toId: string) => {
     if (!fromId || !toId || fromId === toId) return;
@@ -867,6 +902,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         tabs,
         activeId,
         newTab,
+        reopenLastClosedTab,
         openHistory,
         closeTab,
         moveTab,

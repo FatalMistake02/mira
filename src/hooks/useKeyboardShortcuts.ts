@@ -1,9 +1,10 @@
 // src/hooks/useKeyboardShortcuts.ts
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { electron } from '../electronBridge';
 
 interface UseKeyboardShortcutsProps {
   newTab: (url?: string) => void;
+  reopenLastClosedTab: () => void;
   openHistory: () => void;
   openNewWindow: () => void;
   closeTab: (id: string) => void;
@@ -17,6 +18,7 @@ interface UseKeyboardShortcutsProps {
 
 export function useKeyboardShortcuts({
   newTab,
+  reopenLastClosedTab,
   openHistory,
   openNewWindow,
   closeTab,
@@ -27,6 +29,8 @@ export function useKeyboardShortcuts({
   activeId,
   addressInputRef,
 }: UseKeyboardShortcutsProps) {
+  const lastReopenShortcutAtRef = useRef(0);
+
   useEffect(() => {
     const hasElectronBridge = !!electron?.ipcRenderer;
     const isMacOS = electron?.isMacOS ?? false;
@@ -35,12 +39,27 @@ export function useKeyboardShortcuts({
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
+      if (e.repeat) {
+        return;
+      }
       const isPrimaryModifier = isMacOS ? e.metaKey : e.ctrlKey;
 
       if (isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         e.stopPropagation();
         newTab();
+        return;
+      }
+
+      if (isPrimaryModifier && e.shiftKey && e.key.toLowerCase() === 't') {
+        // In Electron, main process forwards this as `app-shortcut` to avoid
+        // duplicate handling when webview/main content focus differs.
+        if (hasElectronBridge) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        reopenLastClosedTab();
         return;
       }
 
@@ -107,7 +126,7 @@ export function useKeyboardShortcuts({
     // Use capture phase (true) to intercept events before they reach the iframe
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newTab, openHistory, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef]);
+  }, [newTab, reopenLastClosedTab, openHistory, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
@@ -126,6 +145,15 @@ export function useKeyboardShortcuts({
         openNewWindow();
         return;
       }
+      if (action === 'reopen-closed-tab') {
+        const now = Date.now();
+        if (now - lastReopenShortcutAtRef.current < 150) {
+          return;
+        }
+        lastReopenShortcutAtRef.current = now;
+        reopenLastClosedTab();
+        return;
+      }
       if (action === 'toggle-devtools') {
         toggleDevTools();
         return;
@@ -137,5 +165,5 @@ export function useKeyboardShortcuts({
 
     ipc.on('app-shortcut', onShortcut);
     return () => ipc.off('app-shortcut', onShortcut);
-  }, [reload, findInPage, openNewWindow, toggleDevTools, printPage]);
+  }, [reload, findInPage, openNewWindow, reopenLastClosedTab, toggleDevTools, printPage]);
 }
