@@ -967,7 +967,7 @@ export default function Settings() {
                 <div className="settings-setting-meta">
                   <span className="settings-setting-label">System default app for links</span>
                   <span className="settings-setting-description">
-                    Register Mira to open `http` and `https` links by default.
+                    Register Mira to open <code>http</code> and <code>https</code> links by default.
                   </span>
                 </div>
                 <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
