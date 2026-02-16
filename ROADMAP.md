@@ -5,8 +5,8 @@
 - [x] Reload (Ctrl+R)
 - [ ] Fix other shortcuts
 - [x] Auto restore all windows
-- [ ] Make dev tools work
-- [ ] Shortcut to restore closed tabs
+- [x] Make dev tools work
+- [x] Shortcut to restore closed tabs
 - [ ] Shortcuts to change tabs
 
 ## v1.0.0 — Stable Release
@@ -15,7 +15,7 @@
 - [ ] Improve performance
 - [ ] Fix bugs/issues
 - [ ] Auto update
- 
+
 ## v1.1.0
 - [ ] Bookmarks and favorites
 - [ ] Site settings
