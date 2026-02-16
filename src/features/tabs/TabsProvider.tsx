@@ -898,6 +898,11 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       if (isDuplicate) return;
 
       recentIpcTabOpenRef.current = { url: normalized, openedAt: now };
+      const activeTab = tabs.find((tab) => tab.id === activeId);
+      if (activeTab && isNewTabUrl(activeTab.url, getBrowserSettings().newTabPage)) {
+        navigate(normalized, activeTab.id);
+        return;
+      }
       newTab(normalized);
     };
 
@@ -916,7 +921,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
 
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
-  }, [activeId, isBootstrapReady, navigate, newTab]);
+  }, [activeId, isBootstrapReady, navigate, newTab, tabs]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
