@@ -19,6 +19,7 @@ type WebviewElement = {
   openDevTools: () => void;
   closeDevTools: () => void;
   isDevToolsOpened: () => boolean;
+  getWebContentsId?: () => number;
   print?: (options?: unknown, callback?: (success: boolean, failureReason: string) => void) => void;
 } | null;
 
@@ -703,6 +704,32 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         wv.closeDevTools();
       }
       return;
+    }
+
+    const devToolsOpenMode = getBrowserSettings().devToolsOpenMode;
+    if (devToolsOpenMode === 'side') {
+      const ipc = electron?.ipcRenderer;
+      if (ipc && typeof wv.getWebContentsId === 'function') {
+        const webContentsId = wv.getWebContentsId();
+        if (typeof webContentsId === 'number' && Number.isFinite(webContentsId)) {
+          void ipc
+            .invoke<boolean>('webview-open-devtools', {
+              webContentsId,
+              mode: 'right',
+            })
+            .then((opened) => {
+              if (!opened && typeof wv.openDevTools === 'function') {
+                wv.openDevTools();
+              }
+            })
+            .catch(() => {
+              if (typeof wv.openDevTools === 'function') {
+                wv.openDevTools();
+              }
+            });
+          return;
+        }
+      }
     }
 
     if (typeof wv.openDevTools === 'function') {

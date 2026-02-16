@@ -19,6 +19,10 @@ interface WebviewElement extends HTMLElement {
   src: string;
   reload: () => void;
   findInPage: (text: string) => void;
+  openDevTools: () => void;
+  closeDevTools: () => void;
+  isDevToolsOpened: () => boolean;
+  getWebContentsId?: () => number;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
   didPageTitleUpdatedHandler?: (e: WebviewPageTitleUpdatedEvent) => void;
   pageFaviconUpdatedHandler?: (e: WebviewPageFaviconUpdatedEvent) => void;

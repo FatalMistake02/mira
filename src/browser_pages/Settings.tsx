@@ -4,6 +4,7 @@ import {
   DEFAULT_BROWSER_SETTINGS,
   getBrowserSettings,
   saveBrowserSettings,
+  type DevToolsOpenMode,
   type TabSleepMode,
 } from '../features/settings/browserSettings';
 import { applyTheme } from '../features/themes/applyTheme';
@@ -50,6 +51,7 @@ export default function Settings() {
   const [tabSleepValue, setTabSleepValue] = useState(() => initialSettings.tabSleepValue);
   const [tabSleepUnit, setTabSleepUnit] = useState(() => initialSettings.tabSleepUnit);
   const [tabSleepMode, setTabSleepMode] = useState(() => initialSettings.tabSleepMode);
+  const [devToolsOpenMode, setDevToolsOpenMode] = useState(() => initialSettings.devToolsOpenMode);
   const [adBlockEnabled, setAdBlockEnabled] = useState(() => initialSettings.adBlockEnabled);
   const [quitOnLastWindowClose, setQuitOnLastWindowClose] = useState(
     () => initialSettings.quitOnLastWindowClose,
@@ -86,6 +88,7 @@ export default function Settings() {
     setTabSleepValue(DEFAULT_BROWSER_SETTINGS.tabSleepValue);
     setTabSleepUnit(DEFAULT_BROWSER_SETTINGS.tabSleepUnit);
     setTabSleepMode(DEFAULT_BROWSER_SETTINGS.tabSleepMode);
+    setDevToolsOpenMode(DEFAULT_BROWSER_SETTINGS.devToolsOpenMode);
     setAdBlockEnabled(DEFAULT_BROWSER_SETTINGS.adBlockEnabled);
     setQuitOnLastWindowClose(DEFAULT_BROWSER_SETTINGS.quitOnLastWindowClose);
     setShowNewTabBranding(DEFAULT_BROWSER_SETTINGS.showNewTabBranding);
@@ -181,6 +184,7 @@ export default function Settings() {
         tabSleepValue,
         tabSleepUnit,
         tabSleepMode,
+        devToolsOpenMode,
         adBlockEnabled,
         quitOnLastWindowClose,
         showNewTabBranding,
@@ -205,6 +209,7 @@ export default function Settings() {
     tabSleepValue,
     tabSleepUnit,
     tabSleepMode,
+    devToolsOpenMode,
     adBlockEnabled,
     quitOnLastWindowClose,
     showNewTabBranding,
@@ -449,6 +454,31 @@ export default function Settings() {
             }}
           />
         </label>
+      </div>
+
+      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="devtools-open-mode" style={{ fontWeight: 600 }}>
+          Developer Tools
+        </label>
+        <select
+          id="devtools-open-mode"
+          value={devToolsOpenMode}
+          onChange={(e) => {
+            const nextMode = e.currentTarget.value;
+            if (nextMode === 'side' || nextMode === 'window') {
+              setDevToolsOpenMode(nextMode as DevToolsOpenMode);
+            }
+            setSaveStatus('saving');
+          }}
+          className="theme-input"
+          style={{
+            maxWidth: 360,
+            padding: '8px 10px',
+          }}
+        >
+          <option value="side">Docked to side (default)</option>
+          <option value="window">Separate window</option>
+        </select>
       </div>
 
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>

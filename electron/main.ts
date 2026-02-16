@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, shell, session } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, session, webContents as electronWebContents } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, WebContents } from 'electron';
 import { promises as fs, unlinkSync, writeFileSync } from 'fs';
@@ -118,6 +118,81 @@ const AD_BLOCK_LIST_URLS = [
   'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/light.txt',
 ];
 let blockedAdHosts = new Set<string>(DEFAULT_BLOCKED_AD_HOSTS);
+
+interface WindowTitleBarOverlayState {
+  color: string;
+  symbolColor: string;
+  height: number;
+  preferNativeOverlay: boolean;
+  suppressForDockedDevToolsCount: number;
+}
+
+const DEFAULT_TITLEBAR_OVERLAY_COLOR = '#00000000';
+const DEFAULT_TITLEBAR_SYMBOL_COLOR = '#e8edf5';
+const DEFAULT_TITLEBAR_OVERLAY_HEIGHT = 38;
+const windowTitleBarOverlayState = new Map<number, WindowTitleBarOverlayState>();
+
+function getOrCreateTitleBarOverlayState(win: BrowserWindow): WindowTitleBarOverlayState {
+  const existing = windowTitleBarOverlayState.get(win.id);
+  if (existing) return existing;
+
+  const created: WindowTitleBarOverlayState = {
+    color: DEFAULT_TITLEBAR_OVERLAY_COLOR,
+    symbolColor: DEFAULT_TITLEBAR_SYMBOL_COLOR,
+    height: DEFAULT_TITLEBAR_OVERLAY_HEIGHT,
+    preferNativeOverlay: isWindows,
+    suppressForDockedDevToolsCount: 0,
+  };
+  windowTitleBarOverlayState.set(win.id, created);
+  return created;
+}
+
+function isTitleBarOverlayActive(win: BrowserWindow): boolean {
+  if (!isWindows || win.isDestroyed()) return false;
+  const overlayState = getOrCreateTitleBarOverlayState(win);
+  return overlayState.preferNativeOverlay && overlayState.suppressForDockedDevToolsCount === 0;
+}
+
+function applyWindowTitleBarOverlay(win: BrowserWindow): boolean {
+  if (!isWindows || win.isDestroyed()) return false;
+
+  const overlayState = getOrCreateTitleBarOverlayState(win);
+  const shouldEnable = overlayState.preferNativeOverlay && overlayState.suppressForDockedDevToolsCount === 0;
+
+  if (shouldEnable) {
+    win.setTitleBarOverlay({
+      color: overlayState.color,
+      symbolColor: overlayState.symbolColor,
+      height: overlayState.height,
+    });
+  } else {
+    win.setTitleBarOverlay(false);
+  }
+
+  if (!win.webContents.isDestroyed()) {
+    win.webContents.send('window-titlebar-overlay-changed', shouldEnable);
+  }
+  return shouldEnable;
+}
+
+function suppressTitleBarOverlayForDockedDevTools(win: BrowserWindow): () => void {
+  const overlayState = getOrCreateTitleBarOverlayState(win);
+  overlayState.suppressForDockedDevToolsCount += 1;
+  applyWindowTitleBarOverlay(win);
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const latest = windowTitleBarOverlayState.get(win.id);
+    if (!latest) return;
+
+    latest.suppressForDockedDevToolsCount = Math.max(0, latest.suppressForDockedDevToolsCount - 1);
+    if (!win.isDestroyed()) {
+      applyWindowTitleBarOverlay(win);
+    }
+  };
+}
 
 function isRestorableSessionTabUrl(url: string): boolean {
   return url.trim().toLowerCase() !== 'mira://newtab';
@@ -1143,6 +1218,64 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('webview-open-devtools', (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return false;
+
+    const candidate = payload as {
+      webContentsId?: unknown;
+      mode?: unknown;
+      activate?: unknown;
+    };
+    const webContentsId =
+      typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+        ? Math.floor(candidate.webContentsId)
+        : -1;
+    if (webContentsId <= 0) return false;
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return false;
+
+    const host = target.hostWebContents;
+    if (!host || host.id !== event.sender.id) return false;
+    const hostWindow = BrowserWindow.fromWebContents(host);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const nextMode =
+      candidate.mode === 'left' ||
+      candidate.mode === 'right' ||
+      candidate.mode === 'bottom' ||
+      candidate.mode === 'undocked' ||
+      candidate.mode === 'detach'
+        ? candidate.mode
+        : 'right';
+
+    const wantsDockedMode = nextMode === 'left' || nextMode === 'right' || nextMode === 'bottom';
+    let releaseOverlaySuppression: (() => void) | null = null;
+    if (isWindows && wantsDockedMode) {
+      releaseOverlaySuppression = suppressTitleBarOverlayForDockedDevTools(hostWindow);
+      const cleanupSuppression = () => {
+        if (!releaseOverlaySuppression) return;
+        releaseOverlaySuppression();
+        releaseOverlaySuppression = null;
+      };
+      target.once('devtools-closed', cleanupSuppression);
+      target.once('destroyed', cleanupSuppression);
+    }
+
+    try {
+      target.openDevTools({
+        mode: nextMode,
+        activate: candidate.activate !== false,
+      });
+      return true;
+    } catch {
+      if (releaseOverlaySuppression) {
+        releaseOverlaySuppression();
+      }
+      return false;
+    }
+  });
+
   ipcMain.handle('window-minimize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return false;
@@ -1171,6 +1304,12 @@ function setupWindowControlsHandlers() {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return false;
     return win.isFullScreen();
+  });
+
+  ipcMain.handle('window-is-titlebar-overlay-enabled', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return false;
+    return isTitleBarOverlayActive(win);
   });
 
   ipcMain.handle('window-close', (event) => {
@@ -1202,12 +1341,14 @@ function setupWindowControlsHandlers() {
       }
 
       if (!normalizedSymbolColor) return false;
-    win.setTitleBarOverlay({
-      color: normalizedOverlayColor || '#00000000',
-      symbolColor: normalizedSymbolColor,
-      height: 38,
-    });
-    return true;
+
+      const overlayState = getOrCreateTitleBarOverlayState(win);
+      overlayState.symbolColor = normalizedSymbolColor;
+      overlayState.color = normalizedOverlayColor || DEFAULT_TITLEBAR_OVERLAY_COLOR;
+      overlayState.height = DEFAULT_TITLEBAR_OVERLAY_HEIGHT;
+      overlayState.preferNativeOverlay = true;
+      applyWindowTitleBarOverlay(win);
+      return true;
     },
   );
 }
@@ -1257,6 +1398,15 @@ function createWindow(
 
   if (isMacOS) {
     win.setWindowButtonVisibility(true);
+  }
+  if (isWindows) {
+    const overlayState = getOrCreateTitleBarOverlayState(win);
+    overlayState.color = DEFAULT_TITLEBAR_OVERLAY_COLOR;
+    overlayState.symbolColor = DEFAULT_TITLEBAR_SYMBOL_COLOR;
+    overlayState.height = DEFAULT_TITLEBAR_OVERLAY_HEIGHT;
+    overlayState.preferNativeOverlay = true;
+    overlayState.suppressForDockedDevToolsCount = 0;
+    applyWindowTitleBarOverlay(win);
   }
 
   if (!app.isPackaged) {
@@ -1310,6 +1460,7 @@ function createWindow(
 
   win.on('closed', () => {
     bootRestoreByWindowId.delete(win.id);
+    windowTitleBarOverlayState.delete(win.id);
     const noWindowsRemaining = BrowserWindow.getAllWindows().length === 0;
 
     // Do not remove this snapshot immediately. Users may be closing windows

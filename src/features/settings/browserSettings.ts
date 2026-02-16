@@ -3,6 +3,7 @@ import { DEFAULT_LAYOUT_ID } from '../layouts/layoutLoader';
 
 export type TabSleepUnit = 'seconds' | 'minutes' | 'hours';
 export type TabSleepMode = 'freeze' | 'discard';
+export type DevToolsOpenMode = 'side' | 'window';
 
 export type BrowserSettings = {
   newTabPage: string;
@@ -11,6 +12,7 @@ export type BrowserSettings = {
   tabSleepValue: number;
   tabSleepUnit: TabSleepUnit;
   tabSleepMode: TabSleepMode;
+  devToolsOpenMode: DevToolsOpenMode;
   adBlockEnabled: boolean;
   quitOnLastWindowClose: boolean;
   showNewTabBranding: boolean;
@@ -25,6 +27,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   tabSleepValue: 10,
   tabSleepUnit: 'minutes',
   tabSleepMode: 'freeze',
+  devToolsOpenMode: 'side',
   adBlockEnabled: false,
   quitOnLastWindowClose: false,
   showNewTabBranding: false,
@@ -82,6 +85,14 @@ function normalizeTabSleepMode(value: unknown): TabSleepMode {
   }
 
   return DEFAULT_BROWSER_SETTINGS.tabSleepMode;
+}
+
+function normalizeDevToolsOpenMode(value: unknown): DevToolsOpenMode {
+  if (value === 'side' || value === 'window') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_SETTINGS.devToolsOpenMode;
 }
 
 function normalizeAdBlockEnabled(value: unknown): boolean {
@@ -146,6 +157,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     tabSleepValue: normalizeTabSleepValue(candidate.tabSleepValue),
     tabSleepUnit: normalizeTabSleepUnit(candidate.tabSleepUnit),
     tabSleepMode: normalizeTabSleepMode(candidate.tabSleepMode),
+    devToolsOpenMode: normalizeDevToolsOpenMode(candidate.devToolsOpenMode),
     adBlockEnabled: normalizeAdBlockEnabled(candidate.adBlockEnabled),
     quitOnLastWindowClose: normalizeQuitOnLastWindowClose(candidate.quitOnLastWindowClose),
     showNewTabBranding: normalizeShowNewTabBranding(candidate.showNewTabBranding),

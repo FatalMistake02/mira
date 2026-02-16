@@ -7,6 +7,7 @@ import appWordmark from '../assets/mira.png';
 export default function TopBar({ children }: { children?: React.ReactNode }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isTitleBarOverlayEnabled, setIsTitleBarOverlayEnabled] = useState(true);
   const isMacOS = electron?.isMacOS ?? false;
   const isWindows = electron?.platform === 'win32';
 
@@ -44,6 +45,27 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
     };
   }, [isMacOS]);
 
+  useEffect(() => {
+    if (!isWindows) {
+      setIsTitleBarOverlayEnabled(false);
+      return;
+    }
+
+    electron?.ipcRenderer
+      .invoke<boolean>('window-is-titlebar-overlay-enabled')
+      .then((value) => setIsTitleBarOverlayEnabled(!!value))
+      .catch(() => undefined);
+
+    const onOverlayChanged = (_event: unknown, value: boolean) => {
+      setIsTitleBarOverlayEnabled(!!value);
+    };
+
+    electron?.ipcRenderer.on('window-titlebar-overlay-changed', onOverlayChanged);
+    return () => {
+      electron?.ipcRenderer.off('window-titlebar-overlay-changed', onOverlayChanged);
+    };
+  }, [isWindows]);
+
   const onMinimize = () => {
     electron?.ipcRenderer.invoke('window-minimize').catch(() => undefined);
   };
@@ -76,6 +98,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
     </div>
   );
 
+  const useNativeWindowsControls = isWindows && isTitleBarOverlayEnabled;
   const controlsSection = isMacOS ? (
     <div
       style={{
@@ -84,7 +107,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
         transition: 'width 140ms ease',
       }}
     />
-  ) : isWindows ? (
+  ) : useNativeWindowsControls ? (
     <div
       style={{
         width: isFullscreen ? 0 : 138,
