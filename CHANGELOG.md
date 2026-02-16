@@ -5,10 +5,11 @@
 - History shows site title
 - Restoring tabs will restore all windows and window locations
 - Work on updates
-- Use real Windows window controls 
+- Use real Windows window controls
 - Added layouts, similar to themes
 - Tabs can be rearranged
 - Settings for new tab logo and welcome message
+- Devtools now work
 
 ## v0.7.0 - 2026-02-15
 
