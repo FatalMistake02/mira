@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, WebContents } from 'electron';
 import { promises as fs, unlinkSync, writeFileSync } from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 // Store active downloads by ID
 const downloadMap = new Map<string, DownloadItem>();
@@ -353,7 +353,7 @@ function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
   try {
     const parsed = new URL(trimmed);
     const protocol = parsed.protocol.toLowerCase();
-    if (protocol !== 'http:' && protocol !== 'https:') return null;
+    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'file:') return null;
     return parsed.toString();
   } catch {
     return null;
@@ -374,8 +374,9 @@ function enqueueIncomingBrowserUrl(rawUrl: string): void {
   incomingBrowserUrlQueue.push(normalized);
 }
 
-function dequeueIncomingBrowserUrl(): string | undefined {
-  return incomingBrowserUrlQueue.shift();
+function takeQueuedIncomingBrowserUrls(): string[] {
+  if (!incomingBrowserUrlQueue.length) return [];
+  return incomingBrowserUrlQueue.splice(0, incomingBrowserUrlQueue.length);
 }
 
 function getDefaultProtocolRegistrationContext():
@@ -1491,6 +1492,12 @@ function setupDefaultBrowserHandlers() {
   });
 }
 
+function setupIncomingUrlHandlers() {
+  ipcMain.handle('incoming-urls-consume', () => {
+    return takeQueuedIncomingBrowserUrls();
+  });
+}
+
 function setupMacDockMenu() {
   if (!isMacOS) return;
   const dockMenu = Menu.buildFromTemplate([
@@ -1787,11 +1794,16 @@ function routeIncomingBrowserUrl(rawUrl: string): void {
   if (targetWindow && !targetWindow.isDestroyed()) {
     if (targetWindow.isMinimized()) targetWindow.restore();
     targetWindow.focus();
-    targetWindow.webContents.send('open-url-in-current-tab', normalized);
+    if (targetWindow.webContents.isLoadingMainFrame()) {
+      enqueueIncomingBrowserUrl(normalized);
+      return;
+    }
+    targetWindow.webContents.send('open-url-in-new-tab', normalized);
     return;
   }
 
-  createWindow(undefined, normalized);
+  enqueueIncomingBrowserUrl(normalized);
+  createWindow();
 }
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -1829,6 +1841,16 @@ if (!hasSingleInstanceLock) {
       }
       enqueueIncomingBrowserUrl(url);
     });
+
+    app.on('open-file', (event, filePath) => {
+      event.preventDefault();
+      const fileUrl = pathToFileURL(filePath).toString();
+      if (app.isReady()) {
+        routeIncomingBrowserUrl(fileUrl);
+        return;
+      }
+      enqueueIncomingBrowserUrl(fileUrl);
+    });
   }
 }
 
@@ -1845,19 +1867,13 @@ app.whenReady().then(async () => {
   setupAdBlocker();
   setupWindowControlsHandlers();
   setupDefaultBrowserHandlers();
+  setupIncomingUrlHandlers();
   setupApplicationMenu();
   setupMacDockMenu();
   scheduleAdBlockListRefresh();
   setupDownloadHandlers();
 
-  const initialUrl = dequeueIncomingBrowserUrl();
-  createWindow(undefined, initialUrl);
-
-  let nextQueuedUrl = dequeueIncomingBrowserUrl();
-  while (nextQueuedUrl) {
-    routeIncomingBrowserUrl(nextQueuedUrl);
-    nextQueuedUrl = dequeueIncomingBrowserUrl();
-  }
+  createWindow();
 });
 
 app.on('activate', () => {

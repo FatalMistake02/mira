@@ -199,10 +199,12 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const [pendingSession, setPendingSession] = useState<SessionSnapshot | null>(null);
   const [restoreTabCountState, setRestoreTabCountState] = useState(0);
   const [restoreWindowCount, setRestoreWindowCount] = useState(1);
+  const [isBootstrapReady, setIsBootstrapReady] = useState(false);
 
   const webviewMap = useRef<Record<string, WebviewElement>>({});
   const hydratedRef = useRef(false);
   const recentIpcTabOpenRef = useRef<{ url: string; openedAt: number } | null>(null);
+  const didConsumeIncomingUrlsRef = useRef(false);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
 
@@ -264,38 +266,43 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         setRestorePromptOpen(true);
       }
       hydratedRef.current = true;
+      setIsBootstrapReady(true);
       return;
     }
 
     let cancelled = false;
     const bootstrapSessionRestore = async () => {
-      const windowRestore = await ipc.invoke<SessionSnapshot | null>('session-take-window-restore');
-      if (cancelled) return;
+      try {
+        const windowRestore = await ipc.invoke<SessionSnapshot | null>('session-take-window-restore');
+        if (cancelled) return;
 
-      if (windowRestore && windowRestore.tabs.length > 0) {
-        const now = Date.now();
-        const nextTabs = windowRestore.tabs.map((tab) =>
-          tab.id === windowRestore.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
-        );
-        setTabs(nextTabs);
-        setActiveId(windowRestore.activeId);
-        setPendingSession(null);
-        setRestoreTabCountState(0);
-        setRestorePromptOpen(false);
-        setRestoreWindowCount(1);
+        if (windowRestore && windowRestore.tabs.length > 0) {
+          const now = Date.now();
+          const nextTabs = windowRestore.tabs.map((tab) =>
+            tab.id === windowRestore.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+          );
+          setTabs(nextTabs);
+          setActiveId(windowRestore.activeId);
+          setPendingSession(null);
+          setRestoreTabCountState(0);
+          setRestorePromptOpen(false);
+          setRestoreWindowCount(1);
+          return;
+        }
+
+        const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
+        if (cancelled) return;
+
+        if (restoreState?.hasPendingRestore) {
+          setRestorePromptOpen(true);
+          setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
+          setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
+        }
+      } finally {
+        if (cancelled) return;
         hydratedRef.current = true;
-        return;
+        setIsBootstrapReady(true);
       }
-
-      const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
-      if (cancelled) return;
-
-      if (restoreState?.hasPendingRestore) {
-        setRestorePromptOpen(true);
-        setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
-        setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
-      }
-      hydratedRef.current = true;
     };
 
     void bootstrapSessionRestore();
@@ -878,8 +885,37 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     };
 
     ipc.on('open-url-in-new-tab', onOpenUrlInNewTab);
+
+    if (!didConsumeIncomingUrlsRef.current && isBootstrapReady) {
+      didConsumeIncomingUrlsRef.current = true;
+      ipc
+        .invoke<string[]>('incoming-urls-consume')
+        .then((queuedUrls) => {
+          if (!Array.isArray(queuedUrls) || queuedUrls.length === 0) return;
+
+          const incomingUrls = queuedUrls
+            .filter((candidate): candidate is string => typeof candidate === 'string')
+            .map((candidate) => candidate.trim())
+            .filter(Boolean);
+          if (!incomingUrls.length) return;
+
+          const activeTab = tabs.find((tab) => tab.id === activeId);
+          const canReuseCurrentTab =
+            !!activeTab && isNewTabUrl(activeTab.url, getBrowserSettings().newTabPage);
+
+          incomingUrls.forEach((incomingUrl, index) => {
+            if (index === 0 && canReuseCurrentTab) {
+              navigate(incomingUrl);
+              return;
+            }
+            newTab(incomingUrl);
+          });
+        })
+        .catch(() => undefined);
+    }
+
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
-  }, [newTab]);
+  }, [activeId, isBootstrapReady, navigate, newTab, tabs]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
