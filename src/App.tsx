@@ -20,7 +20,17 @@ import { getLayoutById } from './features/layouts/layoutLoader';
 
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const { newTab, openHistory, closeTab, reload, findInPage, toggleDevTools, printPage, activeId } =
+  const {
+    newTab,
+    reopenLastClosedTab,
+    openHistory,
+    closeTab,
+    reload,
+    findInPage,
+    toggleDevTools,
+    printPage,
+    activeId,
+  } =
     useTabs();
   const openNewWindow = () => {
     if (electron?.ipcRenderer) {
@@ -32,6 +42,7 @@ function Browser() {
 
   useKeyboardShortcuts({
     newTab,
+    reopenLastClosedTab,
     openHistory,
     openNewWindow,
     closeTab,

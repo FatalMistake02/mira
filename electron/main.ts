@@ -1430,6 +1430,15 @@ function setupApplicationMenu() {
             createWindow(focusedWindow && !focusedWindow.isDestroyed() ? focusedWindow : undefined);
           },
         },
+        {
+          label: 'Reopen Closed Tab',
+          accelerator: 'CmdOrCtrl+Shift+T',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (!focusedWindow || focusedWindow.isDestroyed()) return;
+            focusedWindow.webContents.send('app-shortcut', 'reopen-closed-tab');
+          },
+        },
       ],
     },
     {
@@ -1614,6 +1623,7 @@ function createWindow(
     const isFindChord = isPrimaryChord && key === 'f';
     const isNewWindowChord = isPrimaryChord && key === 'n';
     const isPrintChord = isPrimaryChord && key === 'p';
+    const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
     const isReloadKey = key === 'f5';
     const isDevToolsChord = key === 'f12' || (isMacOS
       ? input.meta && input.alt && key === 'i'
@@ -1640,6 +1650,12 @@ function createWindow(
     if (isPrintChord) {
       event.preventDefault();
       win.webContents.send('app-shortcut', 'print-page');
+      return;
+    }
+
+    if (isReopenClosedTabChord) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'reopen-closed-tab');
       return;
     }
 
