@@ -84,6 +84,8 @@ const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
 const NEW_WINDOW_SHORTCUT_DEDUPE_MS = 250;
 const recentNewWindowShortcutByWindow = new Map<number, number>();
+const SHORTCUT_DEVTOOLS_SUPPRESS_MS = 500;
+const suppressHostDevToolsUntilByWindowId = new Map<number, number>();
 const windowSessionCache = new Map<number, WindowSessionSnapshot>();
 const bootRestoreByWindowId = new Map<number, WindowSessionSnapshot>();
 let pendingRestoreSession: PersistedSessionSnapshot | null = null;
@@ -954,7 +956,9 @@ function setupWebviewTabOpenHandler() {
       const hasPrimaryModifier = input.control || input.meta;
       const isPrimaryChord = hasPrimaryModifier && !input.shift;
       const isNewWindowChord = isPrimaryChord && key === 'n';
-      const isDevToolsChord = hasPrimaryModifier && input.shift && key === 'i';
+      const isDevToolsChord = isMacOS
+        ? input.meta && input.alt && key === 'i'
+        : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i');
 
       if (!isNewWindowChord && !isDevToolsChord) return;
 
@@ -963,6 +967,10 @@ function setupWebviewTabOpenHandler() {
       if (!hostWindow || hostWindow.isDestroyed()) return;
 
       if (isDevToolsChord) {
+        if (toggleFocusedBrowserDevTools()) {
+          return;
+        }
+        markHostDevToolsSuppressedForShortcut(hostWindow);
         hostWindow.webContents.send('app-shortcut', 'toggle-devtools');
         return;
       }
@@ -1184,6 +1192,32 @@ function triggerNewWindowFromShortcut(sourceWindow: BrowserWindow): void {
   createWindow(sourceWindow);
 }
 
+function markHostDevToolsSuppressedForShortcut(win: BrowserWindow): void {
+  suppressHostDevToolsUntilByWindowId.set(win.id, Date.now() + SHORTCUT_DEVTOOLS_SUPPRESS_MS);
+}
+
+function shouldSuppressHostDevTools(win: BrowserWindow): boolean {
+  const suppressUntil = suppressHostDevToolsUntilByWindowId.get(win.id) ?? 0;
+  if (Date.now() > suppressUntil) {
+    suppressHostDevToolsUntilByWindowId.delete(win.id);
+    return false;
+  }
+  return true;
+}
+
+function toggleFocusedBrowserDevTools(): boolean {
+  const focused = electronWebContents.getFocusedWebContents();
+  if (!focused || focused.isDestroyed()) return false;
+  if (!focused.hostWebContents) return false;
+
+  if (focused.isDevToolsOpened()) {
+    focused.closeDevTools();
+  } else {
+    focused.openDevTools();
+  }
+  return true;
+}
+
 function setupAdBlocker() {
   const ses = session.defaultSession;
   ses.webRequest.onBeforeRequest((details, callback) => {
@@ -1364,6 +1398,61 @@ function setupMacDockMenu() {
   app.dock.setMenu(dockMenu);
 }
 
+function setupApplicationMenu() {
+  if (!isMacOS) {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Window',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            createWindow(focusedWindow && !focusedWindow.isDestroyed() ? focusedWindow : undefined);
+          },
+        },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Toggle Browser DevTools',
+          accelerator: 'Command+Alt+I',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (!focusedWindow || focusedWindow.isDestroyed()) return;
+            if (toggleFocusedBrowserDevTools()) return;
+            markHostDevToolsSuppressedForShortcut(focusedWindow);
+            focusedWindow.webContents.send('app-shortcut', 'toggle-devtools');
+          },
+        },
+      ],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow(
   sourceWindow?: BrowserWindow,
   initialUrl?: string,
@@ -1509,6 +1598,12 @@ function createWindow(
   win.on('unmaximize', onWindowBoundsChanged);
   win.on('enter-full-screen', onWindowBoundsChanged);
   win.on('leave-full-screen', onWindowBoundsChanged);
+  win.webContents.on('devtools-opened', () => {
+    if (!shouldSuppressHostDevTools(win)) return;
+    if (win.webContents.isDevToolsOpened()) {
+      win.webContents.closeDevTools();
+    }
+  });
 
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
@@ -1520,8 +1615,9 @@ function createWindow(
     const isNewWindowChord = isPrimaryChord && key === 'n';
     const isPrintChord = isPrimaryChord && key === 'p';
     const isReloadKey = key === 'f5';
-    const isDevToolsChord =
-      key === 'f12' || (isMacOS ? input.meta && input.alt && key === 'i' : input.control && input.shift && key === 'i');
+    const isDevToolsChord = key === 'f12' || (isMacOS
+      ? input.meta && input.alt && key === 'i'
+      : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i'));
 
     if (isReloadChord || isReloadKey) {
       event.preventDefault();
@@ -1549,6 +1645,10 @@ function createWindow(
 
     if (isDevToolsChord) {
       event.preventDefault();
+      if (toggleFocusedBrowserDevTools()) {
+        return;
+      }
+      markHostDevToolsSuppressedForShortcut(win);
       win.webContents.send('app-shortcut', 'toggle-devtools');
     }
   });
@@ -1566,6 +1666,7 @@ app.whenReady().then(async () => {
   setupWebviewTabOpenHandler();
   setupAdBlocker();
   setupWindowControlsHandlers();
+  setupApplicationMenu();
   setupMacDockMenu();
   scheduleAdBlockListRefresh();
   setupDownloadHandlers();
