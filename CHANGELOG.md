@@ -8,6 +8,7 @@
 - Use real Windows window controls 
 - Added layouts, similar to themes
 - Tabs can be rearranged
+- Settings for new tab logo and welcome message
 
 ## v0.7.0 - 2026-02-15
 
