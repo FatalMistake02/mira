@@ -11,6 +11,7 @@
 - Settings for new tab logo and welcome message
 - Devtools now work
 - Tab name updates correctly for internal pages
+- Add shortcut to reopen last closed tab
 
 ## v0.7.0 - 2026-02-15
 
