@@ -250,14 +250,15 @@ body {
 }
 
 .settings-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 6px;
   border-radius: 12px;
   border: var(--layoutBorderWidth, 1px) solid
     color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 75%, transparent);
   background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 82%, transparent);
+  align-self: flex-start;
 }
 
 .settings-tab-btn {
@@ -266,9 +267,9 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0;
-  text-align: center;
+  text-align: left;
 }
 
 .settings-tab-btn-active {
@@ -287,6 +288,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.settings-body {
+  display: grid;
+  grid-template-columns: minmax(150px, 200px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
 }
 
 .settings-card {
@@ -360,6 +368,11 @@ body {
   width: min(100%, 460px);
 }
 
+.settings-setting-control-right {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
 .settings-field {
   display: flex;
   flex-direction: column;
@@ -386,6 +399,10 @@ body {
 
 .settings-text-input {
   width: min(100%, 580px);
+}
+
+.settings-setting-row .settings-text-input.settings-setting-control-grow {
+  width: min(100%, 460px);
 }
 
 .settings-number-input {
@@ -593,7 +610,8 @@ body {
   }
 
   .settings-tabs {
-    grid-template-columns: 1fr;
+    width: 100%;
+    align-self: stretch;
   }
 
   .settings-header-actions {
@@ -611,6 +629,10 @@ body {
   .settings-setting-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .settings-body {
+    grid-template-columns: 1fr;
   }
 
   .settings-setting-control,

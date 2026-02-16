@@ -379,39 +379,40 @@ export default function Settings() {
         </div>
       </header>
 
-      <div
-        className="settings-tabs"
-        role="tablist"
-        aria-label="Settings sections"
-      >
-        {SETTINGS_SECTION_TABS.map((section) => (
-          <button
-            key={section.id}
-            id={`settings-tab-${section.id}`}
-            type="button"
-            role="tab"
-            aria-selected={activeSection === section.id}
-            aria-controls={`settings-panel-${section.id}`}
-            onClick={() => {
-              setActiveSection(section.id);
-              setThemeDropdownOpen(false);
-              setLayoutDropdownOpen(false);
-            }}
-            className={`theme-btn theme-btn-nav settings-tab-btn ${
-              activeSection === section.id ? 'settings-tab-btn-active' : ''
-            }`}
-          >
-            <span className="settings-tab-label">{section.label}</span>
-          </button>
-        ))}
-      </div>
+      <div className="settings-body">
+        <div
+          className="settings-tabs"
+          role="tablist"
+          aria-label="Settings sections"
+        >
+          {SETTINGS_SECTION_TABS.map((section) => (
+            <button
+              key={section.id}
+              id={`settings-tab-${section.id}`}
+              type="button"
+              role="tab"
+              aria-selected={activeSection === section.id}
+              aria-controls={`settings-panel-${section.id}`}
+              onClick={() => {
+                setActiveSection(section.id);
+                setThemeDropdownOpen(false);
+                setLayoutDropdownOpen(false);
+              }}
+              className={`theme-btn theme-btn-nav settings-tab-btn ${
+                activeSection === section.id ? 'settings-tab-btn-active' : ''
+              }`}
+            >
+              <span className="settings-tab-label">{section.label}</span>
+            </button>
+          ))}
+        </div>
 
-      <div
-        id={`settings-panel-${activeSection}`}
-        role="tabpanel"
-        aria-labelledby={`settings-tab-${activeSection}`}
-        className="settings-section"
-      >
+        <div
+          id={`settings-panel-${activeSection}`}
+          role="tabpanel"
+          aria-labelledby={`settings-tab-${activeSection}`}
+          className="settings-section"
+        >
         {activeSection === 'general' && (
           <>
             <section className="theme-panel settings-card">
@@ -437,7 +438,7 @@ export default function Settings() {
                     setSaveStatus('saving');
                   }}
                   placeholder={DEFAULT_BROWSER_SETTINGS.newTabPage}
-                  className="theme-input settings-text-input settings-setting-control settings-setting-control-grow"
+                  className="theme-input settings-text-input settings-setting-control settings-setting-control-grow settings-setting-control-right"
                 />
               </div>
               <label
@@ -498,7 +499,7 @@ export default function Settings() {
                     Time a background tab waits before sleep mode is applied.
                   </span>
                 </label>
-                <div className="settings-inline-controls settings-setting-control settings-setting-control-grow">
+                <div className="settings-inline-controls settings-setting-control settings-setting-control-grow settings-setting-control-right">
                   <input
                     id="tab-sleep-value"
                     type="number"
@@ -927,7 +928,7 @@ export default function Settings() {
                     Check for updates and install/download when available.
                   </span>
                 </div>
-                <div className="settings-actions-row settings-setting-control settings-setting-control-grow">
+                <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
                   <button
                     type="button"
                     onClick={checkForUpdates}
@@ -956,6 +957,7 @@ export default function Settings() {
             </section>
           </>
         )}
+        </div>
       </div>
     </div>
   );
