@@ -658,13 +658,13 @@ body {
 }
 
 .settings-toggle:checked {
-  background: var(--navButtonBg, var(--buttonBg));
-  border-color: var(--navButtonBorder, var(--buttonBorder));
+  background: color-mix(in srgb, var(--navButtonBgActive, var(--buttonBgActive)) 52%, #1d4ef0 48%);
+  border-color: color-mix(in srgb, var(--navButtonBorderActive, var(--buttonBorderActive)) 46%, #3b82f6 54%);
 }
 
 .settings-toggle:checked::after {
   transform: translateX(20px);
-  background: var(--navButtonText, var(--buttonText));
+  background: color-mix(in srgb, var(--navButtonTextActive, var(--buttonTextActive)) 76%, #dbeafe 24%);
 }
 
 .settings-toggle:focus-visible {
