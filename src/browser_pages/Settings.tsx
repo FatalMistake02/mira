@@ -43,6 +43,22 @@ type UpdateCheckResponse =
 
 type DefaultBrowserStatusResponse = {
   isDefault: boolean;
+  message?: string;
+  support?: {
+    code:
+      | 'ok'
+      | 'dev-build'
+      | 'windows-portable'
+      | 'manual-confirmation-required'
+      | 'registration-failed';
+    canAttemptRegistration: boolean;
+    requiresUserAction: boolean;
+    message: string;
+    platform: string;
+    isPackaged: boolean;
+    isPortableBuild: boolean;
+    processDefaultApp: boolean;
+  };
 };
 
 type SetDefaultBrowserResponse = {
@@ -50,6 +66,21 @@ type SetDefaultBrowserResponse = {
   isDefault: boolean;
   requiresUserAction?: boolean;
   message?: string;
+  support?: {
+    code:
+      | 'ok'
+      | 'dev-build'
+      | 'windows-portable'
+      | 'manual-confirmation-required'
+      | 'registration-failed';
+    canAttemptRegistration: boolean;
+    requiresUserAction: boolean;
+    message: string;
+    platform: string;
+    isPackaged: boolean;
+    isPortableBuild: boolean;
+    processDefaultApp: boolean;
+  };
 };
 
 type SettingsSectionId = 'general' | 'customization' | 'app';
@@ -113,6 +144,9 @@ export default function Settings() {
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
+  const [canAttemptDefaultBrowserRegistration, setCanAttemptDefaultBrowserRegistration] = useState(
+    true,
+  );
   const [defaultBrowserStatus, setDefaultBrowserStatus] = useState('');
   const [isCheckingDefaultBrowser, setIsCheckingDefaultBrowser] = useState(false);
   const [isSettingDefaultBrowser, setIsSettingDefaultBrowser] = useState(false);
@@ -394,7 +428,12 @@ export default function Settings() {
       const response =
         await electron.ipcRenderer.invoke<DefaultBrowserStatusResponse>('default-browser-status');
       setIsDefaultBrowser(response.isDefault);
-      setDefaultBrowserStatus(response.isDefault ? 'Mira is already your default browser.' : '');
+      setCanAttemptDefaultBrowserRegistration(response.support?.canAttemptRegistration ?? true);
+      setDefaultBrowserStatus(
+        response.isDefault
+          ? 'Mira is already your default browser.'
+          : response.message || response.support?.message || '',
+      );
     } catch {
       setDefaultBrowserStatus('Failed to check default browser status.');
     } finally {
@@ -414,8 +453,10 @@ export default function Settings() {
       const response =
         await electron.ipcRenderer.invoke<SetDefaultBrowserResponse>('default-browser-set');
       setIsDefaultBrowser(response.isDefault);
+      setCanAttemptDefaultBrowserRegistration(response.support?.canAttemptRegistration ?? true);
       setDefaultBrowserStatus(
         response.message
+          || response.support?.message
           || (response.ok
             ? response.requiresUserAction
               ? 'Mira was registered for web links. Confirm Mira in your OS default apps settings, then refresh status.'
@@ -988,10 +1029,16 @@ export default function Settings() {
                     type="button"
                     onClick={setAsDefaultBrowser}
                     className="theme-btn theme-btn-go settings-btn-pad"
-                    disabled={isSettingDefaultBrowser || isDefaultBrowser === true}
+                    disabled={
+                      isSettingDefaultBrowser
+                      || isDefaultBrowser === true
+                      || !canAttemptDefaultBrowserRegistration
+                    }
                   >
                     {isSettingDefaultBrowser
                       ? 'Setting...'
+                      : !canAttemptDefaultBrowserRegistration
+                        ? 'Unavailable'
                       : isDefaultBrowser
                         ? 'Already Default'
                         : 'Make Default'}

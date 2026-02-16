@@ -206,6 +206,10 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const recentIpcTabOpenRef = useRef<{ url: string; openedAt: number } | null>(null);
   const didConsumeIncomingUrlsRef = useRef(false);
   const startupIncomingUrlsRef = useRef<string[]>([]);
+  const tabsRef = useRef<Tab[]>([initialTabRef.current]);
+  const activeIdRef = useRef(initialTabRef.current.id);
+  const navigateRef = useRef<(url: string, tabId?: string) => void>(() => undefined);
+  const newTabRef = useRef<(url?: string) => void>(() => undefined);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
 
@@ -672,7 +676,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     [],
   );
 
-  const navigate = (url: string, tabId?: string) => {
+  const navigate = useCallback((url: string, tabId?: string) => {
     const targetTabId = tabId ?? activeId;
     const normalized = url.trim();
     if (normalized && !normalized.startsWith('mira://')) {
@@ -701,7 +705,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         };
       }),
     );
-  };
+  }, [activeId]);
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+    activeIdRef.current = activeId;
+  }, [tabs, activeId]);
+
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
+  useEffect(() => {
+    newTabRef.current = newTab;
+  }, [newTab]);
 
   const goBack = () => {
     setTabs((t) =>
@@ -898,12 +915,12 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       if (isDuplicate) return;
 
       recentIpcTabOpenRef.current = { url: normalized, openedAt: now };
-      const activeTab = tabs.find((tab) => tab.id === activeId);
+      const activeTab = tabsRef.current.find((tab) => tab.id === activeIdRef.current);
       if (activeTab && isNewTabUrl(activeTab.url, getBrowserSettings().newTabPage)) {
-        navigate(normalized, activeTab.id);
+        navigateRef.current(normalized, activeTab.id);
         return;
       }
-      newTab(normalized);
+      newTabRef.current(normalized);
     };
 
     ipc.on('open-url-in-new-tab', onOpenUrlInNewTab);
@@ -913,15 +930,15 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       const incomingUrls = startupIncomingUrlsRef.current;
       startupIncomingUrlsRef.current = [];
       if (incomingUrls.length > 0) {
-        navigate(incomingUrls[0], activeId);
+        navigateRef.current(incomingUrls[0], activeIdRef.current);
         incomingUrls.slice(1).forEach((incomingUrl) => {
-          newTab(incomingUrl);
+          newTabRef.current(incomingUrl);
         });
       }
     }
 
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
-  }, [activeId, isBootstrapReady, navigate, newTab, tabs]);
+  }, [isBootstrapReady]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
@@ -931,12 +948,12 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       if (typeof url !== 'string') return;
       const normalized = url.trim();
       if (!normalized) return;
-      navigate(normalized);
+      navigateRef.current(normalized);
     };
 
     ipc.on('open-url-in-current-tab', onOpenUrlInCurrentTab);
     return () => ipc.off('open-url-in-current-tab', onOpenUrlInCurrentTab);
-  }, [navigate]);
+  }, []);
 
   return (
     <TabsContext.Provider
