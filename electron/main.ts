@@ -1181,13 +1181,20 @@ function setupWebviewTabOpenHandler() {
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
 
-      if (isCopyChord) {
+      const focusedContents = electronWebContents.getFocusedWebContents();
+      const focusedInHostWindow =
+        focusedContents !== null &&
+        !focusedContents.isDestroyed() &&
+        focusedContents.id === hostWindow.webContents.id;
+      const fromHostControlledContents = contents.id === hostWindow.webContents.id || focusedInHostWindow;
+
+      if (isCopyChord && fromHostControlledContents) {
         event.preventDefault();
         dispatchEditShortcut('copy', hostWindow);
         return;
       }
 
-      if (isPasteChord) {
+      if (isPasteChord && fromHostControlledContents) {
         event.preventDefault();
         dispatchEditShortcut('paste', hostWindow);
         return;
