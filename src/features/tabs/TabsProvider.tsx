@@ -42,6 +42,8 @@ type TabsContextType = {
   newTab: (url?: string) => void;
   openHistory: () => void;
   closeTab: (id: string) => void;
+  moveTab: (fromId: string, toId: string) => void;
+  moveTabToIndex: (tabId: string, toIndex: number) => void;
   moveTabToNewWindow: (id: string) => void;
   navigate: (url: string, tabId?: string) => void;
   goBack: () => void;
@@ -459,6 +461,47 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     });
   };
 
+  const moveTab = useCallback((fromId: string, toId: string) => {
+    if (!fromId || !toId || fromId === toId) return;
+
+    setTabs((currentTabs) => {
+      const fromIndex = currentTabs.findIndex((tab) => tab.id === fromId);
+      const toIndex = currentTabs.findIndex((tab) => tab.id === toId);
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+        return currentTabs;
+      }
+
+      const nextTabs = [...currentTabs];
+      const [moved] = nextTabs.splice(fromIndex, 1);
+      nextTabs.splice(toIndex, 0, moved);
+      return nextTabs;
+    });
+  }, []);
+
+  const moveTabToIndex = useCallback((tabId: string, toIndex: number) => {
+    if (!tabId) return;
+
+    setTabs((currentTabs) => {
+      const fromIndex = currentTabs.findIndex((tab) => tab.id === tabId);
+      if (fromIndex === -1) return currentTabs;
+
+      const normalizedToIndex = Math.floor(toIndex);
+      if (!Number.isFinite(normalizedToIndex)) return currentTabs;
+
+      const boundedTargetIndex = Math.max(0, Math.min(normalizedToIndex, currentTabs.length - 1));
+      if (boundedTargetIndex === fromIndex) {
+        return currentTabs;
+      }
+
+      const nextTabs = [...currentTabs];
+      const [moved] = nextTabs.splice(fromIndex, 1);
+      const boundedIndex = Math.max(0, Math.min(boundedTargetIndex, nextTabs.length));
+      nextTabs.splice(boundedIndex, 0, moved);
+      return nextTabs;
+    });
+  }, []);
+
+
   const moveTabToNewWindow = useCallback(
     (id: string) => {
       const tabToMove = tabs.find((tab) => tab.id === id);
@@ -791,6 +834,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         newTab,
         openHistory,
         closeTab,
+        moveTab,
+        moveTabToIndex,
         moveTabToNewWindow,
         navigate,
         goBack,

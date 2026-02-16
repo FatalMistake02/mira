@@ -173,7 +173,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
       >
         <div
           style={{
-            WebkitAppRegion: 'no-drag',
+            WebkitAppRegion: 'drag',
             minWidth: 0,
             display: 'flex',
             maxWidth: '100%',

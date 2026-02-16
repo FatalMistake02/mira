@@ -135,18 +135,37 @@ export default function History() {
                   className="theme-btn theme-btn-nav"
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     textAlign: 'left',
                     borderRadius: 0,
                     borderWidth: 0,
                     padding: '10px 12px',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, wordBreak: 'break-all' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                        title={entry.title}
+                      >
                         {entry.title}
                       </div>
-                      <div style={{ fontSize: 12, wordBreak: 'break-all' }} className="theme-text2">
+                      <div
+                        style={{
+                          fontSize: 12,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                        className="theme-text2"
+                        title={entry.url}
+                      >
                         {entry.url}
                       </div>
                     </div>
