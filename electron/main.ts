@@ -1208,7 +1208,6 @@ function shouldSuppressHostDevTools(win: BrowserWindow): boolean {
 function toggleFocusedBrowserDevTools(): boolean {
   const focused = electronWebContents.getFocusedWebContents();
   if (!focused || focused.isDestroyed()) return false;
-  if (focused.getType() === 'devtools') return false;
   if (!focused.hostWebContents) return false;
 
   if (focused.isDevToolsOpened()) {
