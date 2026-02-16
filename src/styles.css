@@ -203,12 +203,338 @@ body {
   color: var(--downloadButtonTextActive, var(--buttonTextActive));
 }
 
+.settings-page {
+  padding: 24px;
+  max-width: 980px;
+  margin: 0 auto;
+  background: var(--bg);
+  color: var(--text1);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.settings-title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.settings-subtitle {
+  margin: 8px 0 0;
+  color: var(--text2);
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 520px;
+}
+
+.settings-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-save-indicator {
+  font-size: 13px;
+  min-width: 56px;
+}
+
+.settings-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  border: var(--layoutBorderWidth, 1px) solid
+    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 75%, transparent);
+  background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 82%, transparent);
+}
+
+.settings-tab-btn {
+  min-height: 0;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  text-align: center;
+}
+
+.settings-tab-btn-active {
+  background: var(--navButtonBgHover, var(--buttonBgHover));
+  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
+  color: var(--navButtonTextHover, var(--buttonTextHover));
+}
+
+.settings-tab-label {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-card-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.settings-card-description {
+  margin: 0;
+  color: var(--text2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: var(--layoutBorderWidth, 1px) solid
+    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 75%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 88%, transparent);
+  padding: 8px 10px;
+}
+
+.settings-setting-row:hover {
+  border-color: var(--surfaceBorderHover, var(--tabBorderHover));
+  background: color-mix(in srgb, var(--surfaceBgHover, var(--tabBgHover)) 88%, transparent);
+}
+
+.settings-setting-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-setting-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.settings-setting-description {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.35;
+}
+
+.settings-setting-control {
+  flex: 0 0 auto;
+}
+
+.settings-setting-control-grow {
+  width: min(100%, 460px);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-inline-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-text-input,
+.settings-select-input,
+.settings-number-input {
+  padding: 8px 10px;
+}
+
+.settings-text-input {
+  width: min(100%, 580px);
+}
+
+.settings-number-input {
+  width: 116px;
+}
+
+.settings-select-input {
+  min-width: 160px;
+}
+
+.settings-select-limit {
+  width: min(100%, 360px);
+}
+
+.settings-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .settings-toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
+  border: var(--layoutBorderWidth, 1px) solid
+    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 75%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 88%, transparent);
+  padding: 8px 10px;
+}
+
+.settings-toggle-row:hover {
+  border-color: var(--surfaceBorderHover, var(--tabBorderHover));
+  background: color-mix(in srgb, var(--surfaceBgHover, var(--tabBgHover)) 88%, transparent);
+}
+
+.settings-toggle-row > span {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.settings-dropdown-wrap {
+  position: relative;
+  max-width: 520px;
+}
+
+.settings-dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  padding: 8px 10px;
+}
+
+.settings-dropdown-trigger-open {
+  background: var(--navButtonBgHover, var(--buttonBgHover));
+  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
+}
+
+.settings-dropdown-value {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-dropdown-caret-icon {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white);
+  opacity: 0.92;
+}
+
+.settings-dropdown-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 260px;
+  box-shadow:
+    0 14px 32px color-mix(in srgb, var(--bg) 56%, transparent),
+    0 2px 8px color-mix(in srgb, var(--bg) 40%, transparent);
+}
+
+.settings-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-bottom: 1px solid var(--surfaceBorder, var(--tabBorder));
+}
+
+.settings-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.settings-dropdown-choice {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 8px;
+}
+
+.settings-dropdown-choice-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-dropdown-choice-selected {
+  background: color-mix(in srgb, var(--navButtonBgActive, var(--buttonBgActive)) 86%, #1d5cff 14%);
+  border-color: color-mix(in srgb, var(--navButtonBorderActive, var(--buttonBorderActive)) 74%, #3b82f6 26%);
+  color: var(--navButtonTextActive, var(--buttonTextActive));
+}
+
+.settings-dropdown-choice-check {
+  flex: 0 0 auto;
+  color: #9fd0ff;
+}
+
+.settings-dropdown-choice:hover:not(:disabled) {
+  background: var(--navButtonBgHover, var(--buttonBgHover));
+  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
+}
+
+.settings-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-btn-pad {
+  padding: 8px 12px;
+}
+
+.settings-inline-message,
+.settings-status {
+  font-size: 13px;
 }
 
 .settings-toggle {
@@ -259,6 +585,49 @@ body {
 .settings-toggle:focus-visible {
   outline: 2px solid var(--navButtonBorderActive, var(--buttonBorderActive));
   outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .settings-page {
+    padding: 16px;
+  }
+
+  .settings-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-header-actions {
+    width: 100%;
+  }
+
+  .settings-header-actions .theme-btn {
+    flex: 1;
+  }
+
+  .settings-dropdown-wrap {
+    max-width: 100%;
+  }
+
+  .settings-setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-setting-control,
+  .settings-setting-control-grow {
+    width: 100%;
+    max-width: none;
+  }
+
+  .settings-setting-row .settings-toggle {
+    width: 44px;
+    margin-left: auto;
+  }
+
+  .settings-text-input,
+  .settings-select-limit {
+    width: 100%;
+  }
 }
 
 .topbar-window-btn {

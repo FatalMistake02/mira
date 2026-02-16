@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import {
   DEFAULT_BROWSER_SETTINGS,
@@ -40,6 +41,26 @@ type UpdateCheckResponse =
   | { ok: true; data: UpdateCheckPayload }
   | { ok: false; error: string };
 
+type SettingsSectionId = 'general' | 'customization' | 'app';
+
+const SETTINGS_SECTION_TABS: Array<{
+  id: SettingsSectionId;
+  label: string;
+}> = [
+  {
+    id: 'general',
+    label: 'General',
+  },
+  {
+    id: 'customization',
+    label: 'Customization',
+  },
+  {
+    id: 'app',
+    label: 'App',
+  },
+];
+
 export default function Settings() {
   const AUTO_SAVE_DELAY_MS = 300;
   const SAVED_BADGE_MS = 1600;
@@ -72,35 +93,17 @@ export default function Settings() {
   const [importMessage, setImportMessage] = useState('');
   const themeFileInputRef = useRef<HTMLInputElement | null>(null);
   const layoutFileInputRef = useRef<HTMLInputElement | null>(null);
+  const layoutDropdownRef = useRef<HTMLDivElement | null>(null);
+  const themeDropdownRef = useRef<HTMLDivElement | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [updateStatus, setUpdateStatus] = useState('');
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckPayload | null>(null);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const isFirstAutoSaveRef = useRef(true);
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { navigate } = useTabs();
-
-  const handleReset = () => {
-    setNewTabPage(DEFAULT_BROWSER_SETTINGS.newTabPage);
-    setThemeId(DEFAULT_BROWSER_SETTINGS.themeId);
-    setLayoutId(DEFAULT_BROWSER_SETTINGS.layoutId);
-    setTabSleepValue(DEFAULT_BROWSER_SETTINGS.tabSleepValue);
-    setTabSleepUnit(DEFAULT_BROWSER_SETTINGS.tabSleepUnit);
-    setTabSleepMode(DEFAULT_BROWSER_SETTINGS.tabSleepMode);
-    setDevToolsOpenMode(DEFAULT_BROWSER_SETTINGS.devToolsOpenMode);
-    setAdBlockEnabled(DEFAULT_BROWSER_SETTINGS.adBlockEnabled);
-    setQuitOnLastWindowClose(DEFAULT_BROWSER_SETTINGS.quitOnLastWindowClose);
-    setShowNewTabBranding(DEFAULT_BROWSER_SETTINGS.showNewTabBranding);
-    setDisableNewTabIntro(DEFAULT_BROWSER_SETTINGS.disableNewTabIntro);
-    setIncludePrereleaseUpdates(DEFAULT_BROWSER_SETTINGS.includePrereleaseUpdates);
-    applyTheme(getThemeById(DEFAULT_BROWSER_SETTINGS.themeId));
-    applyLayout(getLayoutById(DEFAULT_BROWSER_SETTINGS.layoutId));
-    setThemes(getAllThemes());
-    setLayouts(getAllLayouts());
-    setImportMessage('');
-    setSaveStatus('saving');
-  };
 
   const handleThemeChange = (nextThemeId: string) => {
     setThemeId(nextThemeId);
@@ -225,6 +228,49 @@ export default function Settings() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!layoutDropdownOpen && !themeDropdownOpen) return;
+
+    const isInsideDropdown = (target: EventTarget | null): boolean => {
+      if (!(target instanceof Node)) return false;
+      return (
+        !!layoutDropdownRef.current?.contains(target) ||
+        !!themeDropdownRef.current?.contains(target)
+      );
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!isInsideDropdown(event.target)) {
+        setLayoutDropdownOpen(false);
+        setThemeDropdownOpen(false);
+      }
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (!isInsideDropdown(event.target)) {
+        setLayoutDropdownOpen(false);
+        setThemeDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLayoutDropdownOpen(false);
+        setThemeDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [layoutDropdownOpen, themeDropdownOpen]);
+
   const selectedTheme = themes.find((entry) => entry.id === themeId) ?? themes[0] ?? null;
   const selectedLayout = layouts.find((entry) => entry.id === layoutId) ?? layouts[0] ?? null;
   const formatThemeLabel = (entry: ThemeEntry) => {
@@ -322,484 +368,593 @@ export default function Settings() {
   };
 
   return (
-    <div
-      style={{
-        padding: 20,
-        maxWidth: 720,
-        background: 'var(--bg)',
-        color: 'var(--text1)',
-        minHeight: '100%',
-      }}
-    >
-      <h1 style={{ marginTop: 0 }}>Settings</h1>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="new-tab-page" style={{ fontWeight: 600 }}>
-          New Tab Page URL
-        </label>
-        <input
-          id="new-tab-page"
-          type="text"
-          value={newTabPage}
-          onChange={(e) => {
-            setNewTabPage(e.target.value);
-            setSaveStatus('saving');
-          }}
-          placeholder={DEFAULT_BROWSER_SETTINGS.newTabPage}
-          className="theme-input"
-          style={{
-            padding: '8px 10px',
-          }}
-        />
-      </div>
-
-      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="tab-sleep-value" style={{ fontWeight: 600 }}>
-          Tab Sleep Timeout
-        </label>
-        <div style={{ display: 'flex', gap: 8, maxWidth: 360 }}>
-          <input
-            id="tab-sleep-value"
-            type="number"
-            min={1}
-            step={1}
-            value={tabSleepValue}
-            onChange={(e) => {
-              const nextValue = e.currentTarget.valueAsNumber;
-              if (!Number.isFinite(nextValue)) return;
-              setTabSleepValue(Math.max(1, Math.floor(nextValue)));
-              setSaveStatus('saving');
-            }}
-            className="theme-input"
-            style={{
-              width: 120,
-              padding: '8px 10px',
-            }}
-          />
-          <select
-            id="tab-sleep-unit"
-            value={tabSleepUnit}
-            onChange={(e) => {
-              const nextUnit = e.currentTarget.value;
-              if (nextUnit === 'seconds' || nextUnit === 'minutes' || nextUnit === 'hours') {
-                setTabSleepUnit(nextUnit);
-              }
-              setSaveStatus('saving');
-            }}
-            className="theme-input"
-            style={{
-              padding: '8px 10px',
-            }}
-          >
-            <option value="seconds">Seconds</option>
-            <option value="minutes">Minutes</option>
-            <option value="hours">Hours</option>
-          </select>
+    <div className="settings-page">
+      <header className="settings-header">
+        <div>
+          <h1 className="settings-title">Settings</h1>
         </div>
-        <div style={{ display: 'flex', gap: 8, maxWidth: 360 }}>
-          <select
-            id="tab-sleep-mode"
-            value={tabSleepMode}
-            onChange={(e) => {
-              const nextMode = e.currentTarget.value;
-              if (nextMode === 'freeze' || nextMode === 'discard') {
-                setTabSleepMode(nextMode as TabSleepMode);
-              }
-              setSaveStatus('saving');
-            }}
-            className="theme-input"
-            style={{
-              padding: '8px 10px',
-            }}
-          >
-            <option value="freeze">Freeze (keep page state)</option>
-            <option value="discard">Discard (save more memory)</option>
-          </select>
+        <div className="settings-header-actions">
+          {saveStatus === 'saving' && <div className="theme-text2 settings-save-indicator">Saving...</div>}
+          {saveStatus === 'saved' && <div className="theme-text2 settings-save-indicator">Saved</div>}
         </div>
-      </div>
+      </header>
 
-      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="disable-new-tab-intro" style={{ fontWeight: 600 }}>
-          New Tab Intro
-        </label>
-        <label
-          htmlFor="show-new-tab-branding"
-          className="settings-toggle-row"
-        >
-          <span>Show Mira logo and welcome message on New Tab</span>
-          <input
-            id="show-new-tab-branding"
-            type="checkbox"
-            className="settings-toggle"
-            checked={showNewTabBranding}
-            onChange={(e) => {
-              setShowNewTabBranding(e.currentTarget.checked);
-              setSaveStatus('saving');
-            }}
-          />
-        </label>
-        <label
-          htmlFor="disable-new-tab-intro"
-          className="settings-toggle-row"
-        >
-          <span>Disable intro animation at all times</span>
-          <input
-            id="disable-new-tab-intro"
-            type="checkbox"
-            className="settings-toggle"
-            checked={disableNewTabIntro}
-            onChange={(e) => {
-              setDisableNewTabIntro(e.currentTarget.checked);
-              setSaveStatus('saving');
-            }}
-          />
-        </label>
-      </div>
-
-      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="devtools-open-mode" style={{ fontWeight: 600 }}>
-          Developer Tools
-        </label>
-        <select
-          id="devtools-open-mode"
-          value={devToolsOpenMode}
-          onChange={(e) => {
-            const nextMode = e.currentTarget.value;
-            if (nextMode === 'side' || nextMode === 'window') {
-              setDevToolsOpenMode(nextMode as DevToolsOpenMode);
-            }
-            setSaveStatus('saving');
-          }}
-          className="theme-input"
-          style={{
-            maxWidth: 360,
-            padding: '8px 10px',
-          }}
-        >
-          <option value="side">Docked to side (default)</option>
-          <option value="window">Separate window</option>
-        </select>
-      </div>
-
-      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="ad-block-enabled" style={{ fontWeight: 600 }}>
-          Ad Blocker
-        </label>
-        <label
-          htmlFor="ad-block-enabled"
-          className="settings-toggle-row"
-        >
-          <span>Enabled</span>
-          <input
-            id="ad-block-enabled"
-            type="checkbox"
-            className="settings-toggle"
-            checked={adBlockEnabled}
-            onChange={(e) => {
-              setAdBlockEnabled(e.currentTarget.checked);
-              setSaveStatus('saving');
-            }}
-          />
-        </label>
-      </div>
-
-      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="include-prerelease-updates" style={{ fontWeight: 600 }}>
-          Updates
-        </label>
-        <label
-          htmlFor="include-prerelease-updates"
-          className="settings-toggle-row"
-        >
-          <span>Include pre-release versions when checking for updates</span>
-          <input
-            id="include-prerelease-updates"
-            type="checkbox"
-            className="settings-toggle"
-            checked={includePrereleaseUpdates}
-            onChange={(e) => {
-              setIncludePrereleaseUpdates(e.currentTarget.checked);
-              setSaveStatus('saving');
-            }}
-          />
-        </label>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div
+        className="settings-tabs"
+        role="tablist"
+        aria-label="Settings sections"
+      >
+        {SETTINGS_SECTION_TABS.map((section) => (
           <button
+            key={section.id}
+            id={`settings-tab-${section.id}`}
             type="button"
-            onClick={checkForUpdates}
-            className="theme-btn theme-btn-nav"
-            style={{ padding: '8px 12px' }}
-            disabled={isCheckingUpdates}
+            role="tab"
+            aria-selected={activeSection === section.id}
+            aria-controls={`settings-panel-${section.id}`}
+            onClick={() => {
+              setActiveSection(section.id);
+              setThemeDropdownOpen(false);
+              setLayoutDropdownOpen(false);
+            }}
+            className={`theme-btn theme-btn-nav settings-tab-btn ${
+              activeSection === section.id ? 'settings-tab-btn-active' : ''
+            }`}
           >
-            {isCheckingUpdates ? 'Checking...' : 'Check for Updates'}
+            <span className="settings-tab-label">{section.label}</span>
           </button>
-          {updateCheckResult?.hasUpdate && (
-            <button
-              type="button"
-              onClick={runUpdateAction}
-              className="theme-btn theme-btn-go"
-              style={{ padding: '8px 12px' }}
-              disabled={isRunningUpdateAction}
-            >
-              {isRunningUpdateAction
-                ? 'Working...'
-                : updateCheckResult.mode === 'portable'
-                  ? 'Download'
-                  : 'Download and Install'}
-            </button>
-          )}
-        </div>
-        {!!updateStatus && (
-          <div className="theme-text2" style={{ fontSize: 13 }}>
-            {updateStatus}
-          </div>
-        )}
+        ))}
       </div>
 
-      {electron?.isMacOS && (
-        <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label htmlFor="quit-on-last-window-close" style={{ fontWeight: 600 }}>
-            App Lifecycle
-          </label>
-          <label
-            htmlFor="quit-on-last-window-close"
-            className="settings-toggle-row"
-          >
-            <span>Quit app when last window closes</span>
-            <input
-              id="quit-on-last-window-close"
-              type="checkbox"
-              className="settings-toggle"
-              checked={quitOnLastWindowClose}
-              onChange={(e) => {
-                setQuitOnLastWindowClose(e.currentTarget.checked);
-                setSaveStatus('saving');
-              }}
-            />
-          </label>
-        </div>
-      )}
-
-      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="layout-dropdown-button" style={{ fontWeight: 600 }}>
-          Layout
-        </label>
-        <div style={{ position: 'relative', maxWidth: 420 }}>
-          <button
-            id="layout-dropdown-button"
-            type="button"
-            onClick={() => setLayoutDropdownOpen((open) => !open)}
-            className="theme-btn theme-btn-nav"
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '8px 10px',
-            }}
-          >
-            {selectedLayout ? formatLayoutLabel(selectedLayout) : 'No layouts available'}
-          </button>
-
-          {layoutDropdownOpen && (
-            <div
-              className="theme-panel"
-              style={{
-                marginTop: 6,
-                borderRadius: 6,
-                overflow: 'hidden',
-              }}
-            >
-              {layouts.map((entry) => (
-                <div
-                  key={entry.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: 6,
-                    borderBottom: '1px solid var(--tabBorder)',
+      <div
+        id={`settings-panel-${activeSection}`}
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${activeSection}`}
+        className="settings-section"
+      >
+        {activeSection === 'general' && (
+          <>
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">New Tab</h2>
+              </div>
+              <div className="settings-setting-row">
+                <label
+                  htmlFor="new-tab-page"
+                  className="settings-setting-meta"
+                >
+                  <span className="settings-setting-label">New Tab Page URL</span>
+                  <span className="settings-setting-description">
+                    URL opened whenever a new tab is created.
+                  </span>
+                </label>
+                <input
+                  id="new-tab-page"
+                  type="text"
+                  value={newTabPage}
+                  onChange={(e) => {
+                    setNewTabPage(e.target.value);
+                    setSaveStatus('saving');
                   }}
+                  placeholder={DEFAULT_BROWSER_SETTINGS.newTabPage}
+                  className="theme-input settings-text-input settings-setting-control settings-setting-control-grow"
+                />
+              </div>
+              <label
+                htmlFor="show-new-tab-branding"
+                className="settings-setting-row"
+              >
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Show New Tab branding</span>
+                  <span className="settings-setting-description">
+                    Display Mira logo and welcome message on new tabs.
+                  </span>
+                </span>
+                <input
+                  id="show-new-tab-branding"
+                  type="checkbox"
+                  className="settings-toggle settings-setting-control"
+                  checked={showNewTabBranding}
+                  onChange={(e) => {
+                    setShowNewTabBranding(e.currentTarget.checked);
+                    setSaveStatus('saving');
+                  }}
+                />
+              </label>
+              <label
+                htmlFor="disable-new-tab-intro"
+                className="settings-setting-row"
+              >
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Disable intro animation</span>
+                  <span className="settings-setting-description">
+                    Skip the new-tab intro animation at all times.
+                  </span>
+                </span>
+                <input
+                  id="disable-new-tab-intro"
+                  type="checkbox"
+                  className="settings-toggle settings-setting-control"
+                  checked={disableNewTabIntro}
+                  onChange={(e) => {
+                    setDisableNewTabIntro(e.currentTarget.checked);
+                    setSaveStatus('saving');
+                  }}
+                />
+              </label>
+            </section>
+
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Tab Sleep</h2>
+              </div>
+              <div className="settings-setting-row">
+                <label
+                  htmlFor="tab-sleep-value"
+                  className="settings-setting-meta"
+                >
+                  <span className="settings-setting-label">Sleep timeout</span>
+                  <span className="settings-setting-description">
+                    Time a background tab waits before sleep mode is applied.
+                  </span>
+                </label>
+                <div className="settings-inline-controls settings-setting-control settings-setting-control-grow">
+                  <input
+                    id="tab-sleep-value"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={tabSleepValue}
+                    onChange={(e) => {
+                      const nextValue = e.currentTarget.valueAsNumber;
+                      if (!Number.isFinite(nextValue)) return;
+                      setTabSleepValue(Math.max(1, Math.floor(nextValue)));
+                      setSaveStatus('saving');
+                    }}
+                    className="theme-input settings-number-input"
+                  />
+                  <select
+                    id="tab-sleep-unit"
+                    value={tabSleepUnit}
+                    onChange={(e) => {
+                      const nextUnit = e.currentTarget.value;
+                      if (nextUnit === 'seconds' || nextUnit === 'minutes' || nextUnit === 'hours') {
+                        setTabSleepUnit(nextUnit);
+                      }
+                      setSaveStatus('saving');
+                    }}
+                    className="theme-input settings-select-input"
+                  >
+                    <option value="seconds">Seconds</option>
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                  </select>
+                </div>
+              </div>
+              <div className="settings-setting-row">
+                <label
+                  htmlFor="tab-sleep-mode"
+                  className="settings-setting-meta"
+                >
+                  <span className="settings-setting-label">Sleep behavior</span>
+                  <span className="settings-setting-description">
+                    Choose whether sleeping tabs freeze state or get discarded.
+                  </span>
+                </label>
+                <select
+                  id="tab-sleep-mode"
+                  value={tabSleepMode}
+                  onChange={(e) => {
+                    const nextMode = e.currentTarget.value;
+                    if (nextMode === 'freeze' || nextMode === 'discard') {
+                      setTabSleepMode(nextMode as TabSleepMode);
+                    }
+                    setSaveStatus('saving');
+                  }}
+                  className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                >
+                  <option value="freeze">Freeze (keep page state)</option>
+                  <option value="discard">Discard (save more memory)</option>
+                </select>
+              </div>
+            </section>
+
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Browsing</h2>
+              </div>
+              <label
+                htmlFor="ad-block-enabled"
+                className="settings-setting-row"
+              >
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Enable ad blocking</span>
+                  <span className="settings-setting-description">
+                    Block known ad and tracker requests while browsing.
+                  </span>
+                </span>
+                <input
+                  id="ad-block-enabled"
+                  type="checkbox"
+                  className="settings-toggle settings-setting-control"
+                  checked={adBlockEnabled}
+                  onChange={(e) => {
+                    setAdBlockEnabled(e.currentTarget.checked);
+                    setSaveStatus('saving');
+                  }}
+                />
+              </label>
+            </section>
+          </>
+        )}
+
+        {activeSection === 'customization' && (
+          <>
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Layout</h2>
+              </div>
+              <div className="settings-setting-row">
+                <label
+                  htmlFor="layout-dropdown-button"
+                  className="settings-setting-meta"
+                >
+                  <span className="settings-setting-label">Active layout</span>
+                  <span className="settings-setting-description">
+                    Choose which layout profile is used by the browser UI.
+                  </span>
+                </label>
+                <div
+                  ref={layoutDropdownRef}
+                  className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
                 >
                   <button
+                    id="layout-dropdown-button"
                     type="button"
-                    onClick={() => {
-                      handleLayoutChange(entry.id);
-                      setLayoutDropdownOpen(false);
-                    }}
-                    className={`theme-btn ${entry.id === layoutId ? 'theme-btn-go' : 'theme-btn-nav'}`}
-                    style={{
-                      flex: 1,
-                      textAlign: 'left',
-                      padding: '6px 8px',
-                    }}
+                    onClick={() =>
+                      setLayoutDropdownOpen((open) => {
+                        const nextOpen = !open;
+                        if (nextOpen) setThemeDropdownOpen(false);
+                        return nextOpen;
+                      })
+                    }
+                    className={`theme-btn theme-btn-nav settings-dropdown-trigger ${
+                      layoutDropdownOpen ? 'settings-dropdown-trigger-open' : ''
+                    }`}
                   >
-                    {formatLayoutLabel(entry)}
+                    <span className="settings-dropdown-value">
+                      {selectedLayout ? formatLayoutLabel(selectedLayout) : 'No layouts available'}
+                    </span>
+                    {layoutDropdownOpen ? (
+                      <ChevronUp
+                        size={14}
+                        className="settings-dropdown-caret-icon"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <ChevronDown
+                        size={14}
+                        className="settings-dropdown-caret-icon"
+                        aria-hidden="true"
+                      />
+                    )}
                   </button>
 
-                  {entry.source === 'custom' && (
+                  {layoutDropdownOpen && (
+                    <div className="theme-panel settings-dropdown-menu">
+                      {layouts.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="settings-dropdown-item"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleLayoutChange(entry.id);
+                              setLayoutDropdownOpen(false);
+                            }}
+                            className={`theme-btn settings-dropdown-choice ${
+                              entry.id === layoutId
+                                ? 'theme-btn-go settings-dropdown-choice-selected'
+                                : 'theme-btn-nav'
+                            }`}
+                          >
+                            <span className="settings-dropdown-choice-label">{formatLayoutLabel(entry)}</span>
+                            {entry.id === layoutId && (
+                              <Check
+                                size={14}
+                                className="settings-dropdown-choice-check"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+
+                          {entry.source === 'custom' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLayout(entry.id)}
+                              className="theme-btn theme-btn-nav settings-btn-pad"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="settings-actions-row">
+                <button
+                  onClick={() => layoutFileInputRef.current?.click()}
+                  type="button"
+                  className="theme-btn theme-btn-nav settings-btn-pad"
+                >
+                  Add Layout JSON
+                </button>
+                <input
+                  ref={layoutFileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleImportLayout}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => navigate('mira://LayoutCreator')}
+                  className="theme-btn theme-btn-nav settings-btn-pad"
+                >
+                  Open Layout Creator
+                </button>
+              </div>
+            </section>
+
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Theme</h2>
+              </div>
+              <div className="settings-setting-row">
+                <label
+                  htmlFor="theme-dropdown-button"
+                  className="settings-setting-meta"
+                >
+                  <span className="settings-setting-label">Active theme</span>
+                  <span className="settings-setting-description">
+                    Choose which color theme is applied across the app.
+                  </span>
+                </label>
+                <div
+                  ref={themeDropdownRef}
+                  className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
+                >
+                  <button
+                    id="theme-dropdown-button"
+                    type="button"
+                    onClick={() =>
+                      setThemeDropdownOpen((open) => {
+                        const nextOpen = !open;
+                        if (nextOpen) setLayoutDropdownOpen(false);
+                        return nextOpen;
+                      })
+                    }
+                    className={`theme-btn theme-btn-nav settings-dropdown-trigger ${
+                      themeDropdownOpen ? 'settings-dropdown-trigger-open' : ''
+                    }`}
+                  >
+                    <span className="settings-dropdown-value">
+                      {selectedTheme ? formatThemeLabel(selectedTheme) : 'No themes available'}
+                    </span>
+                    {themeDropdownOpen ? (
+                      <ChevronUp
+                        size={14}
+                        className="settings-dropdown-caret-icon"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <ChevronDown
+                        size={14}
+                        className="settings-dropdown-caret-icon"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
+
+                  {themeDropdownOpen && (
+                    <div className="theme-panel settings-dropdown-menu">
+                      {themes.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="settings-dropdown-item"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleThemeChange(entry.id);
+                              setThemeDropdownOpen(false);
+                            }}
+                            className={`theme-btn settings-dropdown-choice ${
+                              entry.id === themeId
+                                ? 'theme-btn-go settings-dropdown-choice-selected'
+                                : 'theme-btn-nav'
+                            }`}
+                          >
+                            <span className="settings-dropdown-choice-label">{formatThemeLabel(entry)}</span>
+                            {entry.id === themeId && (
+                              <Check
+                                size={14}
+                                className="settings-dropdown-choice-check"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+
+                          {entry.source === 'custom' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTheme(entry.id)}
+                              className="theme-btn theme-btn-nav settings-btn-pad"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="settings-actions-row">
+                <button
+                  onClick={() => themeFileInputRef.current?.click()}
+                  type="button"
+                  className="theme-btn theme-btn-nav settings-btn-pad"
+                >
+                  Add Theme JSON
+                </button>
+                <input
+                  ref={themeFileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleImportTheme}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => navigate('mira://ThemeCreator')}
+                  className="theme-btn theme-btn-nav settings-btn-pad"
+                >
+                  Open Theme Creator
+                </button>
+              </div>
+            </section>
+
+            {!!importMessage && <div className="theme-text2 settings-inline-message">{importMessage}</div>}
+          </>
+        )}
+
+        {activeSection === 'app' && (
+          <>
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Dev Tools</h2>
+              </div>
+              <div className="settings-setting-row">
+                <label
+                  htmlFor="devtools-open-mode"
+                  className="settings-setting-meta"
+                >
+                  <span className="settings-setting-label">Developer Tools mode</span>
+                  <span className="settings-setting-description">
+                    Open DevTools docked to the side or in a separate window.
+                  </span>
+                </label>
+                <select
+                  id="devtools-open-mode"
+                  value={devToolsOpenMode}
+                  onChange={(e) => {
+                    const nextMode = e.currentTarget.value;
+                    if (nextMode === 'side' || nextMode === 'window') {
+                      setDevToolsOpenMode(nextMode as DevToolsOpenMode);
+                    }
+                    setSaveStatus('saving');
+                  }}
+                  className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                >
+                  <option value="side">Docked to side (default)</option>
+                  <option value="window">Separate window</option>
+                </select>
+              </div>
+            </section>
+
+            {electron?.isMacOS && (
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">App Lifecycle</h2>
+                </div>
+                <label
+                  htmlFor="quit-on-last-window-close"
+                  className="settings-setting-row"
+                >
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Quit on last window close</span>
+                    <span className="settings-setting-description">
+                      Exit the app immediately after the final window closes.
+                    </span>
+                  </span>
+                  <input
+                    id="quit-on-last-window-close"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={quitOnLastWindowClose}
+                    onChange={(e) => {
+                      setQuitOnLastWindowClose(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+              </section>
+            )}
+
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Updates</h2>
+              </div>
+              <label
+                htmlFor="include-prerelease-updates"
+                className="settings-setting-row"
+              >
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Include pre-release updates</span>
+                  <span className="settings-setting-description">
+                    Also check beta/preview builds when searching for updates.
+                  </span>
+                </span>
+                <input
+                  id="include-prerelease-updates"
+                  type="checkbox"
+                  className="settings-toggle settings-setting-control"
+                  checked={includePrereleaseUpdates}
+                  onChange={(e) => {
+                    setIncludePrereleaseUpdates(e.currentTarget.checked);
+                    setSaveStatus('saving');
+                  }}
+                />
+              </label>
+              <div className="settings-setting-row">
+                <div className="settings-setting-meta">
+                  <span className="settings-setting-label">Update actions</span>
+                  <span className="settings-setting-description">
+                    Check for updates and install/download when available.
+                  </span>
+                </div>
+                <div className="settings-actions-row settings-setting-control settings-setting-control-grow">
+                  <button
+                    type="button"
+                    onClick={checkForUpdates}
+                    className="theme-btn theme-btn-nav settings-btn-pad"
+                    disabled={isCheckingUpdates}
+                  >
+                    {isCheckingUpdates ? 'Checking...' : 'Check for Updates'}
+                  </button>
+                  {updateCheckResult?.hasUpdate && (
                     <button
                       type="button"
-                      onClick={() => handleDeleteLayout(entry.id)}
-                      className="theme-btn theme-btn-nav"
-                      style={{
-                        padding: '6px 10px',
-                      }}
+                      onClick={runUpdateAction}
+                      className="theme-btn theme-btn-go settings-btn-pad"
+                      disabled={isRunningUpdateAction}
                     >
-                      Delete
+                      {isRunningUpdateAction
+                        ? 'Working...'
+                        : updateCheckResult.mode === 'portable'
+                          ? 'Download'
+                          : 'Download and Install'}
                     </button>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => layoutFileInputRef.current?.click()}
-            type="button"
-            className="theme-btn theme-btn-nav"
-            style={{ padding: '8px 12px' }}
-          >
-            Add Layout JSON
-          </button>
-          <input
-            ref={layoutFileInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleImportLayout}
-            style={{ display: 'none' }}
-          />
-          <button
-            type="button"
-            onClick={() => navigate('mira://LayoutCreator')}
-            className="theme-btn theme-btn-nav"
-            style={{ padding: '8px 12px' }}
-          >
-            Open Layout Creator
-          </button>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label htmlFor="theme-dropdown-button" style={{ fontWeight: 600 }}>
-          Theme
-        </label>
-        <div style={{ position: 'relative', maxWidth: 420 }}>
-          <button
-            id="theme-dropdown-button"
-            type="button"
-            onClick={() => setThemeDropdownOpen((open) => !open)}
-            className="theme-btn theme-btn-nav"
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '8px 10px',
-            }}
-          >
-            {selectedTheme ? formatThemeLabel(selectedTheme) : 'No themes available'}
-          </button>
-
-          {themeDropdownOpen && (
-            <div
-              className="theme-panel"
-              style={{
-                marginTop: 6,
-                borderRadius: 6,
-                overflow: 'hidden',
-              }}
-            >
-              {themes.map((entry) => (
-                <div
-                  key={entry.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: 6,
-                    borderBottom: '1px solid var(--tabBorder)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleThemeChange(entry.id);
-                      setThemeDropdownOpen(false);
-                    }}
-                    className={`theme-btn ${entry.id === themeId ? 'theme-btn-go' : 'theme-btn-nav'}`}
-                    style={{
-                      flex: 1,
-                      textAlign: 'left',
-                      padding: '6px 8px',
-                    }}
-                  >
-                    {formatThemeLabel(entry)}
-                  </button>
-
-                  {entry.source === 'custom' && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteTheme(entry.id)}
-                      className="theme-btn theme-btn-nav"
-                      style={{
-                        padding: '6px 10px',
-                      }}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => themeFileInputRef.current?.click()}
-            type="button"
-            className="theme-btn theme-btn-nav"
-            style={{ padding: '8px 12px' }}
-          >
-            Add Theme JSON
-          </button>
-          <input
-            ref={themeFileInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleImportTheme}
-            style={{ display: 'none' }}
-          />
-          <button
-            type="button"
-            onClick={() => navigate('mira://ThemeCreator')}
-            className="theme-btn theme-btn-nav"
-            style={{ padding: '8px 12px' }}
-          >
-            Open Theme Creator
-          </button>
-        </div>
-        {!!importMessage && (
-          <div className="theme-text2" style={{ fontSize: 13 }}>
-            {importMessage}
-          </div>
-        )}
-      </div>
-
-      <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-        <button
-          onClick={handleReset}
-          className="theme-btn theme-btn-nav"
-          style={{ padding: '8px 12px' }}
-        >
-          Reset to Default
-        </button>
-        {saveStatus === 'saving' && (
-          <div className="theme-text2" style={{ alignSelf: 'center' }}>
-            Saving...
-          </div>
-        )}
-        {saveStatus === 'saved' && (
-          <div className="theme-text2" style={{ alignSelf: 'center' }}>
-            Saved
-          </div>
+              </div>
+              {!!updateStatus && <div className="theme-text2 settings-status">{updateStatus}</div>}
+            </section>
+          </>
         )}
       </div>
     </div>
