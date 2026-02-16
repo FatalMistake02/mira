@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import miraLogo from '../assets/mira_logo.png';
 import { useTabs } from '../features/tabs/TabsProvider';
-import { getBrowserSettings } from '../features/settings/browserSettings';
+import { DEFAULT_BROWSER_SETTINGS, getBrowserSettings } from '../features/settings/browserSettings';
 
 const NEW_TAB_INTRO_SHOWN_KEY = 'mira.newtab.intro.shown.v1';
 const INTRO_BLOCK_HEIGHT = 300;
@@ -22,7 +22,10 @@ export default function NewTab() {
       sessionStorage.setItem(NEW_TAB_INTRO_SHOWN_KEY, '1');
       return { showBranding, showIntro: true };
     } catch {
-      return { showBranding: true, showIntro: true };
+      return {
+        showBranding: DEFAULT_BROWSER_SETTINGS.showNewTabBranding,
+        showIntro: !DEFAULT_BROWSER_SETTINGS.disableNewTabIntro,
+      };
     }
   });
   const shouldRenderBranding = introState.showBranding || introState.showIntro;

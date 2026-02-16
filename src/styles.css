@@ -203,6 +203,64 @@ body {
   color: var(--downloadButtonTextActive, var(--buttonTextActive));
 }
 
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.settings-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  border-radius: 999px;
+  border: 1px solid var(--surfaceBorder, var(--tabBorder));
+  background: var(--surfaceBg, var(--tabBg));
+  position: relative;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+  cursor: pointer;
+}
+
+.settings-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surfaceText, var(--text1));
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.settings-toggle:hover {
+  background: var(--surfaceBgHover, var(--tabBgHover));
+  border-color: var(--surfaceBorderHover, var(--tabBorderHover));
+}
+
+.settings-toggle:checked {
+  background: var(--navButtonBg, var(--buttonBg));
+  border-color: var(--navButtonBorder, var(--buttonBorder));
+}
+
+.settings-toggle:checked::after {
+  transform: translateX(20px);
+  background: var(--navButtonText, var(--buttonText));
+}
+
+.settings-toggle:focus-visible {
+  outline: 2px solid var(--navButtonBorderActive, var(--buttonBorderActive));
+  outline-offset: 2px;
+}
+
 .topbar-window-btn {
   background: var(--surfaceBg, var(--tabBg));
   border-left: 1px solid color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 45%, transparent);

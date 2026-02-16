@@ -27,7 +27,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   tabSleepMode: 'freeze',
   adBlockEnabled: false,
   quitOnLastWindowClose: false,
-  showNewTabBranding: true,
+  showNewTabBranding: false,
   disableNewTabIntro: false,
   includePrereleaseUpdates: false,
 };

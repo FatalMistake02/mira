@@ -419,33 +419,35 @@ export default function Settings() {
         </label>
         <label
           htmlFor="show-new-tab-branding"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          className="settings-toggle-row"
         >
+          <span>Show Mira logo and welcome message on New Tab</span>
           <input
             id="show-new-tab-branding"
             type="checkbox"
+            className="settings-toggle"
             checked={showNewTabBranding}
             onChange={(e) => {
               setShowNewTabBranding(e.currentTarget.checked);
               setSaveStatus('saving');
             }}
           />
-          Show Mira logo and welcome message on New Tab
         </label>
         <label
           htmlFor="disable-new-tab-intro"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          className="settings-toggle-row"
         >
+          <span>Disable intro animation at all times</span>
           <input
             id="disable-new-tab-intro"
             type="checkbox"
+            className="settings-toggle"
             checked={disableNewTabIntro}
             onChange={(e) => {
               setDisableNewTabIntro(e.currentTarget.checked);
               setSaveStatus('saving');
             }}
           />
-          Disable intro animation at all times
         </label>
       </div>
 
@@ -455,18 +457,19 @@ export default function Settings() {
         </label>
         <label
           htmlFor="ad-block-enabled"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          className="settings-toggle-row"
         >
+          <span>Enabled</span>
           <input
             id="ad-block-enabled"
             type="checkbox"
+            className="settings-toggle"
             checked={adBlockEnabled}
             onChange={(e) => {
               setAdBlockEnabled(e.currentTarget.checked);
               setSaveStatus('saving');
             }}
           />
-          Enabled
         </label>
       </div>
 
@@ -476,18 +479,19 @@ export default function Settings() {
         </label>
         <label
           htmlFor="include-prerelease-updates"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          className="settings-toggle-row"
         >
+          <span>Include pre-release versions when checking for updates</span>
           <input
             id="include-prerelease-updates"
             type="checkbox"
+            className="settings-toggle"
             checked={includePrereleaseUpdates}
             onChange={(e) => {
               setIncludePrereleaseUpdates(e.currentTarget.checked);
               setSaveStatus('saving');
             }}
           />
-          Include pre-release versions when checking for updates
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -529,18 +533,19 @@ export default function Settings() {
           </label>
           <label
             htmlFor="quit-on-last-window-close"
-            style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+            className="settings-toggle-row"
           >
+            <span>Quit app when last window closes</span>
             <input
               id="quit-on-last-window-close"
               type="checkbox"
+              className="settings-toggle"
               checked={quitOnLastWindowClose}
               onChange={(e) => {
                 setQuitOnLastWindowClose(e.currentTarget.checked);
                 setSaveStatus('saving');
               }}
             />
-            Quit app when last window closes
           </label>
         </div>
       )}
