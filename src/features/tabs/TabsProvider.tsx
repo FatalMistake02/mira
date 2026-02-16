@@ -650,9 +650,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (tab.id !== activeId) return tab;
         if (tab.historyIndex === 0) return tab;
         const newIdx = tab.historyIndex - 1;
+        const nextUrl = tab.history[newIdx];
+        const nextTitle = nextUrl.startsWith('mira://') ? miraUrlToName(nextUrl) : nextUrl;
         return {
           ...tab,
-          url: tab.history[newIdx],
+          url: nextUrl,
+          title: nextTitle,
+          favicon: nextUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
           historyIndex: newIdx,
         };
       }),
@@ -665,9 +669,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (tab.id !== activeId) return tab;
         if (tab.historyIndex >= tab.history.length - 1) return tab;
         const newIdx = tab.historyIndex + 1;
+        const nextUrl = tab.history[newIdx];
+        const nextTitle = nextUrl.startsWith('mira://') ? miraUrlToName(nextUrl) : nextUrl;
         return {
           ...tab,
-          url: tab.history[newIdx],
+          url: nextUrl,
+          title: nextTitle,
+          favicon: nextUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
           historyIndex: newIdx,
         };
       }),
