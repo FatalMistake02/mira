@@ -199,10 +199,17 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const [pendingSession, setPendingSession] = useState<SessionSnapshot | null>(null);
   const [restoreTabCountState, setRestoreTabCountState] = useState(0);
   const [restoreWindowCount, setRestoreWindowCount] = useState(1);
+  const [isBootstrapReady, setIsBootstrapReady] = useState(false);
 
   const webviewMap = useRef<Record<string, WebviewElement>>({});
   const hydratedRef = useRef(false);
   const recentIpcTabOpenRef = useRef<{ url: string; openedAt: number } | null>(null);
+  const didConsumeIncomingUrlsRef = useRef(false);
+  const startupIncomingUrlsRef = useRef<string[]>([]);
+  const tabsRef = useRef<Tab[]>([initialTabRef.current]);
+  const activeIdRef = useRef(initialTabRef.current.id);
+  const navigateRef = useRef<(url: string, tabId?: string) => void>(() => undefined);
+  const newTabRef = useRef<(url?: string) => void>(() => undefined);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
 
@@ -256,6 +263,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
     if (!ipc) {
+      startupIncomingUrlsRef.current = [];
       const currentDefaultTabUrl = getBrowserSettings().newTabPage;
       const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY), currentDefaultTabUrl);
       if (snapshot && !isDefaultSnapshot(snapshot, currentDefaultTabUrl)) {
@@ -264,38 +272,58 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         setRestorePromptOpen(true);
       }
       hydratedRef.current = true;
+      setIsBootstrapReady(true);
       return;
     }
 
     let cancelled = false;
     const bootstrapSessionRestore = async () => {
-      const windowRestore = await ipc.invoke<SessionSnapshot | null>('session-take-window-restore');
-      if (cancelled) return;
+      try {
+        const queuedUrls = await ipc
+          .invoke<string[]>('incoming-urls-consume')
+          .then((urls) =>
+            Array.isArray(urls)
+              ? urls
+                  .filter((candidate): candidate is string => typeof candidate === 'string')
+                  .map((candidate) => candidate.trim())
+                  .filter(Boolean)
+              : [],
+          )
+          .catch(() => []);
+        if (cancelled) return;
+        startupIncomingUrlsRef.current = queuedUrls;
 
-      if (windowRestore && windowRestore.tabs.length > 0) {
-        const now = Date.now();
-        const nextTabs = windowRestore.tabs.map((tab) =>
-          tab.id === windowRestore.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
-        );
-        setTabs(nextTabs);
-        setActiveId(windowRestore.activeId);
-        setPendingSession(null);
-        setRestoreTabCountState(0);
-        setRestorePromptOpen(false);
-        setRestoreWindowCount(1);
-        hydratedRef.current = true;
-        return;
+        const windowRestore = await ipc.invoke<SessionSnapshot | null>('session-take-window-restore');
+        if (cancelled) return;
+
+        if (windowRestore && windowRestore.tabs.length > 0) {
+          const now = Date.now();
+          const nextTabs = windowRestore.tabs.map((tab) =>
+            tab.id === windowRestore.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+          );
+          setTabs(nextTabs);
+          setActiveId(windowRestore.activeId);
+          setPendingSession(null);
+          setRestoreTabCountState(0);
+          setRestorePromptOpen(false);
+          setRestoreWindowCount(1);
+          return;
+        }
+
+        const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
+        if (cancelled) return;
+
+        if (restoreState?.hasPendingRestore && queuedUrls.length === 0) {
+          setRestorePromptOpen(true);
+          setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
+          setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
+        }
+      } finally {
+        if (!cancelled) {
+          hydratedRef.current = true;
+          setIsBootstrapReady(true);
+        }
       }
-
-      const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
-      if (cancelled) return;
-
-      if (restoreState?.hasPendingRestore) {
-        setRestorePromptOpen(true);
-        setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
-        setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
-      }
-      hydratedRef.current = true;
     };
 
     void bootstrapSessionRestore();
@@ -648,7 +676,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     [],
   );
 
-  const navigate = (url: string, tabId?: string) => {
+  const navigate = useCallback((url: string, tabId?: string) => {
     const targetTabId = tabId ?? activeId;
     const normalized = url.trim();
     if (normalized && !normalized.startsWith('mira://')) {
@@ -677,7 +705,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         };
       }),
     );
-  };
+  }, [activeId]);
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+    activeIdRef.current = activeId;
+  }, [tabs, activeId]);
+
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
+  useEffect(() => {
+    newTabRef.current = newTab;
+  }, [newTab]);
 
   const goBack = () => {
     setTabs((t) =>
@@ -874,12 +915,30 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       if (isDuplicate) return;
 
       recentIpcTabOpenRef.current = { url: normalized, openedAt: now };
-      newTab(normalized);
+      const activeTab = tabsRef.current.find((tab) => tab.id === activeIdRef.current);
+      if (activeTab && isNewTabUrl(activeTab.url, getBrowserSettings().newTabPage)) {
+        navigateRef.current(normalized, activeTab.id);
+        return;
+      }
+      newTabRef.current(normalized);
     };
 
     ipc.on('open-url-in-new-tab', onOpenUrlInNewTab);
+
+    if (!didConsumeIncomingUrlsRef.current && isBootstrapReady) {
+      didConsumeIncomingUrlsRef.current = true;
+      const incomingUrls = startupIncomingUrlsRef.current;
+      startupIncomingUrlsRef.current = [];
+      if (incomingUrls.length > 0) {
+        navigateRef.current(incomingUrls[0], activeIdRef.current);
+        incomingUrls.slice(1).forEach((incomingUrl) => {
+          newTabRef.current(incomingUrl);
+        });
+      }
+    }
+
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
-  }, [newTab]);
+  }, [isBootstrapReady]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
@@ -889,12 +948,12 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       if (typeof url !== 'string') return;
       const normalized = url.trim();
       if (!normalized) return;
-      navigate(normalized);
+      navigateRef.current(normalized);
     };
 
     ipc.on('open-url-in-current-tab', onOpenUrlInCurrentTab);
     return () => ipc.off('open-url-in-current-tab', onOpenUrlInCurrentTab);
-  }, [navigate]);
+  }, []);
 
   return (
     <TabsContext.Provider

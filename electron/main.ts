@@ -1,9 +1,9 @@
 import { app, BrowserWindow, ipcMain, Menu, shell, session, webContents as electronWebContents } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, WebContents } from 'electron';
-import { promises as fs, unlinkSync, writeFileSync } from 'fs';
+import { appendFileSync, promises as fs, unlinkSync, writeFileSync } from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 // Store active downloads by ID
 const downloadMap = new Map<string, DownloadItem>();
@@ -13,6 +13,8 @@ const __dirname = path.dirname(__filename);
 const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const isMacOS = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
+const ENABLE_APP_DEBUG_LOGS = true; // Set to false for shipping builds.
+const incomingBrowserUrlQueue: string[] = [];
 
 interface HistoryEntry {
   id: string;
@@ -343,6 +345,219 @@ function shouldBlockRequest(url: string, resourceType: string): boolean {
 
 function getHistoryFilePath() {
   return path.join(app.getPath('userData'), 'history.json');
+}
+
+function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'file:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractIncomingBrowserUrlFromArgv(argv: string[]): string | null {
+  for (let i = argv.length - 1; i >= 0; i -= 1) {
+    const candidate = normalizeIncomingBrowserUrl(argv[i] ?? '');
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+function enqueueIncomingBrowserUrl(rawUrl: string): void {
+  const normalized = normalizeIncomingBrowserUrl(rawUrl);
+  if (!normalized) return;
+  incomingBrowserUrlQueue.push(normalized);
+}
+
+function takeQueuedIncomingBrowserUrls(): string[] {
+  if (!incomingBrowserUrlQueue.length) return [];
+  return incomingBrowserUrlQueue.splice(0, incomingBrowserUrlQueue.length);
+}
+
+function getDefaultProtocolRegistrationContext():
+  | {
+      executable: string;
+      args: string[];
+    }
+  | null {
+  if (!process.defaultApp) return null;
+  const appEntrypoint = process.argv[1];
+  if (!appEntrypoint) return null;
+
+  return {
+    executable: process.execPath,
+    args: [path.resolve(appEntrypoint)],
+  };
+}
+
+function logDebug(scope: string, message: string, details?: Record<string, unknown>): void {
+  if (!ENABLE_APP_DEBUG_LOGS) return;
+  const payload = details ? `${message} ${JSON.stringify(details)}` : message;
+  const line = `[${scope}-debug] ${payload}`;
+  console.info(line);
+
+  try {
+    appendFileSync(
+      path.join(app.getPath('userData'), 'app-debug.log'),
+      `${new Date().toISOString()} ${line}\n`,
+      'utf8',
+    );
+  } catch (error) {
+    console.error('[debug-log-write-failed]', error);
+  }
+}
+
+function logDefaultBrowserDebug(message: string, details?: Record<string, unknown>): void {
+  logDebug('default-browser', message, details);
+}
+
+function getSafeUserDataPath(): string {
+  try {
+    return app.getPath('userData');
+  } catch {
+    return '(userData unavailable)';
+  }
+}
+
+function isDefaultForProtocol(protocol: string): boolean {
+  try {
+    const registrationContext = getDefaultProtocolRegistrationContext();
+    const hasRegistrationContext = !!registrationContext;
+    if (!registrationContext) {
+      const result = app.isDefaultProtocolClient(protocol);
+      logDefaultBrowserDebug('isDefaultForProtocol', {
+        protocol,
+        result,
+        hasRegistrationContext,
+      });
+      return result;
+    }
+
+    const result = app.isDefaultProtocolClient(
+      protocol,
+      registrationContext.executable,
+      registrationContext.args,
+    );
+    logDefaultBrowserDebug('isDefaultForProtocol', {
+      protocol,
+      result,
+      hasRegistrationContext,
+      executable: registrationContext.executable,
+      args: registrationContext.args,
+    });
+    return result;
+  } catch (error) {
+    logDefaultBrowserDebug('isDefaultForProtocol-error', {
+      protocol,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+function setAsDefaultForProtocol(protocol: string): boolean {
+  try {
+    const registrationContext = getDefaultProtocolRegistrationContext();
+    const hasRegistrationContext = !!registrationContext;
+    if (!registrationContext) {
+      const result = app.setAsDefaultProtocolClient(protocol);
+      logDefaultBrowserDebug('setAsDefaultForProtocol', {
+        protocol,
+        result,
+        hasRegistrationContext,
+      });
+      return result;
+    }
+
+    const result = app.setAsDefaultProtocolClient(
+      protocol,
+      registrationContext.executable,
+      registrationContext.args,
+    );
+    logDefaultBrowserDebug('setAsDefaultForProtocol', {
+      protocol,
+      result,
+      hasRegistrationContext,
+      executable: registrationContext.executable,
+      args: registrationContext.args,
+    });
+    return result;
+  } catch (error) {
+    logDefaultBrowserDebug('setAsDefaultForProtocol-error', {
+      protocol,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+function isDefaultBrowser(): boolean {
+  return isDefaultForProtocol('http') && isDefaultForProtocol('https');
+}
+
+type DefaultBrowserSupportCode =
+  | 'ok'
+  | 'dev-build'
+  | 'windows-portable'
+  | 'manual-confirmation-required'
+  | 'registration-failed';
+
+type DefaultBrowserSupportInfo = {
+  code: DefaultBrowserSupportCode;
+  canAttemptRegistration: boolean;
+  requiresUserAction: boolean;
+  message: string;
+  platform: NodeJS.Platform;
+  isPackaged: boolean;
+  isPortableBuild: boolean;
+  processDefaultApp: boolean;
+};
+
+function getDefaultBrowserSupportInfo(): DefaultBrowserSupportInfo {
+  if (!app.isPackaged || process.defaultApp) {
+    return {
+      code: 'dev-build',
+      canAttemptRegistration: false,
+      requiresUserAction: true,
+      message:
+        'Default browser registration is unavailable in development mode. Use an installed packaged build and set Mira in your OS default apps settings.',
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      isPortableBuild,
+      processDefaultApp: !!process.defaultApp,
+    };
+  }
+
+  if (isWindows && isPortableBuild) {
+    return {
+      code: 'windows-portable',
+      canAttemptRegistration: false,
+      requiresUserAction: true,
+      message:
+        'Portable builds cannot reliably own HTTP/HTTPS defaults on Windows. Install the NSIS build, then select Mira in Default apps.',
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      isPortableBuild,
+      processDefaultApp: !!process.defaultApp,
+    };
+  }
+
+  return {
+    code: 'ok',
+    canAttemptRegistration: true,
+    requiresUserAction: false,
+    message: '',
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    isPortableBuild,
+    processDefaultApp: !!process.defaultApp,
+  };
 }
 
 function getSessionFilePath() {
@@ -954,17 +1169,45 @@ function setupWebviewTabOpenHandler() {
       if (input.type !== 'keyDown' || input.isAutoRepeat) return;
       const key = input.key.toLowerCase();
       const hasPrimaryModifier = input.control || input.meta;
+      const isCopyChord = hasPrimaryModifier && !input.shift && key === 'c';
+      const isPasteChord = hasPrimaryModifier && !input.shift && key === 'v';
       const isPrimaryChord = hasPrimaryModifier && !input.shift;
       const isNewWindowChord = isPrimaryChord && key === 'n';
+      const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
       const isDevToolsChord = isMacOS
         ? input.meta && input.alt && key === 'i'
         : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i');
 
-      if (!isNewWindowChord && !isDevToolsChord) return;
-
-      event.preventDefault();
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
+
+      if (isCopyChord) {
+        event.preventDefault();
+        dispatchEditShortcut('copy', hostWindow);
+        return;
+      }
+
+      if (isPasteChord) {
+        event.preventDefault();
+        dispatchEditShortcut('paste', hostWindow);
+        return;
+      }
+
+      if (!isNewWindowChord && !isDevToolsChord && !isAppDevToolsChord) return;
+
+      event.preventDefault();
+
+      if (isAppDevToolsChord) {
+        logDebug('shortcut', 'app-devtools-shortcut-from-webview', {
+          windowId: hostWindow.id,
+          key,
+          control: input.control,
+          meta: input.meta,
+          shift: input.shift,
+        });
+        toggleWindowDevTools(hostWindow);
+        return;
+      }
 
       if (isDevToolsChord) {
         if (toggleFocusedBrowserDevTools()) {
@@ -1218,6 +1461,51 @@ function toggleFocusedBrowserDevTools(): boolean {
   return true;
 }
 
+function toggleWindowDevTools(win: BrowserWindow): boolean {
+  if (win.isDestroyed()) return false;
+  try {
+    const wasOpen = win.webContents.isDevToolsOpened();
+    if (wasOpen) {
+      win.webContents.closeDevTools();
+    } else {
+      win.webContents.openDevTools({ mode: 'detach' });
+    }
+    logDebug('shortcut', 'toggleWindowDevTools', {
+      windowId: win.id,
+      wasOpen,
+      nowOpen: !wasOpen,
+    });
+    return true;
+  } catch (error) {
+    logDebug('shortcut', 'toggleWindowDevTools-error', {
+      windowId: win.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+function dispatchEditShortcut(action: 'copy' | 'paste', hostWindow: BrowserWindow): boolean {
+  if (hostWindow.isDestroyed()) return false;
+
+  const focusedContents = electronWebContents.getFocusedWebContents();
+  const target =
+    focusedContents &&
+    !focusedContents.isDestroyed() &&
+    (focusedContents.id === hostWindow.webContents.id ||
+      focusedContents.hostWebContents?.id === hostWindow.webContents.id)
+      ? focusedContents
+      : hostWindow.webContents;
+
+  if (action === 'copy') {
+    target.copy();
+    return true;
+  }
+
+  target.paste();
+  return true;
+}
+
 function setupAdBlocker() {
   const ses = session.defaultSession;
   ses.webRequest.onBeforeRequest((details, callback) => {
@@ -1387,6 +1675,88 @@ function setupWindowControlsHandlers() {
   );
 }
 
+function setupDefaultBrowserHandlers() {
+  ipcMain.handle('default-browser-status', () => {
+    const support = getDefaultBrowserSupportInfo();
+    const isDefault = isDefaultBrowser();
+    logDefaultBrowserDebug('default-browser-status', {
+      isDefault,
+      support,
+    });
+    return {
+      isDefault,
+      support,
+      message: !isDefault ? support.message : '',
+    };
+  });
+
+  ipcMain.handle('default-browser-set', () => {
+    const support = getDefaultBrowserSupportInfo();
+    const isDefaultBeforeSet = isDefaultBrowser();
+    if (!support.canAttemptRegistration) {
+      logDefaultBrowserDebug('default-browser-set-blocked', {
+        isDefaultBeforeSet,
+        support,
+      });
+      return {
+        ok: false,
+        isDefault: isDefaultBeforeSet,
+        requiresUserAction: support.requiresUserAction,
+        message: support.message,
+        support,
+      };
+    }
+
+    const didSetHttp = setAsDefaultForProtocol('http');
+    const didSetHttps = setAsDefaultForProtocol('https');
+    const ok = didSetHttp && didSetHttps;
+    const isDefault = isDefaultBrowser();
+    const requiresUserAction = ok && !isDefault;
+
+    let message = '';
+    if (!ok) {
+      message = 'Could not register Mira for http/https. Check your OS default apps settings.';
+    } else if (requiresUserAction) {
+      message = isMacOS
+        ? 'Mira was registered for http/https. If it is still not default, set Mira in macOS System Settings > Desktop & Dock > Default web browser, then refresh.'
+        : isWindows
+          ? 'Mira was registered for http/https. Windows may require confirmation in Settings before default status updates. Confirm Mira in Default apps or refresh status in a moment.'
+          : 'Mira was registered for http/https. Confirm Mira in your OS default apps settings, then refresh status.';
+    }
+
+    logDefaultBrowserDebug('default-browser-set', {
+      didSetHttp,
+      didSetHttps,
+      ok,
+      isDefault,
+      requiresUserAction,
+      message,
+      platform: process.platform,
+      support,
+    });
+
+    return {
+      ok,
+      isDefault,
+      requiresUserAction,
+      message,
+      support: {
+        ...support,
+        code: ok ? (requiresUserAction ? 'manual-confirmation-required' : 'ok') : 'registration-failed',
+        canAttemptRegistration: ok,
+        requiresUserAction,
+        message,
+      },
+    };
+  });
+}
+
+function setupIncomingUrlHandlers() {
+  ipcMain.handle('incoming-urls-consume', () => {
+    return takeQueuedIncomingBrowserUrls();
+  });
+}
+
 function setupMacDockMenu() {
   if (!isMacOS) return;
   const dockMenu = Menu.buildFromTemplate([
@@ -1453,6 +1823,18 @@ function setupApplicationMenu() {
             if (toggleFocusedBrowserDevTools()) return;
             markHostDevToolsSuppressedForShortcut(focusedWindow);
             focusedWindow.webContents.send('app-shortcut', 'toggle-devtools');
+          },
+        },
+        {
+          label: 'Toggle App DevTools',
+          accelerator: 'CmdOrCtrl+Shift+J',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (!focusedWindow || focusedWindow.isDestroyed()) return;
+            logDebug('shortcut', 'menu-toggle-app-devtools', {
+              windowId: focusedWindow.id,
+            });
+            toggleWindowDevTools(focusedWindow);
           },
         },
       ],
@@ -1618,16 +2000,31 @@ function createWindow(
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
     const key = input.key.toLowerCase();
     const hasPrimaryModifier = input.control || input.meta;
+    const isCopyChord = hasPrimaryModifier && !input.shift && key === 'c';
+    const isPasteChord = hasPrimaryModifier && !input.shift && key === 'v';
     const isPrimaryChord = hasPrimaryModifier && !input.shift;
     const isReloadChord = isPrimaryChord && key === 'r';
     const isFindChord = isPrimaryChord && key === 'f';
     const isNewWindowChord = isPrimaryChord && key === 'n';
     const isPrintChord = isPrimaryChord && key === 'p';
     const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
+    const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
     const isReloadKey = key === 'f5';
     const isDevToolsChord = key === 'f12' || (isMacOS
       ? input.meta && input.alt && key === 'i'
       : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i'));
+
+    if (isCopyChord) {
+      event.preventDefault();
+      dispatchEditShortcut('copy', win);
+      return;
+    }
+
+    if (isPasteChord) {
+      event.preventDefault();
+      dispatchEditShortcut('paste', win);
+      return;
+    }
 
     if (isReloadChord || isReloadKey) {
       event.preventDefault();
@@ -1659,6 +2056,19 @@ function createWindow(
       return;
     }
 
+    if (isAppDevToolsChord) {
+      event.preventDefault();
+      logDebug('shortcut', 'app-devtools-shortcut-from-window', {
+        windowId: win.id,
+        key,
+        control: input.control,
+        meta: input.meta,
+        shift: input.shift,
+      });
+      toggleWindowDevTools(win);
+      return;
+    }
+
     if (isDevToolsChord) {
       event.preventDefault();
       if (toggleFocusedBrowserDevTools()) {
@@ -1672,7 +2082,86 @@ function createWindow(
   return win;
 }
 
+function routeIncomingBrowserUrl(rawUrl: string): void {
+  const normalized = normalizeIncomingBrowserUrl(rawUrl);
+  if (!normalized) return;
+
+  const focusedWindow = BrowserWindow.getFocusedWindow();
+  const fallbackWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+  const targetWindow = focusedWindow && !focusedWindow.isDestroyed() ? focusedWindow : fallbackWindow;
+
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    if (targetWindow.isMinimized()) targetWindow.restore();
+    targetWindow.focus();
+    if (targetWindow.webContents.isLoadingMainFrame()) {
+      enqueueIncomingBrowserUrl(normalized);
+      return;
+    }
+    targetWindow.webContents.send('open-url-in-new-tab', normalized);
+    return;
+  }
+
+  enqueueIncomingBrowserUrl(normalized);
+  createWindow();
+}
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  const launchUrlFromArgs = extractIncomingBrowserUrlFromArgv(process.argv);
+  if (launchUrlFromArgs) {
+    enqueueIncomingBrowserUrl(launchUrlFromArgs);
+  }
+
+  app.on('second-instance', (_event, commandLine) => {
+    const incomingUrl = extractIncomingBrowserUrlFromArgv(commandLine);
+    if (incomingUrl) {
+      if (app.isReady()) {
+        routeIncomingBrowserUrl(incomingUrl);
+      } else {
+        enqueueIncomingBrowserUrl(incomingUrl);
+      }
+      return;
+    }
+
+    const firstWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+    if (!firstWindow) return;
+    if (firstWindow.isMinimized()) firstWindow.restore();
+    firstWindow.focus();
+  });
+
+  if (isMacOS) {
+    app.on('open-url', (event, url) => {
+      event.preventDefault();
+      if (app.isReady()) {
+        routeIncomingBrowserUrl(url);
+        return;
+      }
+      enqueueIncomingBrowserUrl(url);
+    });
+
+    app.on('open-file', (event, filePath) => {
+      event.preventDefault();
+      const fileUrl = pathToFileURL(filePath).toString();
+      if (app.isReady()) {
+        routeIncomingBrowserUrl(fileUrl);
+        return;
+      }
+      enqueueIncomingBrowserUrl(fileUrl);
+    });
+  }
+}
+
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) return;
+  logDebug('startup', 'logger-ready', {
+    packaged: app.isPackaged,
+    platform: process.platform,
+    userData: getSafeUserDataPath(),
+    pid: process.pid,
+  });
+
   await loadHistory().catch(() => undefined);
   await loadCachedAdBlockHosts().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
@@ -1682,10 +2171,13 @@ app.whenReady().then(async () => {
   setupWebviewTabOpenHandler();
   setupAdBlocker();
   setupWindowControlsHandlers();
+  setupDefaultBrowserHandlers();
+  setupIncomingUrlHandlers();
   setupApplicationMenu();
   setupMacDockMenu();
   scheduleAdBlockListRefresh();
   setupDownloadHandlers();
+
   createWindow();
 });
 

@@ -26,6 +26,28 @@
       "electron/**/*",
       "package.json"
     ],
+    "protocols": [
+      {
+        "name": "Mira URL Handler",
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "htm",
+          "html",
+          "shtml",
+          "xhtml"
+        ],
+        "name": "HTML Document",
+        "role": "Viewer",
+        "mimeType": "text/html"
+      }
+    ],
     "win": {
       "artifactName": "${productName}-${version}-win.${ext}",
       "icon": "assets/app_icons/app_icons.ico",
