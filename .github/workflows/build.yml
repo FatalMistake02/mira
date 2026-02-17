@@ -54,6 +54,42 @@ jobs:
       - name: Apply tag version to package metadata
         run: npm version ${{ steps.tag_version.outputs.version }} --no-git-tag-version
 
+      - name: Update changelog release header
+        shell: bash
+        run: |
+          changelog_file="CHANGELOG.md"
+          release_date="$(date -u +%Y-%m-%d)"
+          release_heading="## v${{ steps.tag_version.outputs.version }} - $release_date"
+
+          if grep -qF "$release_heading" "$changelog_file"; then
+            echo "Changelog already contains release heading: $release_heading"
+            exit 0
+          fi
+
+          if ! grep -qE '^## Unreleased$' "$changelog_file"; then
+            echo "CHANGELOG.md does not contain an '## Unreleased' section."
+            exit 1
+          fi
+
+          tmp_file="$(mktemp)"
+          awk -v heading="$release_heading" '
+            BEGIN { replaced=0 }
+            !replaced && $0=="## Unreleased" {
+              print "## Unreleased"
+              print ""
+              print heading
+              replaced=1
+              next
+            }
+            { print }
+            END {
+              if (!replaced) {
+                exit 1
+              }
+            }
+          ' "$changelog_file" > "$tmp_file"
+          mv "$tmp_file" "$changelog_file"
+
       - name: Upload versioned package metadata
         uses: actions/upload-artifact@v4
         with:
@@ -75,11 +111,12 @@ jobs:
 
           cp package.json "$worktree_dir/package.json"
           cp package-lock.json "$worktree_dir/package-lock.json"
+          cp CHANGELOG.md "$worktree_dir/CHANGELOG.md"
 
           cd "$worktree_dir"
-          git add package.json package-lock.json
+          git add package.json package-lock.json CHANGELOG.md
           if git diff --cached --quiet; then
-            echo "No package version changes to commit."
+            echo "No package/changelog changes to commit."
             exit 0
           fi
           git commit -m "chore: set version to ${{ steps.tag_version.outputs.version }} from tag ${{ steps.tag_version.outputs.release_tag }}"
