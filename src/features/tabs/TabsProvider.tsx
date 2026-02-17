@@ -794,7 +794,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
         const currentUrl = tab.history[tab.historyIndex];
         if (currentUrl === normalized) {
-          return { ...tab, url: normalized };
+          return tab;
         }
 
         const newHistory = tab.history.slice(0, tab.historyIndex + 1).concat(normalized);

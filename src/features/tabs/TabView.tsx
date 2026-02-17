@@ -53,6 +53,17 @@ interface WebviewElement extends HTMLElement {
 }
 
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
+const WEBVIEW_TRACKED_SRC_ATTR = 'data-mira-tracked-src';
+
+function normalizeComparableUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+    return trimmed;
+  }
+}
 
 function applyRawFileDarkModeStyle(
   webview: WebviewElement,
@@ -236,11 +247,13 @@ export default function TabView() {
                   }
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
+                    wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
                     navigate(ev.url, tab.id);
                     applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
                   };
                   const didNavigateInPageHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
+                    wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
                     navigate(ev.url, tab.id);
                     applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
                   };
@@ -287,8 +300,14 @@ export default function TabView() {
                   wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
                   wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
                   wv.addEventListener('found-in-page', foundInPageHandler);
+
+                  const trackedSrc = wv.getAttribute(WEBVIEW_TRACKED_SRC_ATTR) ?? '';
+                  const nextSrc = normalizeComparableUrl(tab.url);
+                  if (trackedSrc !== nextSrc) {
+                    wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, nextSrc);
+                    wv.src = tab.url;
+                  }
                 }}
-                src={tab.url}
                 allowpopups={true}
                 style={{ flex: 1, width: '100%', height: '100%' }}
               />
