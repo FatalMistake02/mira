@@ -1169,8 +1169,6 @@ function setupWebviewTabOpenHandler() {
       if (input.type !== 'keyDown' || input.isAutoRepeat) return;
       const key = input.key.toLowerCase();
       const hasPrimaryModifier = input.control || input.meta;
-      const isCopyChord = hasPrimaryModifier && !input.shift && key === 'c';
-      const isPasteChord = hasPrimaryModifier && !input.shift && key === 'v';
       const isPrimaryChord = hasPrimaryModifier && !input.shift;
       const isNewWindowChord = isPrimaryChord && key === 'n';
       const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
@@ -1180,25 +1178,6 @@ function setupWebviewTabOpenHandler() {
 
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
-
-      const focusedContents = electronWebContents.getFocusedWebContents();
-      const focusedInHostWindow =
-        focusedContents !== null &&
-        !focusedContents.isDestroyed() &&
-        focusedContents.id === hostWindow.webContents.id;
-      const fromHostControlledContents = contents.id === hostWindow.webContents.id || focusedInHostWindow;
-
-      if (isCopyChord && fromHostControlledContents) {
-        event.preventDefault();
-        dispatchEditShortcut('copy', hostWindow);
-        return;
-      }
-
-      if (isPasteChord && fromHostControlledContents) {
-        event.preventDefault();
-        dispatchEditShortcut('paste', hostWindow);
-        return;
-      }
 
       if (!isNewWindowChord && !isDevToolsChord && !isAppDevToolsChord) return;
 
@@ -1492,27 +1471,6 @@ function toggleWindowDevTools(win: BrowserWindow): boolean {
   }
 }
 
-function dispatchEditShortcut(action: 'copy' | 'paste', hostWindow: BrowserWindow): boolean {
-  if (hostWindow.isDestroyed()) return false;
-
-  const focusedContents = electronWebContents.getFocusedWebContents();
-  const target =
-    focusedContents &&
-    !focusedContents.isDestroyed() &&
-    (focusedContents.id === hostWindow.webContents.id ||
-      focusedContents.hostWebContents?.id === hostWindow.webContents.id)
-      ? focusedContents
-      : hostWindow.webContents;
-
-  if (action === 'copy') {
-    target.copy();
-    return true;
-  }
-
-  target.paste();
-  return true;
-}
-
 function setupAdBlocker() {
   const ses = session.defaultSession;
   ses.webRequest.onBeforeRequest((details, callback) => {
@@ -1776,26 +1734,25 @@ function setupMacDockMenu() {
 }
 
 function setupApplicationMenu() {
-  if (!isMacOS) {
-    Menu.setApplicationMenu(null);
-    return;
-  }
-
   const template = [
-    {
-      label: app.name,
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
-    },
+    ...(isMacOS
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+        ]
+      : []),
     {
       label: 'File',
       submenu: [
@@ -1816,6 +1773,18 @@ function setupApplicationMenu() {
             focusedWindow.webContents.send('app-shortcut', 'reopen-closed-tab');
           },
         },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
       ],
     },
     {
@@ -1917,7 +1886,6 @@ function createWindow(
   }
 
   win.setMenuBarVisibility(false);
-  win.removeMenu();
   win.webContents.send('window-maximized-changed', win.isMaximized());
   win.webContents.send('window-fullscreen-changed', win.isFullScreen());
 
@@ -2007,8 +1975,6 @@ function createWindow(
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
     const key = input.key.toLowerCase();
     const hasPrimaryModifier = input.control || input.meta;
-    const isCopyChord = hasPrimaryModifier && !input.shift && key === 'c';
-    const isPasteChord = hasPrimaryModifier && !input.shift && key === 'v';
     const isPrimaryChord = hasPrimaryModifier && !input.shift;
     const isReloadChord = isPrimaryChord && key === 'r';
     const isFindChord = isPrimaryChord && key === 'f';
@@ -2020,18 +1986,6 @@ function createWindow(
     const isDevToolsChord = key === 'f12' || (isMacOS
       ? input.meta && input.alt && key === 'i'
       : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i'));
-
-    if (isCopyChord) {
-      event.preventDefault();
-      dispatchEditShortcut('copy', win);
-      return;
-    }
-
-    if (isPasteChord) {
-      event.preventDefault();
-      dispatchEditShortcut('paste', win);
-      return;
-    }
 
     if (isReloadChord || isReloadKey) {
       event.preventDefault();
