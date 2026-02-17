@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.8.0 - 2026-02-17
+
 - History shows site title
 - Restoring tabs will restore all windows and window locations
 - Work on updates
