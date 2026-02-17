@@ -36,7 +36,10 @@ export function useKeyboardShortcuts({
     const isMacOS = electron?.isMacOS ?? false;
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      const isEditableTarget =
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      const isAddressBarTarget = target === addressInputRef.current;
+      if (isEditableTarget && !isAddressBarTarget) {
         return;
       }
       if (e.repeat) {

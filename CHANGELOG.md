@@ -13,6 +13,7 @@
 - Tab name updates correctly for internal pages
 - Add shortcut to reopen last closed tab
 - Auto focus address bar
+- Shortcuts work while address bar is focused
 
 ## v0.7.0 - 2026-02-15
 
