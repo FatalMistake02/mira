@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+<<<<<<< HEAD
 - Add auto update
+=======
+## v0.8.1 - 2026-02-17
+>>>>>>> 74fe618dd9ccee3a26f63389f79d05ceaf7c338e
 
 ## v0.8.0 - 2026-02-17
 
