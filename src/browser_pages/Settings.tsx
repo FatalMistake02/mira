@@ -396,8 +396,23 @@ export default function Settings() {
     setIsRunningUpdateAction(true);
     try {
       if (updateCheckResult.mode === 'portable') {
-        await electron.ipcRenderer.invoke('updates-open-download', updateCheckResult.downloadUrl);
-        setUpdateStatus('Opened update download in your browser.');
+        const response = await electron.ipcRenderer.invoke<{ ok: boolean; savedPath?: string; error?: string }>(
+          'updates-download-asset',
+          {
+            downloadUrl: updateCheckResult.downloadUrl,
+            assetName: updateCheckResult.assetName,
+          },
+        );
+        if (!response.ok) {
+          setUpdateStatus(response.error || 'Failed to download update.');
+          return;
+        }
+
+        setUpdateStatus(
+          response.savedPath
+            ? `Portable update downloaded: ${response.savedPath}`
+            : 'Portable update downloaded to your Downloads folder.',
+        );
         return;
       }
 

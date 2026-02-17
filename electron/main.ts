@@ -901,6 +901,30 @@ function pickInstallerAsset(release: GitHubRelease): GitHubReleaseAsset | null {
   }
 
   if (process.platform === 'darwin') {
+    const archToken = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : '';
+    const hasMacArchToken = (assetName: string): boolean => {
+      if (!archToken) return false;
+      const normalized = assetName.toLowerCase();
+      return normalized.includes(`-mac-${archToken}.`);
+    };
+
+    const macArchDmg = assets.find(
+      (asset) =>
+        typeof asset.name === 'string' &&
+        asset.name.toLowerCase().endsWith('.dmg') &&
+        hasMacArchToken(asset.name),
+    );
+    if (macArchDmg) return macArchDmg;
+
+    const macArchZip = assets.find(
+      (asset) =>
+        typeof asset.name === 'string' &&
+        asset.name.toLowerCase().endsWith('.zip') &&
+        hasMacArchToken(asset.name),
+    );
+    if (macArchZip) return macArchZip;
+
+    // Fallback for older/renamed assets that do not include explicit arch tokens.
     const dmg = assets.find(
       (asset) => typeof asset.name === 'string' && asset.name.toLowerCase().endsWith('.dmg'),
     );
@@ -1397,12 +1421,32 @@ function setupUpdateHandlers() {
     }
   });
 
-  ipcMain.handle('updates-open-download', async (_event, downloadUrl: unknown) => {
-    const url = typeof downloadUrl === 'string' ? downloadUrl.trim() : '';
-    if (!url) return false;
-    await shell.openExternal(url);
-    return true;
-  });
+  ipcMain.handle(
+    'updates-download-asset',
+    async (_event, payload: { downloadUrl?: unknown; assetName?: unknown } | undefined) => {
+      const downloadUrl = typeof payload?.downloadUrl === 'string' ? payload.downloadUrl.trim() : '';
+      const assetName = typeof payload?.assetName === 'string' ? payload.assetName.trim() : '';
+      if (!downloadUrl || !assetName) {
+        return {
+          ok: false,
+          error: 'Invalid update payload.',
+        };
+      }
+
+      try {
+        const savedPath = await downloadAssetToDownloads(downloadUrl, assetName);
+        return {
+          ok: true,
+          savedPath,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to download update.',
+        };
+      }
+    },
+  );
 
   ipcMain.handle(
     'updates-download-and-install',
