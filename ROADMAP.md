@@ -7,7 +7,7 @@
 - [x] Auto restore all windows
 - [x] Make dev tools work
 - [x] Shortcut to restore closed tabs
-- [ ] Shortcuts to change tabs
+- [x] Shortcuts to change tabs
 
 ## v1.0.0 — Stable Release
 - [ ] Installer & portable builds for Windows, macOS, and Linux

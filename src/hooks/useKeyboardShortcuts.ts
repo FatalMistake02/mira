@@ -1,8 +1,9 @@
 // src/hooks/useKeyboardShortcuts.ts
-import { useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import { electron } from '../electronBridge';
 
 interface UseKeyboardShortcutsProps {
+  tabs: Array<{ id: string }>;
   newTab: (url?: string) => void;
   reopenLastClosedTab: () => void;
   openHistory: () => void;
@@ -14,10 +15,12 @@ interface UseKeyboardShortcutsProps {
   toggleDevTools: () => void;
   printPage: () => void;
   activeId: string | null;
+  setActive: (id: string) => void;
   addressInputRef: RefObject<HTMLInputElement | null>;
 }
 
 export function useKeyboardShortcuts({
+  tabs,
   newTab,
   reopenLastClosedTab,
   openHistory,
@@ -29,9 +32,27 @@ export function useKeyboardShortcuts({
   toggleDevTools,
   printPage,
   activeId,
+  setActive,
   addressInputRef,
 }: UseKeyboardShortcutsProps) {
   const lastReopenShortcutAtRef = useRef(0);
+  const activateRelativeTab = useCallback((delta: 1 | -1) => {
+    if (!tabs.length) return;
+    const currentIndex = activeId ? tabs.findIndex((tab) => tab.id === activeId) : -1;
+    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeCurrentIndex + delta + tabs.length) % tabs.length;
+    const nextTab = tabs[nextIndex];
+    if (!nextTab) return;
+    setActive(nextTab.id);
+  }, [tabs, activeId, setActive]);
+  const activateTabByNumber = useCallback((number: number) => {
+    if (!Number.isInteger(number) || number < 1 || number > 9) return;
+    if (!tabs.length) return;
+    const index = number === 9 ? tabs.length - 1 : number - 1;
+    const nextTab = tabs[index];
+    if (!nextTab) return;
+    setActive(nextTab.id);
+  }, [tabs, setActive]);
 
   useEffect(() => {
     const hasElectronBridge = !!electron?.ipcRenderer;
@@ -74,6 +95,30 @@ export function useKeyboardShortcuts({
         e.preventDefault();
         e.stopPropagation();
         openHistory();
+        return;
+      }
+
+      if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        activateRelativeTab(1);
+        return;
+      }
+
+      if (isPrimaryModifier && e.shiftKey && e.key.toLowerCase() === 'tab') {
+        if (hasElectronBridge) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        activateRelativeTab(-1);
+        return;
+      }
+
+      if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        activateTabByNumber(Number.parseInt(e.key, 10));
         return;
       }
 
@@ -138,13 +183,13 @@ export function useKeyboardShortcuts({
     // Use capture phase (true) to intercept events before they reach the iframe
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newTab, reopenLastClosedTab, openHistory, openDownloads, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef]);
+  }, [newTab, reopenLastClosedTab, openHistory, openDownloads, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef, activateRelativeTab, activateTabByNumber]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
     if (!ipc) return;
 
-    const onShortcut = (_event: unknown, action: string) => {
+    const onShortcut = (_event: unknown, action: string, payload?: unknown) => {
       if (action === 'reload-tab') {
         reload();
         return;
@@ -159,6 +204,19 @@ export function useKeyboardShortcuts({
       }
       if (action === 'open-downloads') {
         openDownloads();
+        return;
+      }
+      if (action === 'activate-next-tab') {
+        activateRelativeTab(1);
+        return;
+      }
+      if (action === 'activate-previous-tab') {
+        activateRelativeTab(-1);
+        return;
+      }
+      if (action === 'activate-tab-index') {
+        if (typeof payload !== 'number') return;
+        activateTabByNumber(payload);
         return;
       }
       if (action === 'reopen-closed-tab') {
@@ -181,5 +239,5 @@ export function useKeyboardShortcuts({
 
     ipc.on('app-shortcut', onShortcut);
     return () => ipc.off('app-shortcut', onShortcut);
-  }, [reload, findInPage, openDownloads, openNewWindow, reopenLastClosedTab, toggleDevTools, printPage]);
+  }, [reload, findInPage, openDownloads, openNewWindow, reopenLastClosedTab, toggleDevTools, printPage, activateRelativeTab, activateTabByNumber]);
 }

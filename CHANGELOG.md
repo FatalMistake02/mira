@@ -15,6 +15,7 @@
 - Auto focus address bar
 - Shortcuts work while address bar is focused
 - Find in page
+- Shortcuts to swap tabs
 
 ## v0.7.0 - 2026-02-15
 

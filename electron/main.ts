@@ -1172,6 +1172,11 @@ function setupWebviewTabOpenHandler() {
       const isPrimaryChord = hasPrimaryModifier && !input.shift;
       const isNewWindowChord = isPrimaryChord && key === 'n';
       const isFindChord = isPrimaryChord && key === 'f';
+      const isNextTabChord = isPrimaryChord && key === 'tab';
+      const isPreviousTabChord = hasPrimaryModifier && input.shift && key === 'tab';
+      const tabNumberShortcut = isPrimaryChord && /^[1-9]$/.test(key)
+        ? Number.parseInt(key, 10)
+        : null;
       const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
       const isDevToolsChord = isMacOS
         ? input.meta && input.alt && key === 'i'
@@ -1180,7 +1185,15 @@ function setupWebviewTabOpenHandler() {
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
 
-      if (!isNewWindowChord && !isFindChord && !isDevToolsChord && !isAppDevToolsChord) return;
+      if (
+        !isNewWindowChord
+        && !isFindChord
+        && !isNextTabChord
+        && !isPreviousTabChord
+        && tabNumberShortcut === null
+        && !isDevToolsChord
+        && !isAppDevToolsChord
+      ) return;
 
       event.preventDefault();
 
@@ -1207,6 +1220,21 @@ function setupWebviewTabOpenHandler() {
 
       if (isFindChord) {
         hostWindow.webContents.send('app-shortcut', 'find-in-page');
+        return;
+      }
+
+      if (isNextTabChord) {
+        hostWindow.webContents.send('app-shortcut', 'activate-next-tab');
+        return;
+      }
+
+      if (isPreviousTabChord) {
+        hostWindow.webContents.send('app-shortcut', 'activate-previous-tab');
+        return;
+      }
+
+      if (tabNumberShortcut !== null) {
+        hostWindow.webContents.send('app-shortcut', 'activate-tab-index', tabNumberShortcut);
         return;
       }
 
@@ -2004,6 +2032,11 @@ function createWindow(
     const isReloadChord = isPrimaryChord && key === 'r';
     const isFindChord = isPrimaryChord && key === 'f';
     const isNewWindowChord = isPrimaryChord && key === 'n';
+    const isNextTabChord = isPrimaryChord && key === 'tab';
+    const isPreviousTabChord = hasPrimaryModifier && input.shift && key === 'tab';
+    const tabNumberShortcut = isPrimaryChord && /^[1-9]$/.test(key)
+      ? Number.parseInt(key, 10)
+      : null;
     const isDownloadsChord = isPrimaryChord && key === 'j';
     const isPrintChord = isPrimaryChord && key === 'p';
     const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
@@ -2022,6 +2055,24 @@ function createWindow(
     if (isNewWindowChord) {
       event.preventDefault();
       triggerNewWindowFromShortcut(win);
+      return;
+    }
+
+    if (isNextTabChord) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'activate-next-tab');
+      return;
+    }
+
+    if (isPreviousTabChord) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'activate-previous-tab');
+      return;
+    }
+
+    if (tabNumberShortcut !== null) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'activate-tab-index', tabNumberShortcut);
       return;
     }
 

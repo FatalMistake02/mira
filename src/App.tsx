@@ -32,6 +32,7 @@ function Browser() {
     openDownloads,
     closeTab,
     reload,
+    setActive,
     toggleDevTools,
     printPage,
     activeId,
@@ -64,6 +65,8 @@ function Browser() {
     printPage,
     toggleDevTools,
     activeId,
+    tabs,
+    setActive,
     addressInputRef,
   });
 
