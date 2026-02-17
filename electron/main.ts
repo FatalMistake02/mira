@@ -2179,6 +2179,9 @@ function createWindow(
   }
 
   applyWindowStateFromSnapshot(win, restoreSnapshot);
+  if (!restoreSnapshot) {
+    win.maximize();
+  }
 
   const normalizedInitialUrl = initialUrl?.trim();
   if (normalizedInitialUrl) {
