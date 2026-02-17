@@ -31,6 +31,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     reload,
     newTab,
     openHistory,
+    openDownloads,
     setActive,
     printPage,
   } = useTabs();
@@ -81,26 +82,13 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   const canGoBack = activeTab && activeTab.historyIndex > 0;
   const canGoForward = activeTab && activeTab.historyIndex < activeTab.history.length - 1;
   const newTabPage = getBrowserSettings().newTabPage;
+  const primaryModifierLabel = electron?.isMacOS ? 'Cmd' : 'Ctrl';
   const openNewWindow = () => {
     if (electron?.ipcRenderer) {
       electron.ipcRenderer.invoke('window-new').catch(() => undefined);
       return;
     }
     window.open(window.location.href, '_blank', 'noopener,noreferrer');
-  };
-  const openDownloadsPage = () => {
-    const existingDownloadsTab = tabs.find((tab) => tab.url.toLowerCase() === 'mira://downloads');
-    if (existingDownloadsTab) {
-      setActive(existingDownloadsTab.id);
-      return;
-    }
-
-    if (activeTab?.url === newTabPage) {
-      navigate('mira://Downloads');
-      return;
-    }
-
-    newTab('mira://Downloads');
   };
   const closeWindow = () => {
     if (electron?.ipcRenderer) {
@@ -242,7 +230,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
                 setMenuOpen(false);
               }}
             >
-              New Tab (Ctrl+T)
+              New Tab ({primaryModifierLabel}+T)
             </button>
             <button
               type="button"
@@ -253,7 +241,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
                 setMenuOpen(false);
               }}
             >
-              New Window (Ctrl+N)
+              New Window ({primaryModifierLabel}+N)
             </button>
             <button
               type="button"
@@ -264,18 +252,18 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
                 setMenuOpen(false);
               }}
             >
-              History
+              History ({primaryModifierLabel}+H)
             </button>
             <button
               type="button"
               className="theme-btn theme-btn-nav"
               style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
               onClick={() => {
-                openDownloadsPage();
+                openDownloads();
                 setMenuOpen(false);
               }}
             >
-              Downloads
+              Downloads ({primaryModifierLabel}+J)
             </button>
             <button
               type="button"
@@ -286,7 +274,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
                 setMenuOpen(false);
               }}
             >
-              Print... (Ctrl+P)
+              Print... ({primaryModifierLabel}+P)
             </button>
             <button
               type="button"

@@ -6,6 +6,7 @@ interface UseKeyboardShortcutsProps {
   newTab: (url?: string) => void;
   reopenLastClosedTab: () => void;
   openHistory: () => void;
+  openDownloads: () => void;
   openNewWindow: () => void;
   closeTab: (id: string) => void;
   reload: () => void;
@@ -20,6 +21,7 @@ export function useKeyboardShortcuts({
   newTab,
   reopenLastClosedTab,
   openHistory,
+  openDownloads,
   openNewWindow,
   closeTab,
   reload,
@@ -72,6 +74,13 @@ export function useKeyboardShortcuts({
         e.preventDefault();
         e.stopPropagation();
         openHistory();
+        return;
+      }
+
+      if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        e.stopPropagation();
+        openDownloads();
         return;
       }
 
@@ -129,7 +138,7 @@ export function useKeyboardShortcuts({
     // Use capture phase (true) to intercept events before they reach the iframe
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newTab, reopenLastClosedTab, openHistory, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef]);
+  }, [newTab, reopenLastClosedTab, openHistory, openDownloads, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
@@ -146,6 +155,10 @@ export function useKeyboardShortcuts({
       }
       if (action === 'open-window') {
         openNewWindow();
+        return;
+      }
+      if (action === 'open-downloads') {
+        openDownloads();
         return;
       }
       if (action === 'reopen-closed-tab') {
@@ -168,5 +181,5 @@ export function useKeyboardShortcuts({
 
     ipc.on('app-shortcut', onShortcut);
     return () => ipc.off('app-shortcut', onShortcut);
-  }, [reload, findInPage, openNewWindow, reopenLastClosedTab, toggleDevTools, printPage]);
+  }, [reload, findInPage, openDownloads, openNewWindow, reopenLastClosedTab, toggleDevTools, printPage]);
 }

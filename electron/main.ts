@@ -1773,6 +1773,25 @@ function setupApplicationMenu() {
             focusedWindow.webContents.send('app-shortcut', 'reopen-closed-tab');
           },
         },
+        { type: 'separator' },
+        {
+          label: 'Downloads',
+          accelerator: 'CmdOrCtrl+J',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (!focusedWindow || focusedWindow.isDestroyed()) return;
+            focusedWindow.webContents.send('app-shortcut', 'open-downloads');
+          },
+        },
+        {
+          label: 'Print...',
+          accelerator: 'CmdOrCtrl+P',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (!focusedWindow || focusedWindow.isDestroyed()) return;
+            focusedWindow.webContents.send('app-shortcut', 'print-page');
+          },
+        },
       ],
     },
     {
@@ -1979,6 +1998,7 @@ function createWindow(
     const isReloadChord = isPrimaryChord && key === 'r';
     const isFindChord = isPrimaryChord && key === 'f';
     const isNewWindowChord = isPrimaryChord && key === 'n';
+    const isDownloadsChord = isPrimaryChord && key === 'j';
     const isPrintChord = isPrimaryChord && key === 'p';
     const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
     const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
@@ -2002,6 +2022,12 @@ function createWindow(
     if (isFindChord) {
       event.preventDefault();
       win.webContents.send('app-shortcut', 'find-in-page');
+      return;
+    }
+
+    if (isDownloadsChord) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'open-downloads');
       return;
     }
 

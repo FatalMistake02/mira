@@ -43,6 +43,7 @@ type TabsContextType = {
   newTab: (url?: string) => void;
   reopenLastClosedTab: () => void;
   openHistory: () => void;
+  openDownloads: () => void;
   closeTab: (id: string) => void;
   moveTab: (fromId: string, toId: string) => void;
   moveTabToIndex: (tabId: string, toIndex: number) => void;
@@ -455,6 +456,26 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     } else {
       newTab('mira://history'); // open separate tab
     }
+  };
+
+  const openDownloads = () => {
+    const existingDownloadsTab = tabs.find(
+      (tab) => tab.url.trim().toLowerCase() === 'mira://downloads',
+    );
+    if (existingDownloadsTab) {
+      setActive(existingDownloadsTab.id);
+      return;
+    }
+
+    const activeTab = tabs.find((tab) => tab.id === activeId);
+    const newTabUrl = getBrowserSettings().newTabPage;
+    const isNewTab = !!activeTab && isNewTabUrl(activeTab.url, newTabUrl);
+    if (isNewTab && activeTab) {
+      navigate('mira://downloads', activeTab.id);
+      return;
+    }
+
+    newTab('mira://downloads');
   };
 
   const closeCurrentWindow = () => {
@@ -963,6 +984,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         newTab,
         reopenLastClosedTab,
         openHistory,
+        openDownloads,
         closeTab,
         moveTab,
         moveTabToIndex,
