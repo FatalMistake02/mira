@@ -4,6 +4,8 @@
 
 - Add auto update
 - Run on startup option
+- Opens maximized
+- Update installer
 
 ## v0.8.1 - 2026-02-17
 
