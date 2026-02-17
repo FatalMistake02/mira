@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.8.1 - 2026-02-17
+
 ## v0.8.0 - 2026-02-17
 
 - History shows site title
