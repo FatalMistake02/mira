@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTabs } from './TabsProvider';
 import { BROWSER_SETTINGS_CHANGED_EVENT, getBrowserSettings } from '../settings/browserSettings';
+import { getThemeById } from '../themes/themeLoader';
 
 interface WebviewNavigationEvent extends Event {
   url: string;
@@ -18,14 +19,63 @@ interface WebviewPageFaviconUpdatedEvent extends Event {
 interface WebviewElement extends HTMLElement {
   src: string;
   reload: () => void;
+  executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
   findInPage: (text: string) => void;
   openDevTools: () => void;
   closeDevTools: () => void;
   isDevToolsOpened: () => boolean;
   getWebContentsId?: () => number;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
+  didNavigateInPageHandler?: (e: WebviewNavigationEvent) => void;
+  domReadyHandler?: () => void;
   didPageTitleUpdatedHandler?: (e: WebviewPageTitleUpdatedEvent) => void;
   pageFaviconUpdatedHandler?: (e: WebviewPageFaviconUpdatedEvent) => void;
+}
+
+const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
+
+function applyRawFileDarkModeStyle(
+  webview: WebviewElement,
+  shouldApply: boolean,
+) {
+  const script = `(() => {
+  const shouldApply = ${shouldApply ? 'true' : 'false'};
+  const styleId = ${JSON.stringify(RAW_FILE_DARK_STYLE_SCRIPT_ID)};
+  const isRawHost = location.hostname === 'raw.githubusercontent.com';
+  const contentType = (document.contentType || '').toLowerCase();
+  const hasSinglePreBody =
+    !!document.body
+    && document.body.children.length === 1
+    && document.body.firstElementChild?.tagName === 'PRE';
+  const isRawTextDocument =
+    contentType.startsWith('text/plain')
+    || contentType.startsWith('application/json')
+    || (contentType === '' && hasSinglePreBody)
+    || (isRawHost && hasSinglePreBody);
+  const existing = document.getElementById(styleId);
+
+  if (shouldApply && isRawTextDocument) {
+    if (!existing) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = [
+        'html, body, pre {',
+        '  background: #000 !important;',
+        '  color: #fff !important;',
+        '}',
+        'a { color: #8ab4ff !important; }',
+      ].join('\\n');
+      document.head?.appendChild(style) || document.documentElement.appendChild(style);
+    }
+    document.documentElement.style.setProperty('color-scheme', 'dark');
+    return;
+  }
+
+  existing?.remove();
+  document.documentElement.style.removeProperty('color-scheme');
+})();`;
+
+  webview.executeJavaScript(script).catch(() => undefined);
 }
 
 // Load all internal pages (unchanged)
@@ -62,16 +112,36 @@ function renderInternal(url: string, reloadToken: number) {
 export default function TabView() {
   const { tabs, activeId, navigate, updateTabMetadata, registerWebview } = useTabs();
   const [tabSleepMode, setTabSleepMode] = useState(() => getBrowserSettings().tabSleepMode);
+  const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
+    () => getBrowserSettings().rawFileDarkModeEnabled,
+  );
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    const settings = getBrowserSettings();
+    return getThemeById(settings.themeId)?.mode ?? 'dark';
+  });
 
   useEffect(() => {
-    const syncTabSleepMode = () => {
-      setTabSleepMode(getBrowserSettings().tabSleepMode);
+    const syncSettings = () => {
+      const settings = getBrowserSettings();
+      setTabSleepMode(settings.tabSleepMode);
+      setRawFileDarkModeEnabled(settings.rawFileDarkModeEnabled);
+      setThemeMode(getThemeById(settings.themeId)?.mode ?? 'dark');
     };
 
-    syncTabSleepMode();
-    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncTabSleepMode);
-    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncTabSleepMode);
+    syncSettings();
+    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
+    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
   }, []);
+
+  useEffect(() => {
+    const shouldApplyRawFileDarkMode = rawFileDarkModeEnabled && themeMode === 'dark';
+    const webviews = document.querySelectorAll('webview');
+    webviews.forEach((node) => {
+      applyRawFileDarkModeStyle(node as unknown as WebviewElement, shouldApplyRawFileDarkMode);
+    });
+  }, [rawFileDarkModeEnabled, themeMode]);
+
+  const shouldApplyRawFileDarkMode = rawFileDarkModeEnabled && themeMode === 'dark';
 
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
@@ -113,6 +183,15 @@ export default function TabView() {
                   if (wv.didNavigateHandler) {
                     wv.removeEventListener('did-navigate', wv.didNavigateHandler as EventListener);
                   }
+                  if (wv.didNavigateInPageHandler) {
+                    wv.removeEventListener(
+                      'did-navigate-in-page',
+                      wv.didNavigateInPageHandler as EventListener,
+                    );
+                  }
+                  if (wv.domReadyHandler) {
+                    wv.removeEventListener('dom-ready', wv.domReadyHandler as EventListener);
+                  }
                   if (wv.didPageTitleUpdatedHandler) {
                     wv.removeEventListener(
                       'page-title-updated',
@@ -128,6 +207,15 @@ export default function TabView() {
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     navigate(ev.url, tab.id);
+                    applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
+                  };
+                  const didNavigateInPageHandler = (e: Event) => {
+                    const ev = e as WebviewNavigationEvent;
+                    navigate(ev.url, tab.id);
+                    applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
+                  };
+                  const domReadyHandler = () => {
+                    applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
                   };
                   const didPageTitleUpdatedHandler = (e: Event) => {
                     const ev = e as WebviewPageTitleUpdatedEvent;
@@ -139,6 +227,10 @@ export default function TabView() {
                   };
 
                   wv.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
+                  wv.didNavigateInPageHandler = didNavigateInPageHandler as (
+                    e: WebviewNavigationEvent,
+                  ) => void;
+                  wv.domReadyHandler = domReadyHandler;
                   wv.didPageTitleUpdatedHandler = didPageTitleUpdatedHandler as (
                     e: WebviewPageTitleUpdatedEvent,
                   ) => void;
@@ -147,6 +239,8 @@ export default function TabView() {
                   ) => void;
 
                   wv.addEventListener('did-navigate', didNavigateHandler);
+                  wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
+                  wv.addEventListener('dom-ready', domReadyHandler);
                   wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
                   wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
                 }}
