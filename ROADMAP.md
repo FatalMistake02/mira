@@ -5,6 +5,7 @@
 - [ ] Clean UI
 - [ ] Improve performance
 - [ ] Fix bugs/issues
+- [ ] Right-click menu
 - [x] Auto update
 - [x] Auto restore
 - [x] Start on startup
