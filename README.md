@@ -9,14 +9,18 @@ A desktop browser built with Electron + React.
 
 ## Features
 
+- Themes
+- Layouts
 - Tabbed browsing
-- Address/search bar
+- Multi-window browsing
 - Session restore
-- Memory-saving tab management
+- Reopen closed tabs
+- Memory-saving tab sleeping
 - Browsing history
 - Download manager
-- Customizable themes
-- Customizable layouts
+- Find in page
+- Devtools support
+- Print support
 
 
 ## Dev setup
