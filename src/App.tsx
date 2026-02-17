@@ -20,7 +20,9 @@ import { getLayoutById } from './features/layouts/layoutLoader';
 
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const previousTabIdsRef = useRef<string[] | null>(null);
   const {
+    tabs,
     newTab,
     reopenLastClosedTab,
     openHistory,
@@ -83,6 +85,34 @@ function Browser() {
     window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applyRuntimeSettings);
     return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applyRuntimeSettings);
   }, []);
+
+  useEffect(() => {
+    const previousTabIds = previousTabIdsRef.current;
+    const currentTabIds = tabs.map((tab) => tab.id);
+    if (!previousTabIds) {
+      previousTabIdsRef.current = currentTabIds;
+      return;
+    }
+
+    const hasAddedTab = currentTabIds.length > previousTabIds.length;
+    const activeTabIsNewlyCreated = !previousTabIds.includes(activeId);
+    const activeTab = tabs.find((tab) => tab.id === activeId);
+    const normalizedActiveUrl = activeTab?.url.trim().toLowerCase();
+    const normalizedNewTabUrl = getBrowserSettings().newTabPage.trim().toLowerCase();
+    const isNewTabUrl =
+      normalizedActiveUrl === normalizedNewTabUrl || normalizedActiveUrl === 'mira://newtab';
+
+    if (hasAddedTab && activeTabIsNewlyCreated && isNewTabUrl) {
+      window.requestAnimationFrame(() => {
+        const addressInput = addressInputRef.current;
+        if (!addressInput) return;
+        addressInput.focus();
+        addressInput.select();
+      });
+    }
+
+    previousTabIdsRef.current = currentTabIds;
+  }, [tabs, activeId]);
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', width: '100vw' }}>
