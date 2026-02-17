@@ -16,11 +16,30 @@ interface WebviewPageFaviconUpdatedEvent extends Event {
   favicons: string[];
 }
 
+interface WebviewFoundInPageResult {
+  requestId: number;
+  activeMatchOrdinal: number;
+  matches: number;
+  finalUpdate: boolean;
+}
+
+interface WebviewFoundInPageEvent extends Event {
+  result?: WebviewFoundInPageResult;
+  requestId?: number;
+  activeMatchOrdinal?: number;
+  matches?: number;
+  finalUpdate?: boolean;
+}
+
 interface WebviewElement extends HTMLElement {
   src: string;
   reload: () => void;
   executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
-  findInPage: (text: string) => void;
+  findInPage: (
+    text: string,
+    options?: { forward?: boolean; findNext?: boolean; matchCase?: boolean },
+  ) => number;
+  stopFindInPage?: (action: 'clearSelection' | 'keepSelection' | 'activateSelection') => void;
   openDevTools: () => void;
   closeDevTools: () => void;
   isDevToolsOpened: () => boolean;
@@ -30,6 +49,7 @@ interface WebviewElement extends HTMLElement {
   domReadyHandler?: () => void;
   didPageTitleUpdatedHandler?: (e: WebviewPageTitleUpdatedEvent) => void;
   pageFaviconUpdatedHandler?: (e: WebviewPageFaviconUpdatedEvent) => void;
+  foundInPageHandler?: (e: WebviewFoundInPageEvent) => void;
 }
 
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
@@ -110,7 +130,14 @@ function renderInternal(url: string, reloadToken: number) {
 }
 
 export default function TabView() {
-  const { tabs, activeId, navigate, updateTabMetadata, registerWebview } = useTabs();
+  const {
+    tabs,
+    activeId,
+    navigate,
+    updateTabMetadata,
+    registerWebview,
+    updateFindInPageMatches,
+  } = useTabs();
   const [tabSleepMode, setTabSleepMode] = useState(() => getBrowserSettings().tabSleepMode);
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => getBrowserSettings().rawFileDarkModeEnabled,
@@ -204,6 +231,9 @@ export default function TabView() {
                       wv.pageFaviconUpdatedHandler as EventListener,
                     );
                   }
+                  if (wv.foundInPageHandler) {
+                    wv.removeEventListener('found-in-page', wv.foundInPageHandler as EventListener);
+                  }
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     navigate(ev.url, tab.id);
@@ -225,6 +255,18 @@ export default function TabView() {
                     const ev = e as WebviewPageFaviconUpdatedEvent;
                     updateTabMetadata(tab.id, { favicon: ev.favicons?.[0] ?? null });
                   };
+                  const foundInPageHandler = (e: Event) => {
+                    const ev = e as WebviewFoundInPageEvent;
+                    const result = ev.result ?? ev;
+                    const requestId =
+                      typeof result.requestId === 'number' ? result.requestId : Number.NaN;
+                    if (!Number.isFinite(requestId)) return;
+
+                    const activeMatchOrdinal =
+                      typeof result.activeMatchOrdinal === 'number' ? result.activeMatchOrdinal : 0;
+                    const matches = typeof result.matches === 'number' ? result.matches : 0;
+                    updateFindInPageMatches(tab.id, requestId, activeMatchOrdinal, matches);
+                  };
 
                   wv.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
                   wv.didNavigateInPageHandler = didNavigateInPageHandler as (
@@ -237,12 +279,14 @@ export default function TabView() {
                   wv.pageFaviconUpdatedHandler = pageFaviconUpdatedHandler as (
                     e: WebviewPageFaviconUpdatedEvent,
                   ) => void;
+                  wv.foundInPageHandler = foundInPageHandler as (e: WebviewFoundInPageEvent) => void;
 
                   wv.addEventListener('did-navigate', didNavigateHandler);
                   wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
                   wv.addEventListener('dom-ready', domReadyHandler);
                   wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
                   wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
+                  wv.addEventListener('found-in-page', foundInPageHandler);
                 }}
                 src={tab.url}
                 allowpopups={true}

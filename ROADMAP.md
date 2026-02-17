@@ -1,9 +1,9 @@
 # Roadmap
 
 ## v0.8.0
-- [ ] Find in page (Ctrl+F)
+- [x] Find in page (Ctrl+F)
 - [x] Reload (Ctrl+R)
-- [ ] Fix other shortcuts
+- [x] Fix other shortcuts
 - [x] Auto restore all windows
 - [x] Make dev tools work
 - [x] Shortcut to restore closed tabs

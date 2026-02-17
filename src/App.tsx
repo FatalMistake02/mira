@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTabs } from './features/tabs/TabsProvider';
 import TabsProvider from './features/tabs/TabsProvider';
 import TabBar from './features/tabs/TabBar';
 import TabView from './features/tabs/TabView';
 import AddressBar from './components/AddressBar';
+import FindBar from './components/FindBar';
 import TopBar from './components/TopBar';
 import RestoreTabsPrompt from './components/RestoreTabsPrompt';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -21,6 +22,8 @@ import { getLayoutById } from './features/layouts/layoutLoader';
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const previousTabIdsRef = useRef<string[] | null>(null);
+  const [findBarOpen, setFindBarOpen] = useState(false);
+  const [findBarFocusToken, setFindBarFocusToken] = useState(0);
   const {
     tabs,
     newTab,
@@ -29,12 +32,18 @@ function Browser() {
     openDownloads,
     closeTab,
     reload,
-    findInPage,
     toggleDevTools,
     printPage,
     activeId,
   } =
     useTabs();
+  const openFindBar = useCallback(() => {
+    setFindBarOpen(true);
+    setFindBarFocusToken((token) => token + 1);
+  }, []);
+  const closeFindBar = useCallback(() => {
+    setFindBarOpen(false);
+  }, []);
   const openNewWindow = () => {
     if (electron?.ipcRenderer) {
       electron.ipcRenderer.invoke('window-new').catch(() => undefined);
@@ -51,7 +60,7 @@ function Browser() {
     openNewWindow,
     closeTab,
     reload,
-    findInPage,
+    findInPage: openFindBar,
     printPage,
     toggleDevTools,
     activeId,
@@ -122,6 +131,7 @@ function Browser() {
         <TabBar />
       </TopBar>
       <AddressBar inputRef={addressInputRef} />
+      <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
       <TabView />
       <RestoreTabsPrompt />
     </div>

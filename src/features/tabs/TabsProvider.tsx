@@ -13,9 +13,21 @@ const SESSION_STORAGE_KEY = 'mira.session.tabs.v1';
 const IPC_OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const INTERNAL_FAVICON_URL = miraLogo;
 
+type FindInPageOptions = {
+  forward?: boolean;
+  findNext?: boolean;
+  matchCase?: boolean;
+};
+
+type FindInPageMatchState = {
+  activeMatchOrdinal: number;
+  matches: number;
+};
+
 type WebviewElement = {
   reload: () => void;
-  findInPage: (text: string) => void;
+  findInPage: (text: string, options?: FindInPageOptions) => number;
+  stopFindInPage?: (action: 'clearSelection' | 'keepSelection' | 'activateSelection') => void;
   openDevTools: () => void;
   closeDevTools: () => void;
   isDevToolsOpened: () => boolean;
@@ -52,7 +64,16 @@ type TabsContextType = {
   goBack: () => void;
   goForward: () => void;
   reload: () => void;
-  findInPage: () => void;
+  searchInPage: (query: string, options?: FindInPageOptions) => void;
+  stopFindInPage: () => void;
+  findInPageActiveMatchOrdinal: number;
+  findInPageMatches: number;
+  updateFindInPageMatches: (
+    tabId: string,
+    requestId: number,
+    activeMatchOrdinal: number,
+    matches: number,
+  ) => void;
   toggleDevTools: () => void;
   updateTabMetadata: (
     id: string,
@@ -201,6 +222,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const [restoreTabCountState, setRestoreTabCountState] = useState(0);
   const [restoreWindowCount, setRestoreWindowCount] = useState(1);
   const [isBootstrapReady, setIsBootstrapReady] = useState(false);
+  const [findInPageMatchesByTab, setFindInPageMatchesByTab] = useState<
+    Record<string, FindInPageMatchState>
+  >({});
 
   const webviewMap = useRef<Record<string, WebviewElement>>({});
   const hydratedRef = useRef(false);
@@ -209,10 +233,64 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const startupIncomingUrlsRef = useRef<string[]>([]);
   const tabsRef = useRef<Tab[]>([initialTabRef.current]);
   const activeIdRef = useRef(initialTabRef.current.id);
+  const lastFindQueryByTabRef = useRef<Record<string, string>>({});
+  const activeFindRequestIdByTabRef = useRef<Record<string, number>>({});
   const navigateRef = useRef<(url: string, tabId?: string) => void>(() => undefined);
   const newTabRef = useRef<(url?: string) => void>(() => undefined);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
+  const activeFindInPageMatches = findInPageMatchesByTab[activeId] ?? {
+    activeMatchOrdinal: 0,
+    matches: 0,
+  };
+
+  const clearFindInPageMatchesForTab = useCallback((tabId: string) => {
+    setFindInPageMatchesByTab((current) => {
+      if (!(tabId in current)) return current;
+      const next = { ...current };
+      delete next[tabId];
+      return next;
+    });
+  }, []);
+
+  const updateFindInPageMatches = useCallback(
+    (
+      tabId: string,
+      requestId: number,
+      activeMatchOrdinal: number,
+      matches: number,
+    ) => {
+      const activeRequestId = activeFindRequestIdByTabRef.current[tabId];
+      if (typeof activeRequestId === 'number' && requestId !== activeRequestId) {
+        return;
+      }
+
+      const nextActiveMatchOrdinal =
+        Number.isFinite(activeMatchOrdinal) && activeMatchOrdinal > 0
+          ? Math.floor(activeMatchOrdinal)
+          : 0;
+      const nextMatches = Number.isFinite(matches) && matches > 0 ? Math.floor(matches) : 0;
+
+      setFindInPageMatchesByTab((current) => {
+        const existing = current[tabId];
+        if (
+          existing &&
+          existing.activeMatchOrdinal === nextActiveMatchOrdinal &&
+          existing.matches === nextMatches
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          [tabId]: {
+            activeMatchOrdinal: nextActiveMatchOrdinal,
+            matches: nextMatches,
+          },
+        };
+      });
+    },
+    [],
+  );
 
   const persistSession = (nextTabs: Tab[], nextActiveId: string) => {
     const restorableTabs = filterRestorableTabs(nextTabs);
@@ -508,6 +586,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         { ...tabToClose, history: [...tabToClose.history] },
       ].slice(-MAX_RECENTLY_CLOSED_TABS);
     }
+    delete lastFindQueryByTabRef.current[id];
+    delete activeFindRequestIdByTabRef.current[id];
+    clearFindInPageMatchesForTab(id);
 
     setTabs((t) => {
       const next = t.filter((tab) => tab.id !== id);
@@ -598,6 +679,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       } else {
         window.open(url || window.location.href, '_blank', 'noopener,noreferrer');
       }
+      delete lastFindQueryByTabRef.current[id];
+      delete activeFindRequestIdByTabRef.current[id];
+      clearFindInPageMatchesForTab(id);
 
       setTabs((currentTabs) => {
         const nextTabs = currentTabs.filter((tab) => tab.id !== id);
@@ -617,7 +701,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         );
       });
     },
-    [tabs, activeId],
+    [tabs, activeId, clearFindInPageMatchesForTab],
   );
 
   const setActive = useCallback(
@@ -791,14 +875,51 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     );
   };
 
-  const findInPage = () => {
+  const searchInPage = useCallback((query: string, options?: FindInPageOptions) => {
     const wv = webviewMap.current[activeId];
     if (!wv || typeof wv.findInPage !== 'function') return;
 
-    const query = window.prompt('Find in page');
-    if (!query) return;
-    wv.findInPage(query);
-  };
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) {
+      if (typeof wv.stopFindInPage === 'function') {
+        wv.stopFindInPage('clearSelection');
+      }
+      delete lastFindQueryByTabRef.current[activeId];
+      delete activeFindRequestIdByTabRef.current[activeId];
+      clearFindInPageMatchesForTab(activeId);
+      return;
+    }
+
+    const previousQuery = lastFindQueryByTabRef.current[activeId];
+    const isNewQuery = previousQuery !== normalizedQuery;
+    if (isNewQuery) {
+      clearFindInPageMatchesForTab(activeId);
+      if (typeof wv.stopFindInPage === 'function') {
+        wv.stopFindInPage('clearSelection');
+      }
+    }
+
+    const requestId = wv.findInPage(normalizedQuery, {
+      forward: options?.forward ?? true,
+      findNext: options?.findNext ?? false,
+      matchCase: options?.matchCase ?? false,
+    });
+    if (typeof requestId === 'number' && Number.isFinite(requestId)) {
+      activeFindRequestIdByTabRef.current[activeId] = requestId;
+    } else {
+      delete activeFindRequestIdByTabRef.current[activeId];
+    }
+    lastFindQueryByTabRef.current[activeId] = normalizedQuery;
+  }, [activeId, clearFindInPageMatchesForTab]);
+
+  const stopFindInPage = useCallback(() => {
+    const wv = webviewMap.current[activeId];
+    if (!wv || typeof wv.stopFindInPage !== 'function') return;
+    wv.stopFindInPage('clearSelection');
+    delete lastFindQueryByTabRef.current[activeId];
+    delete activeFindRequestIdByTabRef.current[activeId];
+    clearFindInPageMatchesForTab(activeId);
+  }, [activeId, clearFindInPageMatchesForTab]);
 
   const toggleDevTools = () => {
     const wv = webviewMap.current[activeId];
@@ -993,7 +1114,11 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         goBack,
         goForward,
         reload,
-        findInPage,
+        searchInPage,
+        stopFindInPage,
+        findInPageActiveMatchOrdinal: activeFindInPageMatches.activeMatchOrdinal,
+        findInPageMatches: activeFindInPageMatches.matches,
+        updateFindInPageMatches,
         toggleDevTools,
         updateTabMetadata,
         printPage,

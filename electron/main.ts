@@ -1171,6 +1171,7 @@ function setupWebviewTabOpenHandler() {
       const hasPrimaryModifier = input.control || input.meta;
       const isPrimaryChord = hasPrimaryModifier && !input.shift;
       const isNewWindowChord = isPrimaryChord && key === 'n';
+      const isFindChord = isPrimaryChord && key === 'f';
       const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
       const isDevToolsChord = isMacOS
         ? input.meta && input.alt && key === 'i'
@@ -1179,7 +1180,7 @@ function setupWebviewTabOpenHandler() {
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
 
-      if (!isNewWindowChord && !isDevToolsChord && !isAppDevToolsChord) return;
+      if (!isNewWindowChord && !isFindChord && !isDevToolsChord && !isAppDevToolsChord) return;
 
       event.preventDefault();
 
@@ -1201,6 +1202,11 @@ function setupWebviewTabOpenHandler() {
         }
         markHostDevToolsSuppressedForShortcut(hostWindow);
         hostWindow.webContents.send('app-shortcut', 'toggle-devtools');
+        return;
+      }
+
+      if (isFindChord) {
+        hostWindow.webContents.send('app-shortcut', 'find-in-page');
         return;
       }
 
