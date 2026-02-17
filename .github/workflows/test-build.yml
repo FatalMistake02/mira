@@ -107,7 +107,7 @@ jobs:
         run: npm ci
 
       - name: Build app (no publish)
-        run: npm run build -- --publish never
+        run: npm run build -- --mac --x64 --arm64 --publish never
 
       - name: Rename macOS artifacts
         shell: bash

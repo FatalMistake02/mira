@@ -63,7 +63,7 @@
       "allowToChangeInstallationDirectory": true
     },
     "mac": {
-      "artifactName": "${productName}-${version}-mac.${ext}",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
       "icon": "assets/app_icons/app_icons.icns",
       "target": [
         "dmg",
