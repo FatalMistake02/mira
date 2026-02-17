@@ -60,7 +60,9 @@
       "artifactName": "${productName}-${version}-win-setup.${ext}",
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}",

@@ -7,7 +7,7 @@
 - [ ] Fix bugs/issues
 - [x] Auto update
 - [ ] Auto restore
-- [ ] Start on startup
+- [x] Start on startup
 
 ## v1.1.0
 - [ ] Bookmarks and favorites
