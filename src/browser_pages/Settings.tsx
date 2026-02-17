@@ -110,6 +110,9 @@ export default function Settings() {
   const initialSettings = getBrowserSettings();
   const [newTabPage, setNewTabPage] = useState(() => initialSettings.newTabPage);
   const [themeId, setThemeId] = useState(() => initialSettings.themeId);
+  const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
+    () => initialSettings.rawFileDarkModeEnabled,
+  );
   const [layoutId, setLayoutId] = useState(() => initialSettings.layoutId);
   const [tabSleepValue, setTabSleepValue] = useState(() => initialSettings.tabSleepValue);
   const [tabSleepUnit, setTabSleepUnit] = useState(() => initialSettings.tabSleepUnit);
@@ -232,6 +235,7 @@ export default function Settings() {
       saveBrowserSettings({
         newTabPage,
         themeId,
+        rawFileDarkModeEnabled,
         layoutId,
         tabSleepValue,
         tabSleepUnit,
@@ -257,6 +261,7 @@ export default function Settings() {
   }, [
     newTabPage,
     themeId,
+    rawFileDarkModeEnabled,
     layoutId,
     tabSleepValue,
     tabSleepUnit,
@@ -936,6 +941,28 @@ export default function Settings() {
                   Open Theme Creator
                 </button>
               </div>
+              <label
+                htmlFor="raw-file-dark-mode-enabled"
+                className="settings-setting-row"
+              >
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Dark mode raw files</span>
+                  <span className="settings-setting-description">
+                    Show plain-text/raw files as white text on a black background when a dark theme
+                    is active.
+                  </span>
+                </span>
+                <input
+                  id="raw-file-dark-mode-enabled"
+                  type="checkbox"
+                  className="settings-toggle settings-setting-control"
+                  checked={rawFileDarkModeEnabled}
+                  onChange={(e) => {
+                    setRawFileDarkModeEnabled(e.currentTarget.checked);
+                    setSaveStatus('saving');
+                  }}
+                />
+              </label>
             </section>
 
             {!!importMessage && <div className="theme-text2 settings-inline-message">{importMessage}</div>}

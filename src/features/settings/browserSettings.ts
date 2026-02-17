@@ -8,6 +8,7 @@ export type DevToolsOpenMode = 'side' | 'window';
 export type BrowserSettings = {
   newTabPage: string;
   themeId: string;
+  rawFileDarkModeEnabled: boolean;
   layoutId: string;
   tabSleepValue: number;
   tabSleepUnit: TabSleepUnit;
@@ -23,6 +24,7 @@ export type BrowserSettings = {
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   newTabPage: 'mira://NewTab',
   themeId: DEFAULT_THEME_ID,
+  rawFileDarkModeEnabled: true,
   layoutId: DEFAULT_LAYOUT_ID,
   tabSleepValue: 10,
   tabSleepUnit: 'minutes',
@@ -60,6 +62,14 @@ function normalizeThemeId(value: unknown): string {
   if (!normalized) return DEFAULT_BROWSER_SETTINGS.themeId;
 
   return normalized;
+}
+
+function normalizeRawFileDarkModeEnabled(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.rawFileDarkModeEnabled;
+  }
+
+  return value;
 }
 
 function normalizeTabSleepValue(value: unknown): number {
@@ -153,6 +163,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   return {
     newTabPage: normalizeNewTabPage(candidate.newTabPage),
     themeId: normalizeThemeId(candidate.themeId),
+    rawFileDarkModeEnabled: normalizeRawFileDarkModeEnabled(candidate.rawFileDarkModeEnabled),
     layoutId: normalizeLayoutId(candidate.layoutId),
     tabSleepValue: normalizeTabSleepValue(candidate.tabSleepValue),
     tabSleepUnit: normalizeTabSleepUnit(candidate.tabSleepUnit),
