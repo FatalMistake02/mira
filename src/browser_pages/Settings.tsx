@@ -45,6 +45,13 @@ type UpdateLaunchAutoSupportResponse = {
   canAutoInstall: boolean;
 };
 
+type RunOnStartupStatusResponse = {
+  ok: boolean;
+  canConfigure: boolean;
+  isEnabled: boolean;
+  message?: string;
+};
+
 type DefaultBrowserStatusResponse = {
   isDefault: boolean;
   message?: string;
@@ -138,6 +145,7 @@ export default function Settings() {
   const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(
     () => initialSettings.autoUpdateOnLaunch,
   );
+  const [runOnStartup, setRunOnStartup] = useState(() => initialSettings.runOnStartup);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -153,6 +161,8 @@ export default function Settings() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
+  const [canConfigureRunOnStartup, setCanConfigureRunOnStartup] = useState(false);
+  const [runOnStartupStatus, setRunOnStartupStatus] = useState('');
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
   const [canAttemptDefaultBrowserRegistration, setCanAttemptDefaultBrowserRegistration] = useState(
@@ -255,6 +265,7 @@ export default function Settings() {
         disableNewTabIntro,
         includePrereleaseUpdates,
         autoUpdateOnLaunch,
+        runOnStartup,
       });
       setSaveStatus('saved');
 
@@ -282,6 +293,7 @@ export default function Settings() {
     disableNewTabIntro,
     includePrereleaseUpdates,
     autoUpdateOnLaunch,
+    runOnStartup,
   ]);
 
   useEffect(() => {
@@ -521,10 +533,37 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
+    if (!electron?.ipcRenderer) return;
+
+    let isSubscribed = true;
+    void electron.ipcRenderer
+      .invoke<RunOnStartupStatusResponse>('settings-run-on-startup-status')
+      .then((response) => {
+        if (!isSubscribed) return;
+        setCanConfigureRunOnStartup(response.canConfigure === true);
+        setRunOnStartupStatus(response.message || '');
+        if (response.canConfigure) {
+          setRunOnStartup(response.isEnabled === true);
+        }
+      })
+      .catch(() => {
+        if (!isSubscribed) return;
+        setCanConfigureRunOnStartup(false);
+        setRunOnStartupStatus('Failed to check startup settings.');
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
+
+  useEffect(() => {
     void refreshDefaultBrowserStatus();
     // Run once on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const showAppLifecycleSettings = electron?.isMacOS || electron?.platform === 'win32';
 
   return (
     <div className="settings-page">
@@ -1048,11 +1087,37 @@ export default function Settings() {
               </div>
             </section>
 
-            {electron?.isMacOS && (
+            {showAppLifecycleSettings && (
               <section className="theme-panel settings-card">
                 <div className="settings-card-header">
-                  <h2 className="settings-card-title">App Lifecycle</h2>
+                  <h2 className="settings-card-title">Startup</h2>
                 </div>
+                <label
+                  htmlFor="run-on-startup"
+                  className="settings-setting-row"
+                >
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Run on startup</span>
+                    <span className="settings-setting-description">
+                      Launch Mira automatically when you sign in to your computer.
+                    </span>
+                  </span>
+                  <input
+                    id="run-on-startup"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={runOnStartup}
+                    disabled={!canConfigureRunOnStartup}
+                    onChange={(e) => {
+                      setRunOnStartup(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+                {!!runOnStartupStatus && (
+                  <div className="theme-text2 settings-status">{runOnStartupStatus}</div>
+                )}
+                {electron?.isMacOS && (
                 <label
                   htmlFor="quit-on-last-window-close"
                   className="settings-setting-row"
@@ -1074,6 +1139,7 @@ export default function Settings() {
                     }}
                   />
                 </label>
+                )}
               </section>
             )}
 

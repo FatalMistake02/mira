@@ -88,6 +88,7 @@ function Browser() {
           'settings-set-quit-on-last-window-close',
           settings.quitOnLastWindowClose,
         ),
+        electron.ipcRenderer.invoke('settings-set-run-on-startup', settings.runOnStartup),
         electron.ipcRenderer.invoke('window-set-titlebar-symbol-color', {
           symbolColor,
           color: overlayColor,

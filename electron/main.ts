@@ -520,6 +520,18 @@ type DefaultBrowserSupportInfo = {
   processDefaultApp: boolean;
 };
 
+type RunOnStartupSupportCode = 'ok' | 'unsupported-platform' | 'dev-build' | 'read-failed';
+
+type RunOnStartupSupportInfo = {
+  code: RunOnStartupSupportCode;
+  canConfigure: boolean;
+  message: string;
+  platform: NodeJS.Platform;
+  isPackaged: boolean;
+  processDefaultApp: boolean;
+  isEnabled: boolean;
+};
+
 function getDefaultBrowserSupportInfo(): DefaultBrowserSupportInfo {
   if (!app.isPackaged || process.defaultApp) {
     return {
@@ -559,6 +571,55 @@ function getDefaultBrowserSupportInfo(): DefaultBrowserSupportInfo {
     isPortableBuild,
     processDefaultApp: !!process.defaultApp,
   };
+}
+
+function getRunOnStartupSupportInfo(): RunOnStartupSupportInfo {
+  if (!isWindows && !isMacOS) {
+    return {
+      code: 'unsupported-platform',
+      canConfigure: false,
+      message: 'Run on startup is only supported on Windows and macOS.',
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      processDefaultApp: !!process.defaultApp,
+      isEnabled: false,
+    };
+  }
+
+  if (!app.isPackaged || process.defaultApp) {
+    return {
+      code: 'dev-build',
+      canConfigure: false,
+      message: 'Run on startup is unavailable in development mode. Use an installed packaged build.',
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      processDefaultApp: !!process.defaultApp,
+      isEnabled: false,
+    };
+  }
+
+  try {
+    const loginItemSettings = app.getLoginItemSettings();
+    return {
+      code: 'ok',
+      canConfigure: true,
+      message: '',
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      processDefaultApp: !!process.defaultApp,
+      isEnabled: loginItemSettings.openAtLogin === true,
+    };
+  } catch (error) {
+    return {
+      code: 'read-failed',
+      canConfigure: false,
+      message: error instanceof Error ? error.message : 'Failed to read startup settings.',
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      processDefaultApp: !!process.defaultApp,
+      isEnabled: false,
+    };
+  }
 }
 
 function getSessionFilePath() {
@@ -1651,6 +1712,63 @@ function setupAdBlocker() {
   ipcMain.handle('settings-set-quit-on-last-window-close', async (_, enabled: unknown) => {
     quitOnLastWindowClose = isMacOS && enabled === true;
     return quitOnLastWindowClose;
+  });
+
+  ipcMain.handle('settings-run-on-startup-status', async () => {
+    const support = getRunOnStartupSupportInfo();
+    return {
+      ok: support.code === 'ok',
+      canConfigure: support.canConfigure,
+      isEnabled: support.isEnabled,
+      message: support.message,
+      support,
+    };
+  });
+
+  ipcMain.handle('settings-set-run-on-startup', async (_, enabled: unknown) => {
+    const supportBefore = getRunOnStartupSupportInfo();
+    if (!supportBefore.canConfigure) {
+      return {
+        ok: false,
+        canConfigure: false,
+        isEnabled: supportBefore.isEnabled,
+        message: supportBefore.message,
+        support: supportBefore,
+      };
+    }
+
+    const shouldEnable = enabled === true;
+    try {
+      if (isMacOS) {
+        app.setLoginItemSettings({
+          openAtLogin: shouldEnable,
+          openAsHidden: false,
+        });
+      } else {
+        app.setLoginItemSettings({
+          openAtLogin: shouldEnable,
+        });
+      }
+    } catch (error) {
+      const supportFailed = getRunOnStartupSupportInfo();
+      return {
+        ok: false,
+        canConfigure: supportFailed.canConfigure,
+        isEnabled: supportFailed.isEnabled,
+        message: error instanceof Error ? error.message : 'Failed to update startup setting.',
+        support: supportFailed,
+      };
+    }
+
+    const supportAfter = getRunOnStartupSupportInfo();
+    const didApply = supportAfter.canConfigure && supportAfter.isEnabled === shouldEnable;
+    return {
+      ok: didApply,
+      canConfigure: supportAfter.canConfigure,
+      isEnabled: supportAfter.isEnabled,
+      message: didApply ? '' : 'Startup setting may require additional OS permissions.',
+      support: supportAfter,
+    };
   });
 }
 
