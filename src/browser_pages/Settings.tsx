@@ -6,6 +6,7 @@ import {
   getBrowserSettings,
   saveBrowserSettings,
   type DevToolsOpenMode,
+  type StartupRestoreBehavior,
   type TabSleepMode,
 } from '../features/settings/browserSettings';
 import { applyTheme } from '../features/themes/applyTheme';
@@ -146,6 +147,9 @@ export default function Settings() {
     () => initialSettings.autoUpdateOnLaunch,
   );
   const [runOnStartup, setRunOnStartup] = useState(() => initialSettings.runOnStartup);
+  const [startupRestoreBehavior, setStartupRestoreBehavior] = useState<StartupRestoreBehavior>(
+    () => initialSettings.startupRestoreBehavior,
+  );
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -266,6 +270,7 @@ export default function Settings() {
         includePrereleaseUpdates,
         autoUpdateOnLaunch,
         runOnStartup,
+        startupRestoreBehavior,
       });
       setSaveStatus('saved');
 
@@ -294,6 +299,7 @@ export default function Settings() {
     includePrereleaseUpdates,
     autoUpdateOnLaunch,
     runOnStartup,
+    startupRestoreBehavior,
   ]);
 
   useEffect(() => {
@@ -563,7 +569,7 @@ export default function Settings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const showAppLifecycleSettings = electron?.isMacOS || electron?.platform === 'win32';
+  const canConfigureRunOnStartupSetting = electron?.isMacOS || electron?.platform === 'win32';
 
   return (
     <div className="settings-page">
@@ -1087,38 +1093,73 @@ export default function Settings() {
               </div>
             </section>
 
-            {showAppLifecycleSettings && (
-              <section className="theme-panel settings-card">
-                <div className="settings-card-header">
-                  <h2 className="settings-card-title">Startup</h2>
-                </div>
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Startup</h2>
+              </div>
+              <div className="settings-setting-row">
                 <label
-                  htmlFor="run-on-startup"
-                  className="settings-setting-row"
+                  htmlFor="startup-restore-behavior"
+                  className="settings-setting-meta"
                 >
-                  <span className="settings-setting-meta">
-                    <span className="settings-setting-label">Run on startup</span>
-                    <span className="settings-setting-description">
-                      Launch Mira automatically when you sign in to your computer.
-                    </span>
+                  <span className="settings-setting-label">Restore behavior</span>
+                  <span className="settings-setting-description">
+                    Choose how Mira handles your previous session on startup.
                   </span>
-                  <input
-                    id="run-on-startup"
-                    type="checkbox"
-                    className="settings-toggle settings-setting-control"
-                    checked={runOnStartup}
-                    disabled={!canConfigureRunOnStartup}
-                    onChange={(e) => {
-                      setRunOnStartup(e.currentTarget.checked);
-                      setSaveStatus('saving');
-                    }}
-                  />
                 </label>
-                {!!runOnStartupStatus && (
-                  <div className="theme-text2 settings-status">{runOnStartupStatus}</div>
-                )}
-              </section>
-            )}
+                <select
+                  id="startup-restore-behavior"
+                  value={startupRestoreBehavior}
+                  onChange={(e) => {
+                    const nextMode = e.currentTarget.value;
+                    if (
+                      nextMode === 'ask'
+                      || nextMode === 'windows'
+                      || nextMode === 'tabs'
+                      || nextMode === 'fresh'
+                    ) {
+                      setStartupRestoreBehavior(nextMode as StartupRestoreBehavior);
+                      setSaveStatus('saving');
+                    }
+                  }}
+                  className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                >
+                  <option value="ask">Always Ask (default)</option>
+                  <option value="windows">Auto Restore All Windows</option>
+                  <option value="tabs">Auto Restore Tabs</option>
+                  <option value="fresh">Auto Start Fresh</option>
+                </select>
+              </div>
+              {canConfigureRunOnStartupSetting && (
+                <>
+                  <label
+                    htmlFor="run-on-startup"
+                    className="settings-setting-row"
+                  >
+                    <span className="settings-setting-meta">
+                      <span className="settings-setting-label">Run on startup</span>
+                      <span className="settings-setting-description">
+                        Launch Mira automatically when you sign in to your computer.
+                      </span>
+                    </span>
+                    <input
+                      id="run-on-startup"
+                      type="checkbox"
+                      className="settings-toggle settings-setting-control"
+                      checked={runOnStartup}
+                      disabled={!canConfigureRunOnStartup}
+                      onChange={(e) => {
+                        setRunOnStartup(e.currentTarget.checked);
+                        setSaveStatus('saving');
+                      }}
+                    />
+                  </label>
+                  {!!runOnStartupStatus && (
+                    <div className="theme-text2 settings-status">{runOnStartupStatus}</div>
+                  )}
+                </>
+              )}
+            </section>
 
             <section className="theme-panel settings-card">
               <div className="settings-card-header">

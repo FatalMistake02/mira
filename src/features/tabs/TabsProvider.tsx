@@ -7,6 +7,7 @@ import {
   BROWSER_SETTINGS_CHANGED_EVENT,
   getBrowserSettings,
   getTabSleepAfterMs,
+  type StartupRestoreBehavior,
 } from '../settings/browserSettings';
 
 const SESSION_STORAGE_KEY = 'mira.session.tabs.v1';
@@ -243,6 +244,19 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     activeMatchOrdinal: 0,
     matches: 0,
   };
+  const applyRestoredSnapshot = useCallback((snapshot: SessionSnapshot) => {
+    if (!snapshot.tabs.length) return;
+    const now = Date.now();
+    const restoredTabs = snapshot.tabs.map((tab) =>
+      tab.id === snapshot.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+    );
+    setTabs(restoredTabs);
+    setActiveId(snapshot.activeId);
+    setPendingSession(null);
+    setRestoreTabCountState(0);
+    setRestorePromptOpen(false);
+    setRestoreWindowCount(1);
+  }, []);
 
   const clearFindInPageMatchesForTab = useCallback((tabId: string) => {
     setFindInPageMatchesByTab((current) => {
@@ -251,7 +265,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       delete next[tabId];
       return next;
     });
-  }, []);
+  }, [applyRestoredSnapshot]);
 
   const updateFindInPageMatches = useCallback(
     (
@@ -343,12 +357,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     const ipc = electron?.ipcRenderer;
     if (!ipc) {
       startupIncomingUrlsRef.current = [];
+      const settings = getBrowserSettings();
+      const restoreBehavior: StartupRestoreBehavior = settings.startupRestoreBehavior;
       const currentDefaultTabUrl = getBrowserSettings().newTabPage;
       const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY), currentDefaultTabUrl);
       if (snapshot && !isDefaultSnapshot(snapshot, currentDefaultTabUrl)) {
-        setPendingSession(snapshot);
-        setRestoreTabCountState(snapshot.tabs.length);
-        setRestorePromptOpen(true);
+        if (restoreBehavior === 'ask') {
+          setPendingSession(snapshot);
+          setRestoreTabCountState(snapshot.tabs.length);
+          setRestorePromptOpen(true);
+        } else if (restoreBehavior === 'fresh') {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+        } else {
+          applyRestoredSnapshot(snapshot);
+        }
       }
       hydratedRef.current = true;
       setIsBootstrapReady(true);
@@ -376,16 +398,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (cancelled) return;
 
         if (windowRestore && windowRestore.tabs.length > 0) {
-          const now = Date.now();
-          const nextTabs = windowRestore.tabs.map((tab) =>
-            tab.id === windowRestore.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
-          );
-          setTabs(nextTabs);
-          setActiveId(windowRestore.activeId);
-          setPendingSession(null);
-          setRestoreTabCountState(0);
-          setRestorePromptOpen(false);
-          setRestoreWindowCount(1);
+          applyRestoredSnapshot(windowRestore);
           return;
         }
 
@@ -393,9 +406,21 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (cancelled) return;
 
         if (restoreState?.hasPendingRestore && queuedUrls.length === 0) {
-          setRestorePromptOpen(true);
-          setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
-          setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
+          const restoreBehavior: StartupRestoreBehavior = getBrowserSettings().startupRestoreBehavior;
+          if (restoreBehavior === 'ask') {
+            setRestorePromptOpen(true);
+            setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
+            setRestoreWindowCount(Math.max(restoreState.windowCount || 1, 1));
+          } else if (restoreBehavior === 'fresh') {
+            await ipc.invoke('session-discard-restore').catch(() => undefined);
+          } else {
+            const mode: SessionRestoreMode = restoreBehavior === 'windows' ? 'windows' : 'tabs';
+            const snapshot = await ipc
+              .invoke<SessionSnapshot | null>('session-accept-restore', mode)
+              .catch(() => null);
+            if (cancelled || !snapshot) return;
+            applyRestoredSnapshot(snapshot);
+          }
         }
       } finally {
         if (!cancelled) {

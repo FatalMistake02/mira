@@ -6,6 +6,7 @@
 - Run on startup option
 - Opens maximized
 - Update installer
+- Auto restore
 
 ## v0.8.1 - 2026-02-17
 

@@ -6,8 +6,9 @@
 - [ ] Improve performance
 - [ ] Fix bugs/issues
 - [x] Auto update
-- [ ] Auto restore
+- [x] Auto restore
 - [x] Start on startup
+- [ ] Onboarding
 
 ## v1.1.0
 - [ ] Bookmarks and favorites

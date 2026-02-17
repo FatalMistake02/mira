@@ -4,6 +4,7 @@ import { DEFAULT_LAYOUT_ID } from '../layouts/layoutLoader';
 export type TabSleepUnit = 'seconds' | 'minutes' | 'hours';
 export type TabSleepMode = 'freeze' | 'discard';
 export type DevToolsOpenMode = 'side' | 'window';
+export type StartupRestoreBehavior = 'ask' | 'windows' | 'tabs' | 'fresh';
 
 export type BrowserSettings = {
   newTabPage: string;
@@ -21,6 +22,7 @@ export type BrowserSettings = {
   includePrereleaseUpdates: boolean;
   autoUpdateOnLaunch: boolean;
   runOnStartup: boolean;
+  startupRestoreBehavior: StartupRestoreBehavior;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -39,6 +41,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   includePrereleaseUpdates: false,
   autoUpdateOnLaunch: false,
   runOnStartup: false,
+  startupRestoreBehavior: 'ask',
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
@@ -174,6 +177,14 @@ function normalizeRunOnStartup(value: unknown): boolean {
   return value;
 }
 
+function normalizeStartupRestoreBehavior(value: unknown): StartupRestoreBehavior {
+  if (value === 'ask' || value === 'windows' || value === 'tabs' || value === 'fresh') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_SETTINGS.startupRestoreBehavior;
+}
+
 export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   if (typeof value !== 'object' || value === null) {
     return DEFAULT_BROWSER_SETTINGS;
@@ -198,6 +209,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     ),
     autoUpdateOnLaunch: normalizeAutoUpdateOnLaunch(candidate.autoUpdateOnLaunch),
     runOnStartup: normalizeRunOnStartup(candidate.runOnStartup),
+    startupRestoreBehavior: normalizeStartupRestoreBehavior(candidate.startupRestoreBehavior),
   };
 }
 
