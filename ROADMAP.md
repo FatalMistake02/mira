@@ -5,7 +5,7 @@
 - [ ] Clean UI
 - [ ] Improve performance
 - [ ] Fix bugs/issues
-- [ ] Auto update
+- [x] Auto update
 - [ ] Auto restore
 - [ ] Start on startup
 

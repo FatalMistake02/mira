@@ -19,6 +19,7 @@ export type BrowserSettings = {
   showNewTabBranding: boolean;
   disableNewTabIntro: boolean;
   includePrereleaseUpdates: boolean;
+  autoUpdateOnLaunch: boolean;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -35,6 +36,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   showNewTabBranding: false,
   disableNewTabIntro: false,
   includePrereleaseUpdates: false,
+  autoUpdateOnLaunch: false,
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
@@ -154,6 +156,14 @@ function normalizeIncludePrereleaseUpdates(value: unknown): boolean {
   return value;
 }
 
+function normalizeAutoUpdateOnLaunch(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.autoUpdateOnLaunch;
+  }
+
+  return value;
+}
+
 export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   if (typeof value !== 'object' || value === null) {
     return DEFAULT_BROWSER_SETTINGS;
@@ -176,6 +186,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     includePrereleaseUpdates: normalizeIncludePrereleaseUpdates(
       candidate.includePrereleaseUpdates,
     ),
+    autoUpdateOnLaunch: normalizeAutoUpdateOnLaunch(candidate.autoUpdateOnLaunch),
   };
 }
 

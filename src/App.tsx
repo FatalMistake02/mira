@@ -22,6 +22,7 @@ import { getLayoutById } from './features/layouts/layoutLoader';
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const previousTabIdsRef = useRef<string[] | null>(null);
+  const didRequestLaunchAutoUpdateRef = useRef(false);
   const [findBarOpen, setFindBarOpen] = useState(false);
   const [findBarFocusToken, setFindBarFocusToken] = useState(0);
   const {
@@ -98,6 +99,20 @@ function Browser() {
 
     window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applyRuntimeSettings);
     return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, applyRuntimeSettings);
+  }, []);
+
+  useEffect(() => {
+    if (!electron?.ipcRenderer || didRequestLaunchAutoUpdateRef.current) return;
+
+    const settings = getBrowserSettings();
+    if (!settings.autoUpdateOnLaunch) return;
+
+    didRequestLaunchAutoUpdateRef.current = true;
+    void electron.ipcRenderer
+      .invoke('updates-run-launch-auto', {
+        includePrerelease: settings.includePrereleaseUpdates,
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {

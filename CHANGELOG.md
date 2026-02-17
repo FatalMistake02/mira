@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add auto update
+
 ## v0.8.0 - 2026-02-17
 
 - History shows site title

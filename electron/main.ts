@@ -96,6 +96,7 @@ const pendingClosedWindowCleanupTimers = new Map<number, NodeJS.Timeout>();
 let isQuitting = false;
 let adBlockEnabled = true;
 let quitOnLastWindowClose = false;
+let hasAttemptedLaunchAutoUpdate = false;
 const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/FatalMistake02/mira/releases?per_page=40';
 const isPortableBuild = process.platform === 'win32' && !!process.env.PORTABLE_EXECUTABLE_FILE;
 const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
@@ -994,6 +995,14 @@ function pickLatestRelease(releases: GitHubRelease[]): GitHubRelease | null {
   return sorted[0] ?? null;
 }
 
+function canAutoInstallUpdatesOnLaunch(): boolean {
+  const isSupportedPlatform = process.platform === 'win32' || process.platform === 'darwin';
+  if (!isSupportedPlatform) return false;
+  if (!app.isPackaged || process.defaultApp) return false;
+  if (isPortableBuild) return false;
+  return true;
+}
+
 async function checkForUpdates(includePrerelease: boolean): Promise<UpdateCheckResult | null> {
   const releases = await fetchReleases(includePrerelease);
   const latestRelease = pickLatestRelease(releases);
@@ -1399,6 +1408,85 @@ function applyWindowStateFromSnapshot(
 }
 
 function setupUpdateHandlers() {
+  ipcMain.handle('updates-launch-auto-support', () => {
+    return {
+      canAutoInstall: canAutoInstallUpdatesOnLaunch(),
+    };
+  });
+
+  ipcMain.handle(
+    'updates-run-launch-auto',
+    async (_event, options: { includePrerelease?: boolean } | undefined) => {
+      if (hasAttemptedLaunchAutoUpdate) {
+        return {
+          ok: true,
+          skipped: true,
+          reason: 'already-attempted',
+        };
+      }
+      hasAttemptedLaunchAutoUpdate = true;
+
+      if (!canAutoInstallUpdatesOnLaunch()) {
+        return {
+          ok: true,
+          skipped: true,
+          reason: 'unsupported-build',
+        };
+      }
+
+      try {
+        const result = await checkForUpdates(options?.includePrerelease === true);
+        if (!result) {
+          return {
+            ok: true,
+            skipped: true,
+            reason: 'no-compatible-asset',
+          };
+        }
+
+        if (!result.hasUpdate) {
+          return {
+            ok: true,
+            skipped: true,
+            reason: 'up-to-date',
+          };
+        }
+
+        if (result.mode !== 'installer') {
+          return {
+            ok: true,
+            skipped: true,
+            reason: 'non-installer-build',
+          };
+        }
+
+        const downloadedPath = await downloadAssetToDownloads(result.downloadUrl, result.assetName);
+        const openError = await shell.openPath(downloadedPath);
+        if (openError) {
+          return {
+            ok: false,
+            error: openError,
+          };
+        }
+
+        if (process.platform === 'win32') {
+          setTimeout(() => app.quit(), 1000).unref();
+        }
+
+        return {
+          ok: true,
+          skipped: false,
+          launchedInstaller: true,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to run launch update check.',
+        };
+      }
+    },
+  );
+
   ipcMain.handle('updates-check', async (_event, options: { includePrerelease?: boolean } | undefined) => {
     try {
       const result = await checkForUpdates(options?.includePrerelease === true);

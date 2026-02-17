@@ -41,6 +41,10 @@ type UpdateCheckResponse =
   | { ok: true; data: UpdateCheckPayload }
   | { ok: false; error: string };
 
+type UpdateLaunchAutoSupportResponse = {
+  canAutoInstall: boolean;
+};
+
 type DefaultBrowserStatusResponse = {
   isDefault: boolean;
   message?: string;
@@ -83,7 +87,7 @@ type SetDefaultBrowserResponse = {
   };
 };
 
-type SettingsSectionId = 'general' | 'customization' | 'app';
+type SettingsSectionId = 'general' | 'appearance' | 'app';
 
 const SETTINGS_SECTION_TABS: Array<{
   id: SettingsSectionId;
@@ -94,8 +98,8 @@ const SETTINGS_SECTION_TABS: Array<{
     label: 'General',
   },
   {
-    id: 'customization',
-    label: 'Customization',
+    id: 'appearance',
+    label: 'Appearance',
   },
   {
     id: 'app',
@@ -131,6 +135,9 @@ export default function Settings() {
   const [includePrereleaseUpdates, setIncludePrereleaseUpdates] = useState(
     () => initialSettings.includePrereleaseUpdates,
   );
+  const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(
+    () => initialSettings.autoUpdateOnLaunch,
+  );
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -145,6 +152,7 @@ export default function Settings() {
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckPayload | null>(null);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
+  const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
   const [canAttemptDefaultBrowserRegistration, setCanAttemptDefaultBrowserRegistration] = useState(
@@ -246,6 +254,7 @@ export default function Settings() {
         showNewTabBranding,
         disableNewTabIntro,
         includePrereleaseUpdates,
+        autoUpdateOnLaunch,
       });
       setSaveStatus('saved');
 
@@ -272,6 +281,7 @@ export default function Settings() {
     showNewTabBranding,
     disableNewTabIntro,
     includePrereleaseUpdates,
+    autoUpdateOnLaunch,
   ]);
 
   useEffect(() => {
@@ -489,6 +499,26 @@ export default function Settings() {
       setIsSettingDefaultBrowser(false);
     }
   };
+
+  useEffect(() => {
+    if (!electron?.ipcRenderer) return;
+
+    let isSubscribed = true;
+    void electron.ipcRenderer
+      .invoke<UpdateLaunchAutoSupportResponse>('updates-launch-auto-support')
+      .then((response) => {
+        if (!isSubscribed) return;
+        setCanAutoInstallOnLaunch(response.canAutoInstall === true);
+      })
+      .catch(() => {
+        if (!isSubscribed) return;
+        setCanAutoInstallOnLaunch(false);
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
 
   useEffect(() => {
     void refreshDefaultBrowserStatus();
@@ -718,7 +748,7 @@ export default function Settings() {
           </>
         )}
 
-        {activeSection === 'customization' && (
+        {activeSection === 'appearance' && (
           <>
             <section className="theme-panel settings-card">
               <div className="settings-card-header">
@@ -1117,6 +1147,29 @@ export default function Settings() {
                   }}
                 />
               </label>
+              {canAutoInstallOnLaunch && (
+                <label
+                  htmlFor="auto-update-on-launch"
+                  className="settings-setting-row"
+                >
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Auto-update on launch</span>
+                    <span className="settings-setting-description">
+                      On app start, check for updates and automatically install when available.
+                    </span>
+                  </span>
+                  <input
+                    id="auto-update-on-launch"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={autoUpdateOnLaunch}
+                    onChange={(e) => {
+                      setAutoUpdateOnLaunch(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+              )}
               <div className="settings-setting-row">
                 <div className="settings-setting-meta">
                   <span className="settings-setting-label">Update actions</span>
