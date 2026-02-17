@@ -1117,29 +1117,6 @@ export default function Settings() {
                 {!!runOnStartupStatus && (
                   <div className="theme-text2 settings-status">{runOnStartupStatus}</div>
                 )}
-                {electron?.isMacOS && (
-                <label
-                  htmlFor="quit-on-last-window-close"
-                  className="settings-setting-row"
-                >
-                  <span className="settings-setting-meta">
-                    <span className="settings-setting-label">Quit on last window close</span>
-                    <span className="settings-setting-description">
-                      Exit the app immediately after the final window closes.
-                    </span>
-                  </span>
-                  <input
-                    id="quit-on-last-window-close"
-                    type="checkbox"
-                    className="settings-toggle settings-setting-control"
-                    checked={quitOnLastWindowClose}
-                    onChange={(e) => {
-                      setQuitOnLastWindowClose(e.currentTarget.checked);
-                      setSaveStatus('saving');
-                    }}
-                  />
-                </label>
-                )}
               </section>
             )}
 

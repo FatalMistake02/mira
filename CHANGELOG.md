@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-<<<<<<< HEAD
 - Add auto update
-=======
+- Run on startup option
+
 ## v0.8.1 - 2026-02-17
->>>>>>> 74fe618dd9ccee3a26f63389f79d05ceaf7c338e
+
+- Fix macOS tab reloading issue
 
 ## v0.8.0 - 2026-02-17
 
