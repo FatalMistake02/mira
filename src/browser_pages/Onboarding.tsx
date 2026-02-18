@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import miraLogo from '../assets/mira_logo.png';
 import { electron } from '../electronBridge';
-import { getBrowserSettings, saveBrowserSettings } from '../features/settings/browserSettings';
+import {
+  getBrowserSettings,
+  saveBrowserSettings,
+  type StartupRestoreBehavior,
+} from '../features/settings/browserSettings';
 import { applyTheme } from '../features/themes/applyTheme';
 import { getAllThemes, getThemeById, type ThemeEntry } from '../features/themes/themeLoader';
 import { applyLayout } from '../features/layouts/applyLayout';
@@ -64,6 +68,9 @@ export default function Onboarding() {
     const hasCurrentLayout = allLayouts.some((entry) => entry.id === initialSettings.layoutId);
     return hasCurrentLayout ? initialSettings.layoutId : fallbackLayoutId;
   });
+  const [startupRestoreBehavior, setStartupRestoreBehavior] = useState<StartupRestoreBehavior>(
+    () => initialSettings.startupRestoreBehavior,
+  );
   const [runOnStartup, setRunOnStartup] = useState(() => initialSettings.runOnStartup);
   const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(
     () => initialSettings.autoUpdateOnLaunch,
@@ -150,6 +157,7 @@ export default function Onboarding() {
     saveBrowserSettings({
       themeId: resolvedThemeId,
       layoutId,
+      startupRestoreBehavior,
       runOnStartup: canConfigureRunOnStartup ? runOnStartup : false,
       autoUpdateOnLaunch: canAutoInstallOnLaunch ? autoUpdateOnLaunch : false,
     });
@@ -348,6 +356,36 @@ export default function Onboarding() {
 
           {stepIndex === 2 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label className="settings-setting-row" htmlFor="onboarding-startup-restore-behavior">
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Restore behavior</span>
+                  <span className="settings-setting-description">
+                    Choose how Mira restores your previous session on startup.
+                  </span>
+                </span>
+                <select
+                  id="onboarding-startup-restore-behavior"
+                  className="theme-input settings-select-input settings-setting-control"
+                  value={startupRestoreBehavior}
+                  onChange={(event) => {
+                    const nextMode = event.currentTarget.value;
+                    if (
+                      nextMode === 'ask'
+                      || nextMode === 'windows'
+                      || nextMode === 'tabs'
+                      || nextMode === 'fresh'
+                    ) {
+                      setStartupRestoreBehavior(nextMode as StartupRestoreBehavior);
+                    }
+                  }}
+                >
+                  <option value="ask">Always Ask (default)</option>
+                  <option value="windows">Auto Restore All Windows</option>
+                  <option value="tabs">Auto Restore Tabs</option>
+                  <option value="fresh">Auto Start Fresh</option>
+                </select>
+              </label>
+
               <label className="settings-setting-row" htmlFor="onboarding-run-on-startup">
                 <span className="settings-setting-meta">
                   <span className="settings-setting-label">Run on startup</span>
