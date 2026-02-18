@@ -21,6 +21,8 @@ A desktop browser built with Electron + React.
 - Find in page
 - Devtools support
 - Print support
+- Ad block
+- Tracker block
 
 
 ## Dev setup
