@@ -3,13 +3,14 @@
 ## v1.0.0 — Stable Release
 - [x] Installer & portable builds for Windows, macOS, and Linux
 - [x] Clean UI
-- [ ] Improve performance
-- [x] Fix bugs/issues
-- [ ] Right-click menu (most actions don't work properly)
 - [x] Auto update
 - [x] Auto restore
 - [x] Start on startup
 - [x] Onboarding
+- [x] Fix bugs/issues
+- [ ] Right-click menu (most actions don't work properly)
+- [ ] Improve performance
+- [ ] Fix links not able to open new tabs 
 
 ## v1.1.0
 - [ ] Bookmarks and favorites
