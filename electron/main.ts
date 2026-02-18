@@ -120,9 +120,7 @@ const isPortableBuild = process.platform === 'win32' && !!process.env.PORTABLE_E
 const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
 const AD_BLOCK_FETCH_TIMEOUT_MS = 15000;
 const AD_BLOCK_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const TRACKER_BLOCK_CACHE_FILE = 'tracker-hosts-v1.txt';
-const TRACKER_BLOCK_FETCH_TIMEOUT_MS = 15000;
-const TRACKER_BLOCK_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const TRACKER_BLOCK_LOCAL_FILE = path.join('src', 'assets', 'trackers.txt');
 
 const DEFAULT_BLOCKED_AD_HOSTS = [
   'doubleclick.net',
@@ -165,12 +163,6 @@ const blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
 const AD_BLOCK_LIST_URLS = [
   'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
   'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/light.txt',
-];
-const TRACKER_BLOCK_RULE_LIST_URLS = [
-  'https://raw.githubusercontent.com/easylist/easylist/master/easyprivacy/easyprivacy_general.txt',
-  'https://raw.githubusercontent.com/easylist/easylist/master/easyprivacy/easyprivacy_specific.txt',
-  'https://raw.githubusercontent.com/easylist/easylist/master/easyprivacy/easyprivacy_thirdparty.txt',
-  'https://raw.githubusercontent.com/easylist/easylist/master/easyprivacy/easyprivacy_trackingservers.txt',
 ];
 let blockedAdHosts = new Set<string>(DEFAULT_BLOCKED_AD_HOSTS);
 
@@ -292,8 +284,8 @@ function getAdBlockCachePath(): string {
   return path.join(app.getPath('userData'), AD_BLOCK_CACHE_FILE);
 }
 
-function getTrackerBlockCachePath(): string {
-  return path.join(app.getPath('userData'), TRACKER_BLOCK_CACHE_FILE);
+function getBundledTrackerListPath(): string {
+  return path.join(app.getAppPath(), TRACKER_BLOCK_LOCAL_FILE);
 }
 
 function isValidHostnameToken(token: string): boolean {
@@ -345,34 +337,6 @@ function parseHostsFromBlocklist(raw: string): Set<string> {
   return parsed;
 }
 
-function extractHostFromEasyPrivacyRuleToken(token: string): string | null {
-  const trimmed = token.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith('!') || trimmed.startsWith('[') || trimmed.startsWith('@@')) return null;
-
-  const withoutOptions = trimmed.split('$', 1)[0]?.trim() ?? '';
-  if (!withoutOptions) return null;
-
-  // Host-only matcher: path rules from EasyPrivacy are intentionally ignored here.
-  const match = withoutOptions.match(/^\|\|([a-z0-9*.-]+)\^$/i);
-  if (!match?.[1]) return null;
-
-  const normalizedHost = normalizeBlockedHostToken(match[1].replace(/^\*\./, ''));
-  if (!normalizedHost) return null;
-  return normalizedHost;
-}
-
-function parseHostsFromEasyPrivacy(raw: string): Set<string> {
-  const parsed = new Set<string>();
-
-  for (const token of raw.split(/\s+/)) {
-    const host = extractHostFromEasyPrivacyRuleToken(token);
-    if (host) parsed.add(host);
-  }
-
-  return parsed;
-}
-
 async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -399,15 +363,15 @@ async function loadCachedAdBlockHosts(): Promise<void> {
   }
 }
 
-async function loadCachedTrackerBlockHosts(): Promise<void> {
+async function loadBundledTrackerBlockHosts(): Promise<void> {
   try {
-    const raw = await fs.readFile(getTrackerBlockCachePath(), 'utf-8');
-    const cachedHosts = parseHostsFromBlocklist(raw);
-    if (!cachedHosts.size) return;
+    const raw = await fs.readFile(getBundledTrackerListPath(), 'utf-8');
+    const parsedHosts = parseHostsFromBlocklist(raw);
+    if (!parsedHosts.size) return;
 
-    blockedTrackerHosts = new Set([...DEFAULT_BLOCKED_TRACKER_HOSTS, ...cachedHosts]);
+    blockedTrackerHosts = new Set([...DEFAULT_BLOCKED_TRACKER_HOSTS, ...parsedHosts]);
   } catch {
-    // No cache yet.
+    // Missing local tracker list should not disable default tracker blocking.
   }
 }
 
@@ -436,44 +400,11 @@ async function refreshAdBlockHostsFromLists(): Promise<void> {
   }
 }
 
-async function refreshTrackerBlockHostsFromLists(): Promise<void> {
-  const downloadedHosts = new Set<string>();
-
-  for (const listUrl of TRACKER_BLOCK_RULE_LIST_URLS) {
-    try {
-      const listText = await fetchTextWithTimeout(listUrl, TRACKER_BLOCK_FETCH_TIMEOUT_MS);
-      const parsedHosts = parseHostsFromEasyPrivacy(listText);
-      for (const host of parsedHosts) {
-        downloadedHosts.add(host);
-      }
-    } catch {
-      // Ignore single-list failures and continue with remaining lists.
-    }
-  }
-
-  if (!downloadedHosts.size) return;
-
-  blockedTrackerHosts = new Set([...DEFAULT_BLOCKED_TRACKER_HOSTS, ...downloadedHosts]);
-  try {
-    await fs.writeFile(getTrackerBlockCachePath(), Array.from(downloadedHosts).join('\n'), 'utf-8');
-  } catch {
-    // Cache write failures should not disable blocking.
-  }
-}
-
 function scheduleAdBlockListRefresh(): void {
   void refreshAdBlockHostsFromLists();
   const interval = setInterval(() => {
     void refreshAdBlockHostsFromLists();
   }, AD_BLOCK_REFRESH_INTERVAL_MS);
-  interval.unref();
-}
-
-function scheduleTrackerListRefresh(): void {
-  void refreshTrackerBlockHostsFromLists();
-  const interval = setInterval(() => {
-    void refreshTrackerBlockHostsFromLists();
-  }, TRACKER_BLOCK_REFRESH_INTERVAL_MS);
   interval.unref();
 }
 
@@ -2911,7 +2842,7 @@ app.whenReady().then(async () => {
 
   await loadHistory().catch(() => undefined);
   await loadCachedAdBlockHosts().catch(() => undefined);
-  await loadCachedTrackerBlockHosts().catch(() => undefined);
+  await loadBundledTrackerBlockHosts().catch(() => undefined);
   await loadPersistedAppState().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
@@ -2926,7 +2857,6 @@ app.whenReady().then(async () => {
   setupApplicationMenu();
   setupMacDockMenu();
   scheduleAdBlockListRefresh();
-  scheduleTrackerListRefresh();
   setupDownloadHandlers();
 
   if (shouldShowOnboarding()) {
