@@ -252,7 +252,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
                 setMenuOpen(false);
               }}
             >
-              History ({primaryModifierLabel}+H)
+              History ({primaryModifierLabel}+{electron?.isMacOS ? "Y" : "H"})
             </button>
             <button
               type="button"
