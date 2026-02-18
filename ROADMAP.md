@@ -2,9 +2,9 @@
 
 ## v1.0.0 — Stable Release
 - [ ] Installer & portable builds for Windows, macOS, and Linux
-- [ ] Clean UI
+- [x] Clean UI
 - [ ] Improve performance
-- [ ] Fix bugs/issues
+- [x] Fix bugs/issues
 - [ ] Right-click menu
 - [x] Auto update
 - [x] Auto restore

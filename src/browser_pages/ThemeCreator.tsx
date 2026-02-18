@@ -10,8 +10,9 @@ import { getBrowserSettings, saveBrowserSettings } from '../features/settings/br
 import { THEME_SCHEMA_VERSION, type Theme, type ThemeMode } from '../themes/types';
 import { getThemeColorDisplayName } from '../themes/colorVariableToDisplayName';
 
-const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const CSS_VAR_PATTERN = /^var\(\s*--([a-zA-Z0-9_-]+)\s*\)$/;
+type RGBAColor = { r: number; g: number; b: number; a: number };
 
 function normalizeHexColor(value: string): string | null {
   const trimmed = value.trim();
@@ -24,7 +25,68 @@ function normalizeHexColor(value: string): string | null {
     return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
   }
 
+  if (trimmed.length === 5) {
+    const r = trimmed[1];
+    const g = trimmed[2];
+    const b = trimmed[3];
+    const a = trimmed[4];
+    return `#${r}${r}${g}${g}${b}${b}${a}${a}`.toLowerCase();
+  }
+
   return trimmed.toLowerCase();
+}
+
+function clampChannel(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${clampChannel(r).toString(16).padStart(2, '0')}${clampChannel(g)
+    .toString(16)
+    .padStart(2, '0')}${clampChannel(b).toString(16).padStart(2, '0')}`;
+}
+
+function rgbToHexWithAlpha(r: number, g: number, b: number, a: number): string {
+  const alpha = Math.max(0, Math.min(1, a));
+  const alphaHex = Math.round(alpha * 255).toString(16).padStart(2, '0');
+  return `${rgbToHex(r, g, b)}${alphaHex}`;
+}
+
+function parseColorToRgba(value: string): RGBAColor | null {
+  const raw = value.trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === 'transparent') {
+    return { r: 0, g: 0, b: 0, a: 0 };
+  }
+
+  const hex = normalizeHexColor(raw);
+  if (hex) {
+    const r = Number.parseInt(hex.slice(1, 3), 16);
+    const g = Number.parseInt(hex.slice(3, 5), 16);
+    const b = Number.parseInt(hex.slice(5, 7), 16);
+    const a = hex.length === 9 ? Number.parseInt(hex.slice(7, 9), 16) / 255 : 1;
+    return { r, g, b, a };
+  }
+
+  const rgbaMatch = raw.match(
+    /^rgba?\(\s*([0-9]{1,3})\s*[, ]\s*([0-9]{1,3})\s*[, ]\s*([0-9]{1,3})(?:\s*[,/]\s*([0-9.]+))?\s*\)$/,
+  );
+  if (!rgbaMatch) return null;
+
+  const r = clampChannel(Number.parseInt(rgbaMatch[1], 10));
+  const g = clampChannel(Number.parseInt(rgbaMatch[2], 10));
+  const b = clampChannel(Number.parseInt(rgbaMatch[3], 10));
+  const aRaw = rgbaMatch[4];
+  const parsedAlpha = aRaw === undefined ? 1 : Number.parseFloat(aRaw);
+  const a = Number.isFinite(parsedAlpha) ? Math.max(0, Math.min(1, parsedAlpha)) : 1;
+  return { r, g, b, a };
+}
+
+function parseRgbLikeToHex(value: string): string | null {
+  const parsed = parseColorToRgba(value);
+  if (!parsed) return null;
+  return rgbToHex(parsed.r, parsed.g, parsed.b);
 }
 
 function resolveColorValue(
@@ -37,15 +99,65 @@ function resolveColorValue(
   visited.add(key);
 
   const candidate = (colors[key] ?? fallbackColors[key] ?? '').trim();
-  const normalizedHex = normalizeHexColor(candidate);
-  if (normalizedHex) return normalizedHex;
+  if (!candidate) return null;
 
   const varMatch = candidate.match(CSS_VAR_PATTERN);
   if (varMatch) {
     return resolveColorValue(varMatch[1], colors, fallbackColors, visited);
   }
 
+  return candidate;
+}
+
+function resolveHexColorValue(
+  key: string,
+  colors: Record<string, string>,
+  fallbackColors: Record<string, string>,
+): string | null {
+  const candidate = resolveColorValue(key, colors, fallbackColors, new Set<string>());
+  if (!candidate) return null;
+
+  const normalizedHex = normalizeHexColor(candidate);
+  if (normalizedHex) return normalizedHex;
+
   return null;
+}
+
+function getColorPickerValue(
+  key: string,
+  colors: Record<string, string>,
+  fallbackColors: Record<string, string>,
+): string {
+  const resolved = resolveColorValue(key, colors, fallbackColors, new Set<string>()) ?? '';
+  return (
+    resolveHexColorValue(key, colors, fallbackColors)
+    ?? parseRgbLikeToHex(resolved)
+    ?? '#000000'
+  );
+}
+
+function getResolvedRgbaForEditor(
+  key: string,
+  colors: Record<string, string>,
+  fallbackColors: Record<string, string>,
+): RGBAColor {
+  const resolved = resolveColorValue(key, colors, fallbackColors, new Set<string>()) ?? '';
+  return parseColorToRgba(resolved) ?? { r: 0, g: 0, b: 0, a: 1 };
+}
+
+function formatColorWithOpacity(r: number, g: number, b: number, opacityPercent: number): string {
+  const clampedOpacity = Math.max(0, Math.min(100, Math.round(opacityPercent)));
+  if (clampedOpacity <= 0) return 'transparent';
+
+  const alpha = clampedOpacity / 100;
+  if (alpha >= 1) return rgbToHex(r, g, b);
+  return rgbToHexWithAlpha(r, g, b, alpha);
+}
+
+function parseOpacityPercent(value: string, fallback: number): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(100, parsed));
 }
 
 function createEditableColors(baseTheme: Theme, fallbackTheme: Theme): Record<string, string> {
@@ -55,11 +167,22 @@ function createEditableColors(baseTheme: Theme, fallbackTheme: Theme): Record<st
 
   const result: Record<string, string> = {};
   allKeys.forEach((key) => {
+    const baseRaw = (baseTheme.colors[key] ?? '').trim();
+    if (baseRaw) {
+      result[key] = normalizeHexColor(baseRaw) ?? baseRaw;
+      return;
+    }
+
+    const fallbackRaw = (fallbackTheme.colors[key] ?? '').trim();
+    if (fallbackRaw) {
+      result[key] = normalizeHexColor(fallbackRaw) ?? fallbackRaw;
+      return;
+    }
+
     const resolved =
       resolveColorValue(key, baseTheme.colors, fallbackTheme.colors, new Set<string>()) ??
-      normalizeHexColor(fallbackTheme.colors[key]) ??
       '#000000';
-    result[key] = resolved;
+    result[key] = normalizeHexColor(resolved) ?? resolved;
   });
   return result;
 }
@@ -222,7 +345,7 @@ export default function ThemeCreator() {
         <div className="settings-card-header">
           <h2 className="settings-card-title">Theme Details</h2>
         </div>
-        <div className="creator-meta-grid">
+        <div className="creator-meta-grid theme-creator-meta-grid">
           <label className="creator-meta-field">
             <span className="settings-setting-label">Base Theme</span>
             <select
@@ -289,36 +412,84 @@ export default function ThemeCreator() {
         <div className="settings-card-header">
           <h2 className="settings-card-title">Colors</h2>
         </div>
-        <div className="creator-values-list">
+        <div className="creator-values-list theme-creator-values-list">
           {editableKeys.map((key) => (
-            <div key={key} className="settings-setting-row creator-value-row">
-              <div className="settings-setting-meta">
-                <span className="settings-setting-label">{getThemeColorDisplayName(key)}</span>
-                <span className="settings-setting-description creator-code-text">{key}</span>
-              </div>
-              <div className="creator-color-controls settings-setting-control settings-setting-control-grow settings-setting-control-right">
-                <input
-                  type="color"
-                  value={colors[key]}
-                  onChange={(e) => {
-                    const next = e.currentTarget.value;
-                    setColors((prev) => ({ ...prev, [key]: next }));
-                    setExportMessage('');
-                  }}
-                  className="creator-color-swatch"
-                />
-                <input
-                  value={colors[key]}
-                  onChange={(e) => {
-                    const normalized = normalizeHexColor(e.currentTarget.value);
-                    if (!normalized) return;
-                    setColors((prev) => ({ ...prev, [key]: normalized }));
-                    setExportMessage('');
-                  }}
-                  className="theme-input settings-text-input creator-code-input"
-                />
-              </div>
-            </div>
+            (() => {
+              const resolvedRgba = getResolvedRgbaForEditor(key, colors, fallbackTheme.colors);
+              const opacityPercent = Math.round(resolvedRgba.a * 100);
+              return (
+                <div key={key} className="settings-setting-row creator-value-row theme-creator-value-row">
+                  <div className="settings-setting-meta">
+                    <span className="settings-setting-label">{getThemeColorDisplayName(key)}</span>
+                  </div>
+                  <div className="creator-color-controls settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                    <input
+                      value={colors[key]}
+                      onChange={(e) => {
+                        const trimmed = e.currentTarget.value.trim();
+                        if (!trimmed) {
+                          setColors((prev) => ({ ...prev, [key]: 'transparent' }));
+                          setExportMessage('');
+                          return;
+                        }
+                        const normalized = normalizeHexColor(trimmed);
+                        setColors((prev) => ({ ...prev, [key]: normalized ?? trimmed }));
+                        setExportMessage('');
+                      }}
+                      className="theme-input settings-text-input creator-code-input"
+                    />
+                    <input
+                      type="color"
+                      value={getColorPickerValue(key, colors, fallbackTheme.colors)}
+                      onChange={(e) => {
+                        const nextHex = e.currentTarget.value;
+                        const parsedHex = parseColorToRgba(nextHex) ?? { r: 0, g: 0, b: 0, a: 1 };
+                        setColors((prev) => ({
+                          ...prev,
+                          [key]: formatColorWithOpacity(
+                            parsedHex.r,
+                            parsedHex.g,
+                            parsedHex.b,
+                            opacityPercent,
+                          ),
+                        }));
+                        setExportMessage('');
+                      }}
+                      className="creator-color-swatch"
+                    />
+                    <label className="theme-text2" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                      Opacity
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={opacityPercent}
+                      onChange={(event) => {
+                        const nextOpacity = parseOpacityPercent(
+                          event.currentTarget.value,
+                          opacityPercent,
+                        );
+                        setColors((prev) => ({
+                          ...prev,
+                          [key]: formatColorWithOpacity(
+                            resolvedRgba.r,
+                            resolvedRgba.g,
+                            resolvedRgba.b,
+                            nextOpacity,
+                          ),
+                        }));
+                        setExportMessage('');
+                      }}
+                      className="theme-input settings-text-input"
+                      style={{ width: 72 }}
+                      aria-label={`${getThemeColorDisplayName(key)} opacity`}
+                    />
+                  </div>
+                </div>
+              );
+            })()
           ))}
         </div>
       </section>
