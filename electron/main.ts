@@ -1039,6 +1039,38 @@ function pickInstallerAsset(release: GitHubRelease): GitHubReleaseAsset | null {
     return zip ?? null;
   }
 
+  if (process.platform === 'linux') {
+    const archTokens =
+      process.arch === 'arm64'
+        ? ['arm64', 'aarch64']
+        : process.arch === 'x64'
+          ? ['x86_64', 'amd64', 'x64']
+          : [];
+
+    const hasArchToken = (assetName: string): boolean => {
+      if (!archTokens.length) return false;
+      const normalized = assetName.toLowerCase();
+      return archTokens.some((token) => normalized.includes(token));
+    };
+
+    const pickByExtension = (extension: string): GitHubReleaseAsset | null => {
+      const archMatch = assets.find(
+        (asset) =>
+          typeof asset.name === 'string' &&
+          asset.name.toLowerCase().endsWith(extension) &&
+          hasArchToken(asset.name),
+      );
+      if (archMatch) return archMatch;
+
+      const genericMatch = assets.find(
+        (asset) => typeof asset.name === 'string' && asset.name.toLowerCase().endsWith(extension),
+      );
+      return genericMatch ?? null;
+    };
+
+    return pickByExtension('.appimage') ?? pickByExtension('.deb') ?? pickByExtension('.rpm');
+  }
+
   return null;
 }
 
@@ -1099,7 +1131,8 @@ function pickLatestRelease(releases: GitHubRelease[]): GitHubRelease | null {
 }
 
 function canAutoInstallUpdatesOnLaunch(): boolean {
-  const isSupportedPlatform = process.platform === 'win32' || process.platform === 'darwin';
+  const isSupportedPlatform =
+    process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux';
   if (!isSupportedPlatform) return false;
   if (!app.isPackaged || process.defaultApp) return false;
   if (isPortableBuild) return false;

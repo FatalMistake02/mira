@@ -1,7 +1,7 @@
 # Roadmap
 
 ## v1.0.0 — Stable Release
-- [ ] Installer & portable builds for Windows, macOS, and Linux
+- [x] Installer & portable builds for Windows, macOS, and Linux
 - [x] Clean UI
 - [ ] Improve performance
 - [x] Fix bugs/issues
