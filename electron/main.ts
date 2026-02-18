@@ -144,18 +144,13 @@ const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'googletagservices.com',
   'cdn.segment.com',
   'api.segment.io',
-  'api-js.mixpanel.com',
-  'api.mixpanel.com',
-  'cdn.mxpnl.com',
-  'api2.amplitude.com',
-  'api.amplitude.com',
-  'script.hotjar.com',
-  'vars.hotjar.com',
+  'mixpanel.com',
+  'amplitude.com',
+  'hotjar.com',
   'clarity.ms',
   'app-measurement.com',
   'connect.facebook.net',
-  'edge.fullstory.com',
-  'rs.fullstory.com',
+  'fullstory.com',
   'js-agent.newrelic.com',
   'bam.nr-data.net',
   'datadoghq-browser-agent.com',
@@ -163,22 +158,10 @@ const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'snap.licdn.com',
   'ads-twitter.com',
   'static.ads-twitter.com',
-  'trk.branch.io',
+  'link.branch.io',
   'app.adjust.com',
 ];
-const TRACKER_HOST_RULE_EXCLUSIONS = new Set<string>([
-  'facebook.net',
-  'segment.com',
-  'segment.io',
-  'mixpanel.com',
-  'amplitude.com',
-  'hotjar.com',
-  'fullstory.com',
-  'newrelic.com',
-  'branch.io',
-  'adjust.com',
-]);
-let blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
+const blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
 const AD_BLOCK_LIST_URLS = [
   'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
   'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/light.txt',
@@ -376,7 +359,6 @@ function extractHostFromEasyPrivacyRuleToken(token: string): string | null {
 
   const normalizedHost = normalizeBlockedHostToken(match[1].replace(/^\*\./, ''));
   if (!normalizedHost) return null;
-  if (TRACKER_HOST_RULE_EXCLUSIONS.has(normalizedHost)) return null;
   return normalizedHost;
 }
 
