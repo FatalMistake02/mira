@@ -85,6 +85,10 @@ function Browser() {
       void Promise.allSettled([
         electron.ipcRenderer.invoke('settings-set-ad-block-enabled', settings.adBlockEnabled),
         electron.ipcRenderer.invoke(
+          'settings-set-tracker-block-enabled',
+          settings.trackerBlockEnabled,
+        ),
+        electron.ipcRenderer.invoke(
           'settings-set-quit-on-last-window-close',
           settings.quitOnLastWindowClose,
         ),

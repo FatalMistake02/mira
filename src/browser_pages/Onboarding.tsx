@@ -72,6 +72,9 @@ export default function Onboarding() {
     () => initialSettings.startupRestoreBehavior,
   );
   const [runOnStartup, setRunOnStartup] = useState(() => initialSettings.runOnStartup);
+  const [trackerBlockEnabled, setTrackerBlockEnabled] = useState(
+    () => initialSettings.trackerBlockEnabled,
+  );
   const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(
     () => initialSettings.autoUpdateOnLaunch,
   );
@@ -159,6 +162,7 @@ export default function Onboarding() {
       layoutId,
       startupRestoreBehavior,
       runOnStartup: canConfigureRunOnStartup ? runOnStartup : false,
+      trackerBlockEnabled,
       autoUpdateOnLaunch: canAutoInstallOnLaunch ? autoUpdateOnLaunch : false,
     });
 
@@ -423,6 +427,22 @@ export default function Onboarding() {
                   checked={autoUpdateOnLaunch}
                   disabled={!canAutoInstallOnLaunch}
                   onChange={(event) => setAutoUpdateOnLaunch(event.currentTarget.checked)}
+                />
+              </label>
+
+              <label className="settings-setting-row" htmlFor="onboarding-tracker-blocking">
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Enable tracker blocking</span>
+                  <span className="settings-setting-description">
+                    Block known analytics and tracking scripts like Google Tag Manager.
+                  </span>
+                </span>
+                <input
+                  id="onboarding-tracker-blocking"
+                  type="checkbox"
+                  className="settings-toggle settings-setting-control"
+                  checked={trackerBlockEnabled}
+                  onChange={(event) => setTrackerBlockEnabled(event.currentTarget.checked)}
                 />
               </label>
 

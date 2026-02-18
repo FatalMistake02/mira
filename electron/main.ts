@@ -111,6 +111,7 @@ const pendingClosedWindowCleanupTimers = new Map<number, NodeJS.Timeout>();
 const onboardingWindowIds = new Set<number>();
 let isQuitting = false;
 let adBlockEnabled = true;
+let trackerBlockEnabled = false;
 let quitOnLastWindowClose = false;
 let hasAttemptedLaunchAutoUpdate = false;
 let onboardingCompleted = false;
@@ -133,6 +134,30 @@ const DEFAULT_BLOCKED_AD_HOSTS = [
   'zedo.com',
   'adform.net',
 ];
+const DEFAULT_BLOCKED_TRACKER_HOSTS = [
+  'googletagmanager.com',
+  'google-analytics.com',
+  'analytics.google.com',
+  'googletagservices.com',
+  'segment.com',
+  'segment.io',
+  'mixpanel.com',
+  'amplitude.com',
+  'hotjar.com',
+  'clarity.ms',
+  'app-measurement.com',
+  'facebook.net',
+  'fullstory.com',
+  'newrelic.com',
+  'datadoghq-browser-agent.com',
+  'bat.bing.com',
+  'snap.licdn.com',
+  'ads-twitter.com',
+  'static.ads-twitter.com',
+  'branch.io',
+  'adjust.com',
+];
+const blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
 const AD_BLOCK_LIST_URLS = [
   // Widely used in Pi-hole setups
   'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
@@ -379,17 +404,31 @@ function isHostBlocked(hostname: string): boolean {
 }
 
 function shouldBlockRequest(url: string, resourceType: string): boolean {
-  if (!adBlockEnabled) return false;
   if (resourceType === 'mainFrame') return false;
 
   try {
     const parsed = new URL(url);
     const protocol = parsed.protocol.toLowerCase();
     if (protocol !== 'http:' && protocol !== 'https:') return false;
-    return isHostBlocked(parsed.hostname.toLowerCase());
+
+    const host = parsed.hostname.toLowerCase();
+    const adBlocked = adBlockEnabled && isHostBlocked(host);
+    const trackerBlocked = trackerBlockEnabled && isTrackerHostBlocked(host);
+    return adBlocked || trackerBlocked;
   } catch {
     return false;
   }
+}
+
+function isTrackerHostBlocked(hostname: string): boolean {
+  let candidate = hostname;
+  while (candidate) {
+    if (blockedTrackerHosts.has(candidate)) return true;
+    const nextDot = candidate.indexOf('.');
+    if (nextDot === -1) return false;
+    candidate = candidate.slice(nextDot + 1);
+  }
+  return false;
 }
 
 function getHistoryFilePath() {
@@ -1805,6 +1844,11 @@ function setupAdBlocker() {
   ipcMain.handle('settings-set-ad-block-enabled', async (_, enabled: unknown) => {
     adBlockEnabled = enabled !== false;
     return adBlockEnabled;
+  });
+
+  ipcMain.handle('settings-set-tracker-block-enabled', async (_, enabled: unknown) => {
+    trackerBlockEnabled = enabled !== false;
+    return trackerBlockEnabled;
   });
 
   ipcMain.handle('settings-set-quit-on-last-window-close', async (_, enabled: unknown) => {

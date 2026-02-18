@@ -131,6 +131,9 @@ export default function Settings() {
   const [tabSleepMode, setTabSleepMode] = useState(() => initialSettings.tabSleepMode);
   const [devToolsOpenMode, setDevToolsOpenMode] = useState(() => initialSettings.devToolsOpenMode);
   const [adBlockEnabled, setAdBlockEnabled] = useState(() => initialSettings.adBlockEnabled);
+  const [trackerBlockEnabled, setTrackerBlockEnabled] = useState(
+    () => initialSettings.trackerBlockEnabled,
+  );
   const [quitOnLastWindowClose, setQuitOnLastWindowClose] = useState(
     () => initialSettings.quitOnLastWindowClose,
   );
@@ -265,6 +268,7 @@ export default function Settings() {
         tabSleepMode,
         devToolsOpenMode,
         adBlockEnabled,
+        trackerBlockEnabled,
         quitOnLastWindowClose,
         showNewTabBranding,
         disableNewTabIntro,
@@ -294,6 +298,7 @@ export default function Settings() {
     tabSleepMode,
     devToolsOpenMode,
     adBlockEnabled,
+    trackerBlockEnabled,
     quitOnLastWindowClose,
     showNewTabBranding,
     disableNewTabIntro,
@@ -786,7 +791,7 @@ export default function Settings() {
                   <span className="settings-setting-meta">
                     <span className="settings-setting-label">Enable ad blocking</span>
                     <span className="settings-setting-description">
-                      Block known ad and tracker requests while browsing.
+                      Block known ad and marketing hosts while browsing.
                     </span>
                   </span>
                   <input
@@ -796,6 +801,25 @@ export default function Settings() {
                     checked={adBlockEnabled}
                     onChange={(e) => {
                       setAdBlockEnabled(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+
+                <label htmlFor="tracker-block-enabled" className="settings-setting-row">
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Enable tracker blocking</span>
+                    <span className="settings-setting-description">
+                      Block known analytics and tracking scripts like Google Tag Manager.
+                    </span>
+                  </span>
+                  <input
+                    id="tracker-block-enabled"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={trackerBlockEnabled}
+                    onChange={(e) => {
+                      setTrackerBlockEnabled(e.currentTarget.checked);
                       setSaveStatus('saving');
                     }}
                   />
