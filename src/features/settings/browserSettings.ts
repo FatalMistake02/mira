@@ -16,6 +16,7 @@ export type BrowserSettings = {
   tabSleepMode: TabSleepMode;
   devToolsOpenMode: DevToolsOpenMode;
   adBlockEnabled: boolean;
+  trackerBlockEnabled: boolean;
   quitOnLastWindowClose: boolean;
   showNewTabBranding: boolean;
   disableNewTabIntro: boolean;
@@ -35,6 +36,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   tabSleepMode: 'freeze',
   devToolsOpenMode: 'side',
   adBlockEnabled: false,
+  trackerBlockEnabled: false,
   quitOnLastWindowClose: false,
   showNewTabBranding: false,
   disableNewTabIntro: false,
@@ -115,6 +117,17 @@ function normalizeDevToolsOpenMode(value: unknown): DevToolsOpenMode {
 function normalizeAdBlockEnabled(value: unknown): boolean {
   if (typeof value !== 'boolean') {
     return DEFAULT_BROWSER_SETTINGS.adBlockEnabled;
+  }
+
+  return value;
+}
+
+function normalizeTrackerBlockEnabled(
+  value: unknown,
+  fallbackAdBlockEnabled: boolean,
+): boolean {
+  if (typeof value !== 'boolean') {
+    return fallbackAdBlockEnabled;
   }
 
   return value;
@@ -201,6 +214,10 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     tabSleepMode: normalizeTabSleepMode(candidate.tabSleepMode),
     devToolsOpenMode: normalizeDevToolsOpenMode(candidate.devToolsOpenMode),
     adBlockEnabled: normalizeAdBlockEnabled(candidate.adBlockEnabled),
+    trackerBlockEnabled: normalizeTrackerBlockEnabled(
+      candidate.trackerBlockEnabled,
+      normalizeAdBlockEnabled(candidate.adBlockEnabled),
+    ),
     quitOnLastWindowClose: normalizeQuitOnLastWindowClose(candidate.quitOnLastWindowClose),
     showNewTabBranding: normalizeShowNewTabBranding(candidate.showNewTabBranding),
     disableNewTabIntro: normalizeDisableNewTabIntro(candidate.disableNewTabIntro),
