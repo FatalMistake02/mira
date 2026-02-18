@@ -823,125 +823,6 @@ export default function Settings() {
           <>
             <section className="theme-panel settings-card">
               <div className="settings-card-header">
-                <h2 className="settings-card-title">Layout</h2>
-              </div>
-              <div className="settings-setting-row">
-                <label
-                  htmlFor="layout-dropdown-button"
-                  className="settings-setting-meta"
-                >
-                  <span className="settings-setting-label">Active layout</span>
-                  <span className="settings-setting-description">
-                    Choose which layout profile is used by the browser UI.
-                  </span>
-                </label>
-                <div
-                  ref={layoutDropdownRef}
-                  className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
-                >
-                  <button
-                    id="layout-dropdown-button"
-                    type="button"
-                    onClick={() =>
-                      setLayoutDropdownOpen((open) => {
-                        const nextOpen = !open;
-                        if (nextOpen) setThemeDropdownOpen(false);
-                        return nextOpen;
-                      })
-                    }
-                    className={`theme-btn theme-btn-nav settings-dropdown-trigger ${
-                      layoutDropdownOpen ? 'settings-dropdown-trigger-open' : ''
-                    }`}
-                  >
-                    <span className="settings-dropdown-value">
-                      {selectedLayout ? formatLayoutLabel(selectedLayout) : 'No layouts available'}
-                    </span>
-                    {layoutDropdownOpen ? (
-                      <ChevronUp
-                        size={14}
-                        className="settings-dropdown-caret-icon"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <ChevronDown
-                        size={14}
-                        className="settings-dropdown-caret-icon"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </button>
-
-                  {layoutDropdownOpen && (
-                    <div className="theme-panel settings-dropdown-menu">
-                      {layouts.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="settings-dropdown-item"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleLayoutChange(entry.id);
-                              setLayoutDropdownOpen(false);
-                            }}
-                            className={`theme-btn settings-dropdown-choice ${
-                              entry.id === layoutId
-                                ? 'theme-btn-go settings-dropdown-choice-selected'
-                                : 'theme-btn-nav'
-                            }`}
-                          >
-                            <span className="settings-dropdown-choice-label">{formatLayoutLabel(entry)}</span>
-                            {entry.id === layoutId && (
-                              <Check
-                                size={14}
-                                className="settings-dropdown-choice-check"
-                                aria-hidden="true"
-                              />
-                            )}
-                          </button>
-
-                          {entry.source === 'custom' && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLayout(entry.id)}
-                              className="theme-btn theme-btn-nav settings-btn-pad"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="settings-actions-row">
-                <button
-                  onClick={() => layoutFileInputRef.current?.click()}
-                  type="button"
-                  className="theme-btn theme-btn-nav settings-btn-pad"
-                >
-                  Add Layout JSON
-                </button>
-                <input
-                  ref={layoutFileInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleImportLayout}
-                  style={{ display: 'none' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => navigate('mira://LayoutCreator')}
-                  className="theme-btn theme-btn-nav settings-btn-pad"
-                >
-                  Open Layout Creator
-                </button>
-              </div>
-            </section>
-
-            <section className="theme-panel settings-card">
-              <div className="settings-card-header">
                 <h2 className="settings-card-title">Theme</h2>
               </div>
               <div className="settings-setting-row">
@@ -1079,6 +960,125 @@ export default function Settings() {
                   }}
                 />
               </label>
+            </section>
+
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Layout</h2>
+              </div>
+              <div className="settings-setting-row">
+                <label
+                  htmlFor="layout-dropdown-button"
+                  className="settings-setting-meta"
+                >
+                  <span className="settings-setting-label">Active layout</span>
+                  <span className="settings-setting-description">
+                    Choose which layout profile is used by the browser UI.
+                  </span>
+                </label>
+                <div
+                  ref={layoutDropdownRef}
+                  className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
+                >
+                  <button
+                    id="layout-dropdown-button"
+                    type="button"
+                    onClick={() =>
+                      setLayoutDropdownOpen((open) => {
+                        const nextOpen = !open;
+                        if (nextOpen) setThemeDropdownOpen(false);
+                        return nextOpen;
+                      })
+                    }
+                    className={`theme-btn theme-btn-nav settings-dropdown-trigger ${
+                      layoutDropdownOpen ? 'settings-dropdown-trigger-open' : ''
+                    }`}
+                  >
+                    <span className="settings-dropdown-value">
+                      {selectedLayout ? formatLayoutLabel(selectedLayout) : 'No layouts available'}
+                    </span>
+                    {layoutDropdownOpen ? (
+                      <ChevronUp
+                        size={14}
+                        className="settings-dropdown-caret-icon"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <ChevronDown
+                        size={14}
+                        className="settings-dropdown-caret-icon"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
+
+                  {layoutDropdownOpen && (
+                    <div className="theme-panel settings-dropdown-menu">
+                      {layouts.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="settings-dropdown-item"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleLayoutChange(entry.id);
+                              setLayoutDropdownOpen(false);
+                            }}
+                            className={`theme-btn settings-dropdown-choice ${
+                              entry.id === layoutId
+                                ? 'theme-btn-go settings-dropdown-choice-selected'
+                                : 'theme-btn-nav'
+                            }`}
+                          >
+                            <span className="settings-dropdown-choice-label">{formatLayoutLabel(entry)}</span>
+                            {entry.id === layoutId && (
+                              <Check
+                                size={14}
+                                className="settings-dropdown-choice-check"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+
+                          {entry.source === 'custom' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLayout(entry.id)}
+                              className="theme-btn theme-btn-nav settings-btn-pad"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="settings-actions-row">
+                <button
+                  onClick={() => layoutFileInputRef.current?.click()}
+                  type="button"
+                  className="theme-btn theme-btn-nav settings-btn-pad"
+                >
+                  Add Layout JSON
+                </button>
+                <input
+                  ref={layoutFileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleImportLayout}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => navigate('mira://LayoutCreator')}
+                  className="theme-btn theme-btn-nav settings-btn-pad"
+                >
+                  Open Layout Creator
+                </button>
+              </div>
             </section>
 
             {!!importMessage && <div className="theme-text2 settings-inline-message">{importMessage}</div>}

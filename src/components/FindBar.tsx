@@ -140,7 +140,7 @@ export default function FindBar({ open, focusToken, onClose }: FindBarProps) {
       <button
         type="button"
         title="Previous match (Shift+Enter)"
-        className="theme-btn theme-btn-nav"
+        className="theme-btn theme-btn-nav nav-icon-btn"
         onClick={() => findNext(false)}
         disabled={!canSearchInPage || !hasQuery}
         style={{
@@ -156,7 +156,7 @@ export default function FindBar({ open, focusToken, onClose }: FindBarProps) {
       <button
         type="button"
         title="Next match (Enter)"
-        className="theme-btn theme-btn-nav"
+        className="theme-btn theme-btn-nav nav-icon-btn"
         onClick={() => findNext(true)}
         disabled={!canSearchInPage || !hasQuery}
         style={{
@@ -204,7 +204,7 @@ export default function FindBar({ open, focusToken, onClose }: FindBarProps) {
       <button
         type="button"
         title="Close find"
-        className="theme-btn theme-btn-nav"
+        className="theme-btn theme-btn-nav nav-icon-btn"
         onClick={onClose}
         style={{
           padding: '4px 8px',

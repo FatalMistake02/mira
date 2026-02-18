@@ -126,7 +126,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         onClick={goBack}
         disabled={!canGoBack}
         title="Back"
-        className="theme-btn theme-btn-nav"
+        className="theme-btn theme-btn-nav nav-icon-btn"
         style={{
           padding: '4px 8px',
           height: 'var(--layoutNavButtonHeight, 30px)',
@@ -142,7 +142,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         onClick={goForward}
         disabled={!canGoForward}
         title="Forward"
-        className="theme-btn theme-btn-nav"
+        className="theme-btn theme-btn-nav nav-icon-btn"
         style={{
           padding: '4px 8px',
           height: 'var(--layoutNavButtonHeight, 30px)',
@@ -157,7 +157,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       <button
         onClick={reload}
         title="Refresh"
-        className="theme-btn theme-btn-nav"
+        className="theme-btn theme-btn-nav nav-icon-btn"
         style={{
           padding: '4px 8px',
           height: 'var(--layoutNavButtonHeight, 30px)',
@@ -194,7 +194,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         <button
           onClick={() => setMenuOpen((prev) => !prev)}
           title="Menu"
-          className="theme-btn theme-btn-nav"
+          className="theme-btn theme-btn-nav nav-icon-btn"
           style={{
             padding: '4px 8px',
             height: 'var(--layoutNavButtonHeight, 30px)',

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
 
@@ -332,7 +332,7 @@ export default function TabBar() {
                   transition: draggingTabId === tab.id ? 'none' : 'opacity 110ms ease',
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
                   boxShadow:
-                    draggingTabId === tab.id ? '0 6px 18px rgba(0, 0, 0, 0.28)' : undefined,
+                    draggingTabId === tab.id ? 'var(--tabDragShadow, 0 6px 18px rgba(0, 0, 0, 0.28))' : undefined,
                 }}
               >
                 {displayFavicon ? (
@@ -356,7 +356,7 @@ export default function TabBar() {
                       height: 16,
                       borderRadius: 3,
                       display: 'inline-block',
-                      background: 'var(--borderColor, rgba(255,255,255,0.2))',
+                      background: 'var(--tabPlaceholderBg, var(--surfaceBorder, var(--tabBorder)))',
                       flexShrink: 0,
                     }}
                   />
@@ -388,7 +388,7 @@ export default function TabBar() {
                   className="theme-btn tab-close-btn"
                   style={{
                     opacity: 0.8,
-                    padding: 2,
+                    padding: 4,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -396,23 +396,24 @@ export default function TabBar() {
                     WebkitAppRegion: 'no-drag',
                   }}
                 >
-                  <X size={12} strokeWidth={2.2} aria-hidden="true" />
+                  <X size={14} strokeWidth={2.2} aria-hidden="true" />
                 </button>
               </div>
             );
           })}
           <button
             onClick={() => newTab()}
-            className="theme-btn theme-btn-nav"
+            className="theme-btn theme-btn-nav nav-icon-btn tab-new-tab-btn"
             style={{
               height: TAB_ROW_HEIGHT,
-              minWidth: 'var(--layoutDownloadButtonSize, 34px)',
-              padding: '0 10px',
+              width: 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
+              minWidth: 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
+              marginTop: 1,
               flexShrink: 0,
               WebkitAppRegion: 'no-drag',
             }}
           >
-            +
+            <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
           </button>
         </div>
         <div
@@ -439,7 +440,7 @@ export default function TabBar() {
             border: 'var(--layoutBorderWidth, 1px) solid var(--surfaceBorder, var(--tabBorder))',
             borderRadius: 'var(--layoutPanelRadius, 8px)',
             padding: 6,
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.35)',
+            boxShadow: 'var(--menuShadow, 0 10px 30px rgba(0, 0, 0, 0.35))',
             WebkitAppRegion: 'no-drag',
           }}
           onClick={(event) => event.stopPropagation()}

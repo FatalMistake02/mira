@@ -83,6 +83,48 @@ body {
   --layoutNavButtonHeight: 30px;
   --layoutDownloadButtonSize: 34px;
   --layoutDownloadIndicatorVisibility: always;
+  --accentPrimary: #3b82f6;
+  --accentPrimarySoft: #1d5cff;
+  --accentText: #9fd0ff;
+  --focusOutline: var(--navButtonBorderActive);
+  --windowCloseButtonBgHover: #e81123;
+  --windowCloseButtonBgActive: #c50f1f;
+  --windowCloseButtonText: #ffffff;
+  --tabCloseButtonBgHover: color-mix(in srgb, var(--tabText, var(--text1)) 14%, transparent);
+  --tabCloseButtonBgActive: color-mix(in srgb, var(--tabText, var(--text1)) 20%, transparent);
+  --tabPlaceholderBg: color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 55%, transparent);
+  --tabDragShadow: 0 6px 18px color-mix(in srgb, var(--bg) 72%, transparent);
+  --menuShadow: 0 10px 30px color-mix(in srgb, var(--bg) 78%, transparent);
+  --dropdownShadow:
+    0 14px 32px color-mix(in srgb, var(--bg) 56%, transparent),
+    0 2px 8px color-mix(in srgb, var(--bg) 40%, transparent);
+  --dropdownCaretColor: color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white);
+  --dropdownChoiceSelectedBg: color-mix(
+    in srgb,
+    var(--navButtonBgActive, var(--buttonBgActive)) 86%,
+    var(--accentPrimarySoft) 14%
+  );
+  --dropdownChoiceSelectedBorder: color-mix(
+    in srgb,
+    var(--navButtonBorderActive, var(--buttonBorderActive)) 74%,
+    var(--accentPrimary) 26%
+  );
+  --dropdownChoiceCheckColor: var(--accentText);
+  --toggleCheckedBg: color-mix(
+    in srgb,
+    var(--navButtonBgActive, var(--buttonBgActive)) 52%,
+    var(--accentPrimarySoft) 48%
+  );
+  --toggleCheckedBorder: color-mix(
+    in srgb,
+    var(--navButtonBorderActive, var(--buttonBorderActive)) 46%,
+    var(--accentPrimary) 54%
+  );
+  --toggleCheckedKnob: color-mix(
+    in srgb,
+    var(--navButtonTextActive, var(--buttonTextActive)) 76%,
+    #dbeafe 24%
+  );
 }
 
 body {
@@ -160,11 +202,11 @@ body {
 }
 
 .tab-close-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--tabText, var(--textColor)) 14%, transparent);
+  background: var(--tabCloseButtonBgHover, color-mix(in srgb, var(--tabText, var(--text1)) 14%, transparent));
 }
 
 .tab-close-btn:active:not(:disabled) {
-  background: color-mix(in srgb, var(--tabText, var(--textColor)) 20%, transparent);
+  background: var(--tabCloseButtonBgActive, color-mix(in srgb, var(--tabText, var(--text1)) 20%, transparent));
 }
 
 .theme-btn-nav {
@@ -183,6 +225,35 @@ body {
   background: var(--navButtonBgActive, var(--buttonBgActive));
   border-color: var(--navButtonBorderActive, var(--buttonBorderActive));
   color: var(--navButtonTextActive, var(--buttonTextActive));
+}
+
+.nav-icon-btn {
+  width: var(--layoutNavButtonHeight, 30px);
+  min-width: var(--layoutNavButtonHeight, 30px);
+  height: var(--layoutNavButtonHeight, 30px);
+  padding: 0 !important;
+  border: none;
+  border-radius: 999px;
+}
+
+.nav-icon-btn:hover:not(:disabled),
+.nav-icon-btn:active:not(:disabled) {
+  border: none;
+}
+
+.tab-new-tab-btn {
+  background: var(--surfaceBg, var(--tabBg));
+  color: var(--surfaceText, var(--tabText));
+}
+
+.tab-new-tab-btn:hover:not(:disabled) {
+  background: var(--surfaceBgHover, var(--tabBgHover));
+  color: var(--surfaceTextHover, var(--tabTextHover));
+}
+
+.tab-new-tab-btn:active:not(:disabled) {
+  background: var(--surfaceBgActive, var(--tabBgActive));
+  color: var(--surfaceTextActive, var(--tabTextActive));
 }
 
 .theme-btn-download {
@@ -476,7 +547,7 @@ body {
 
 .settings-dropdown-caret-icon {
   flex: 0 0 auto;
-  color: color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white);
+  color: var(--dropdownCaretColor, color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white));
   opacity: 0.92;
 }
 
@@ -489,9 +560,7 @@ body {
   border-radius: 8px;
   overflow-y: auto;
   max-height: 260px;
-  box-shadow:
-    0 14px 32px color-mix(in srgb, var(--bg) 56%, transparent),
-    0 2px 8px color-mix(in srgb, var(--bg) 40%, transparent);
+  box-shadow: var(--dropdownShadow);
 }
 
 .settings-dropdown-item {
@@ -524,14 +593,20 @@ body {
 }
 
 .settings-dropdown-choice-selected {
-  background: color-mix(in srgb, var(--navButtonBgActive, var(--buttonBgActive)) 86%, #1d5cff 14%);
-  border-color: color-mix(in srgb, var(--navButtonBorderActive, var(--buttonBorderActive)) 74%, #3b82f6 26%);
+  background: var(
+    --dropdownChoiceSelectedBg,
+    color-mix(in srgb, var(--navButtonBgActive, var(--buttonBgActive)) 86%, var(--accentPrimarySoft) 14%)
+  );
+  border-color: var(
+    --dropdownChoiceSelectedBorder,
+    color-mix(in srgb, var(--navButtonBorderActive, var(--buttonBorderActive)) 74%, var(--accentPrimary) 26%)
+  );
   color: var(--navButtonTextActive, var(--buttonTextActive));
 }
 
 .settings-dropdown-choice-check {
   flex: 0 0 auto;
-  color: #9fd0ff;
+  color: var(--dropdownChoiceCheckColor, var(--accentText));
 }
 
 .settings-dropdown-choice:hover:not(:disabled) {
@@ -658,17 +733,17 @@ body {
 }
 
 .settings-toggle:checked {
-  background: color-mix(in srgb, var(--navButtonBgActive, var(--buttonBgActive)) 52%, #1d4ef0 48%);
-  border-color: color-mix(in srgb, var(--navButtonBorderActive, var(--buttonBorderActive)) 46%, #3b82f6 54%);
+  background: var(--toggleCheckedBg);
+  border-color: var(--toggleCheckedBorder);
 }
 
 .settings-toggle:checked::after {
   transform: translateX(20px);
-  background: color-mix(in srgb, var(--navButtonTextActive, var(--buttonTextActive)) 76%, #dbeafe 24%);
+  background: var(--toggleCheckedKnob);
 }
 
 .settings-toggle:focus-visible {
-  outline: 2px solid var(--navButtonBorderActive, var(--buttonBorderActive));
+  outline: 2px solid var(--focusOutline, var(--navButtonBorderActive, var(--buttonBorderActive)));
   outline-offset: 2px;
 }
 
@@ -745,13 +820,13 @@ body {
 }
 
 .topbar-window-btn-close:hover:not(:disabled) {
-  background: #e81123;
-  color: #ffffff;
+  background: var(--windowCloseButtonBgHover, #e81123);
+  color: var(--windowCloseButtonText, #ffffff);
 }
 
 .topbar-window-btn-close:active:not(:disabled) {
-  background: #c50f1f;
-  color: #ffffff;
+  background: var(--windowCloseButtonBgActive, #c50f1f);
+  color: var(--windowCloseButtonText, #ffffff);
 }
 
 .theme-tab {
