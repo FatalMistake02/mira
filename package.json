@@ -1,9 +1,14 @@
 {
   "name": "mira",
+  "description": "A browser",
+  "author": "Mira Community",
+  "license": "MIT",
   "private": true,
   "version": "0.8.1",
   "type": "module",
   "main": "electron/main.ts",
+  "homepage": "https://mira.fatalmistake02.com",
+  "repository": "https://github.com/FatalMistake02/mira",
   "scripts": {
     "dev:react": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
