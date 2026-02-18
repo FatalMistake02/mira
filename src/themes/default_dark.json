@@ -68,6 +68,14 @@
     "surfaceTextActive": "#ffffff",
     "surfaceBorder": "#353535",
     "surfaceBorderHover": "#464646",
-    "surfaceBorderActive": "#595959"
+    "surfaceBorderActive": "#595959",
+    "contextMenuBg": "#202020",
+    "contextMenuBgHover": "#2b2b2b",
+    "contextMenuBgActive": "#363636",
+    "contextMenuText": "#efefef",
+    "contextMenuTextHover": "#ffffff",
+    "contextMenuBorder": "#474747",
+    "contextMenuDivider": "#5f5f5f",
+    "contextMenuShadow": "0 16px 38px rgba(0, 0, 0, 0.46)"
   }
 }

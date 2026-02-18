@@ -1,8 +1,10 @@
 /// <reference types="vite/client" />
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTabs } from './TabsProvider';
 import { BROWSER_SETTINGS_CHANGED_EVENT, getBrowserSettings } from '../settings/browserSettings';
 import { getThemeById } from '../themes/themeLoader';
+import { electron } from '../../electronBridge';
+import ContextMenu, { type ContextMenuEntry } from '../../components/ContextMenu';
 
 interface WebviewNavigationEvent extends Event {
   url: string;
@@ -31,6 +33,31 @@ interface WebviewFoundInPageEvent extends Event {
   finalUpdate?: boolean;
 }
 
+interface WebviewContextMenuEditFlags {
+  canUndo?: boolean;
+  canRedo?: boolean;
+  canCut?: boolean;
+  canCopy?: boolean;
+  canPaste?: boolean;
+  canPasteAndMatchStyle?: boolean;
+  canSelectAll?: boolean;
+}
+
+interface WebviewContextMenuParams {
+  x?: number;
+  y?: number;
+  pageURL?: string;
+  linkURL?: string;
+  srcURL?: string;
+  mediaType?: string;
+  isEditable?: boolean;
+  editFlags?: WebviewContextMenuEditFlags;
+}
+
+interface WebviewContextMenuEvent extends Event {
+  params?: WebviewContextMenuParams;
+}
+
 interface WebviewElement extends HTMLElement {
   src: string;
   reload: () => void;
@@ -50,6 +77,36 @@ interface WebviewElement extends HTMLElement {
   didPageTitleUpdatedHandler?: (e: WebviewPageTitleUpdatedEvent) => void;
   pageFaviconUpdatedHandler?: (e: WebviewPageFaviconUpdatedEvent) => void;
   foundInPageHandler?: (e: WebviewFoundInPageEvent) => void;
+  contextMenuHandler?: (e: WebviewContextMenuEvent) => void;
+}
+
+interface NormalizedContextMenuEditFlags {
+  canUndo: boolean;
+  canRedo: boolean;
+  canCut: boolean;
+  canCopy: boolean;
+  canPaste: boolean;
+  canPasteAndMatchStyle: boolean;
+  canSelectAll: boolean;
+}
+
+interface NormalizedContextMenuParams {
+  x: number;
+  y: number;
+  pageURL: string;
+  linkURL: string;
+  srcURL: string;
+  mediaType: string;
+  isEditable: boolean;
+  editFlags: NormalizedContextMenuEditFlags;
+}
+
+interface PageContextMenuState {
+  tabId: string;
+  webContentsId: number;
+  x: number;
+  y: number;
+  params: NormalizedContextMenuParams;
 }
 
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
@@ -63,6 +120,28 @@ function normalizeComparableUrl(url: string): string {
   } catch {
     return trimmed;
   }
+}
+
+function normalizeContextMenuParams(params?: WebviewContextMenuParams): NormalizedContextMenuParams {
+  const editFlags = params?.editFlags;
+  return {
+    x: Number.isFinite(params?.x) ? Math.floor(params?.x ?? 0) : 0,
+    y: Number.isFinite(params?.y) ? Math.floor(params?.y ?? 0) : 0,
+    pageURL: typeof params?.pageURL === 'string' ? params.pageURL.trim() : '',
+    linkURL: typeof params?.linkURL === 'string' ? params.linkURL.trim() : '',
+    srcURL: typeof params?.srcURL === 'string' ? params.srcURL.trim() : '',
+    mediaType: typeof params?.mediaType === 'string' ? params.mediaType.trim().toLowerCase() : '',
+    isEditable: params?.isEditable === true,
+    editFlags: {
+      canUndo: editFlags?.canUndo ?? true,
+      canRedo: editFlags?.canRedo ?? true,
+      canCut: editFlags?.canCut ?? true,
+      canCopy: editFlags?.canCopy ?? true,
+      canPaste: editFlags?.canPaste ?? true,
+      canPasteAndMatchStyle: editFlags?.canPasteAndMatchStyle ?? true,
+      canSelectAll: editFlags?.canSelectAll ?? true,
+    },
+  };
 }
 
 function applyRawFileDarkModeStyle(webview: WebviewElement, shouldApply: boolean) {
@@ -138,8 +217,19 @@ function renderInternal(url: string, reloadToken: number) {
 }
 
 export default function TabView() {
-  const { tabs, activeId, navigate, updateTabMetadata, registerWebview, updateFindInPageMatches } =
-    useTabs();
+  const {
+    tabs,
+    activeId,
+    navigate,
+    updateTabMetadata,
+    registerWebview,
+    updateFindInPageMatches,
+    newTab,
+    goBack,
+    goForward,
+    reload,
+    printPage,
+  } = useTabs();
   const [tabSleepMode, setTabSleepMode] = useState(() => getBrowserSettings().tabSleepMode);
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => getBrowserSettings().rawFileDarkModeEnabled,
@@ -148,6 +238,7 @@ export default function TabView() {
     const settings = getBrowserSettings();
     return getThemeById(settings.themeId)?.mode ?? 'dark';
   });
+  const [pageMenuState, setPageMenuState] = useState<PageContextMenuState | null>(null);
 
   useEffect(() => {
     const syncSettings = () => {
@@ -171,6 +262,183 @@ export default function TabView() {
   }, [rawFileDarkModeEnabled, themeMode]);
 
   const shouldApplyRawFileDarkMode = rawFileDarkModeEnabled && themeMode === 'dark';
+
+  const closePageMenu = useCallback(() => {
+    setPageMenuState(null);
+  }, []);
+
+  useEffect(() => {
+    if (!pageMenuState) return;
+
+    const tabStillExists = tabs.some((tab) => tab.id === pageMenuState.tabId);
+    if (tabStillExists && pageMenuState.tabId === activeId) return;
+    setPageMenuState(null);
+  }, [tabs, activeId, pageMenuState]);
+
+  const runWebviewContextAction = useCallback(
+    (
+      action: string,
+      payload?: {
+        url?: string;
+        text?: string;
+        x?: number;
+        y?: number;
+      },
+    ) => {
+      if (!pageMenuState) return;
+      const ipc = electron?.ipcRenderer;
+      if (!ipc) return;
+
+      void ipc
+        .invoke('webview-context-action', {
+          webContentsId: pageMenuState.webContentsId,
+          action,
+          url: payload?.url,
+          text: payload?.text,
+          x: payload?.x,
+          y: payload?.y,
+        })
+        .catch(() => undefined);
+    },
+    [pageMenuState],
+  );
+
+  const openInNewTabFromMenu = useCallback(
+    (url: string) => {
+      const normalized = url.trim();
+      if (!normalized) return;
+      closePageMenu();
+      const ipc = electron?.ipcRenderer;
+      if (ipc) {
+        void ipc.invoke<boolean>('tab-open-url-in-new-tab', normalized).catch(() => {
+          window.setTimeout(() => {
+            newTab(normalized);
+          }, 0);
+        });
+        return;
+      }
+      window.setTimeout(() => {
+        newTab(normalized);
+      }, 0);
+    },
+    [closePageMenu, newTab],
+  );
+
+  const pageMenuEntries = useMemo<ContextMenuEntry[]>(() => {
+    if (!pageMenuState) return [];
+
+    const currentTab = tabs.find((tab) => tab.id === pageMenuState.tabId) ?? null;
+    const params = pageMenuState.params;
+    const sourceUrl = params.pageURL || currentTab?.url || '';
+
+    const canGoBack = !!currentTab && currentTab.historyIndex > 0;
+    const canGoForward = !!currentTab && currentTab.historyIndex < currentTab.history.length - 1;
+
+    const item = (
+      label: string,
+      onSelect: () => void,
+      options?: { disabled?: boolean },
+    ): ContextMenuEntry => ({
+      type: 'item',
+      label,
+      onSelect,
+      disabled: options?.disabled,
+    });
+    const separator = (): ContextMenuEntry => ({ type: 'separator' });
+    const inspectEntry = item('Inspect', () =>
+      runWebviewContextAction('inspect-element', { x: params.x, y: params.y }),
+    );
+
+    if (params.isEditable) {
+      return [
+        item('Undo', () => runWebviewContextAction('edit-undo'), {
+          disabled: !params.editFlags.canUndo,
+        }),
+        item('Redo', () => runWebviewContextAction('edit-redo'), {
+          disabled: !params.editFlags.canRedo,
+        }),
+        separator(),
+        item('Cut', () => runWebviewContextAction('edit-cut'), {
+          disabled: !params.editFlags.canCut,
+        }),
+        item('Copy', () => runWebviewContextAction('edit-copy'), {
+          disabled: !params.editFlags.canCopy,
+        }),
+        item('Paste', () => runWebviewContextAction('edit-paste'), {
+          disabled: !params.editFlags.canPaste,
+        }),
+        item('Paste as Plain Text', () => runWebviewContextAction('edit-paste-as-plain-text'), {
+          disabled: !params.editFlags.canPasteAndMatchStyle,
+        }),
+        separator(),
+        item('Select All', () => runWebviewContextAction('edit-select-all'), {
+          disabled: !params.editFlags.canSelectAll,
+        }),
+        separator(),
+        inspectEntry,
+      ];
+    }
+
+    if (params.mediaType === 'image' || !!params.srcURL) {
+      return [
+        item('Open Image in New Tab', () => openInNewTabFromMenu(params.srcURL), {
+          disabled: !params.srcURL,
+        }),
+        item('Save Image As', () => runWebviewContextAction('download-url', { url: params.srcURL }), {
+          disabled: !params.srcURL,
+        }),
+        item('Copy Image', () => runWebviewContextAction('copy-image-at', { x: params.x, y: params.y })),
+        item('Copy Image Address', () => runWebviewContextAction('copy-text', { text: params.srcURL }), {
+          disabled: !params.srcURL,
+        }),
+        separator(),
+        inspectEntry,
+      ];
+    }
+
+    if (params.linkURL) {
+      return [
+        item('Open in New Tab', () => openInNewTabFromMenu(params.linkURL)),
+        item('Open in New Window', () => {
+          const ipc = electron?.ipcRenderer;
+          if (ipc) {
+            void ipc.invoke('window-new-with-url', params.linkURL).catch(() => undefined);
+            return;
+          }
+          window.open(params.linkURL, '_blank', 'noopener,noreferrer');
+        }),
+        separator(),
+        item('Copy Link Address', () => runWebviewContextAction('copy-text', { text: params.linkURL })),
+        item('Save Link As', () => runWebviewContextAction('download-url', { url: params.linkURL })),
+        separator(),
+        inspectEntry,
+      ];
+    }
+
+    return [
+      item('Back', () => goBack(), { disabled: !canGoBack }),
+      item('Forward', () => goForward(), { disabled: !canGoForward }),
+      item('Reload', () => reload()),
+      separator(),
+      item('Save As', () => runWebviewContextAction('save-page-as')),
+      item('Print', () => printPage()),
+      separator(),
+      item('View Source', () => openInNewTabFromMenu(`view-source:${sourceUrl}`), {
+        disabled: !sourceUrl,
+      }),
+      separator(),
+      inspectEntry,
+    ];
+  }, [
+    pageMenuState,
+    tabs,
+    openInNewTabFromMenu,
+    goBack,
+    goForward,
+    reload,
+    printPage,
+    runWebviewContextAction,
+  ]);
 
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
@@ -236,6 +504,9 @@ export default function TabView() {
                   if (wv.foundInPageHandler) {
                     wv.removeEventListener('found-in-page', wv.foundInPageHandler as EventListener);
                   }
+                  if (wv.contextMenuHandler) {
+                    wv.removeEventListener('context-menu', wv.contextMenuHandler as EventListener);
+                  }
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
@@ -271,6 +542,32 @@ export default function TabView() {
                     const matches = typeof result.matches === 'number' ? result.matches : 0;
                     updateFindInPageMatches(tab.id, requestId, activeMatchOrdinal, matches);
                   };
+                  const contextMenuHandler = (e: Event) => {
+                    e.preventDefault();
+
+                    const webContentsId = typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
+                    if (!Number.isFinite(webContentsId) || webContentsId <= 0) return;
+
+                    const ev = e as WebviewContextMenuEvent;
+                    const params = normalizeContextMenuParams(ev.params);
+                    let x = params.x;
+                    let y = params.y;
+
+                    // Some environments report coordinates relative to the webview bounds.
+                    // If direct values look invalid, fall back to translating by webview offset.
+                    if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+                      const webviewRect = wv.getBoundingClientRect();
+                      x = webviewRect.left + params.x;
+                      y = webviewRect.top + params.y;
+                    }
+                    setPageMenuState({
+                      tabId: tab.id,
+                      webContentsId: Math.floor(webContentsId),
+                      x,
+                      y,
+                      params,
+                    });
+                  };
 
                   wv.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
                   wv.didNavigateInPageHandler = didNavigateInPageHandler as (
@@ -286,6 +583,7 @@ export default function TabView() {
                   wv.foundInPageHandler = foundInPageHandler as (
                     e: WebviewFoundInPageEvent,
                   ) => void;
+                  wv.contextMenuHandler = contextMenuHandler as (e: WebviewContextMenuEvent) => void;
 
                   wv.addEventListener('did-navigate', didNavigateHandler);
                   wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
@@ -293,6 +591,7 @@ export default function TabView() {
                   wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
                   wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
                   wv.addEventListener('found-in-page', foundInPageHandler);
+                  wv.addEventListener('context-menu', contextMenuHandler);
 
                   const trackedSrc = wv.getAttribute(WEBVIEW_TRACKED_SRC_ATTR) ?? '';
                   const nextSrc = normalizeComparableUrl(tab.url);
@@ -308,6 +607,13 @@ export default function TabView() {
           </div>
         );
       })}
+      <ContextMenu
+        open={!!pageMenuState}
+        anchor={pageMenuState ? { x: pageMenuState.x, y: pageMenuState.y } : null}
+        entries={pageMenuEntries}
+        onClose={closePageMenu}
+        minWidth={208}
+      />
     </div>
   );
 }

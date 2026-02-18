@@ -95,6 +95,14 @@ body {
   --tabPlaceholderBg: color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 55%, transparent);
   --tabDragShadow: 0 6px 18px color-mix(in srgb, var(--bg) 72%, transparent);
   --menuShadow: 0 10px 30px color-mix(in srgb, var(--bg) 78%, transparent);
+  --contextMenuBg: var(--surfaceBg, var(--tabBg));
+  --contextMenuBgHover: var(--surfaceBgHover, var(--tabBgHover));
+  --contextMenuBgActive: var(--surfaceBgActive, var(--tabBgActive));
+  --contextMenuText: var(--surfaceText, var(--text1));
+  --contextMenuTextHover: var(--surfaceTextHover, var(--text1));
+  --contextMenuBorder: var(--surfaceBorder, var(--tabBorder));
+  --contextMenuDivider: color-mix(in srgb, var(--contextMenuBorder) 72%, transparent);
+  --contextMenuShadow: var(--menuShadow);
   --dropdownShadow:
     0 14px 32px color-mix(in srgb, var(--bg) 56%, transparent),
     0 2px 8px color-mix(in srgb, var(--bg) 40%, transparent);
@@ -980,6 +988,62 @@ body {
 .tab-strip-fade-right {
   right: 0;
   background: linear-gradient(to left, var(--surfaceBg, var(--tabBg)), transparent);
+}
+
+.mira-context-menu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border-radius: var(--layoutPanelRadius, 8px);
+  border: var(--layoutBorderWidth, 1px) solid var(--contextMenuBorder, var(--surfaceBorder));
+  background: var(--contextMenuBg, var(--surfaceBg));
+  box-shadow: var(--contextMenuShadow, var(--menuShadow));
+  color: var(--contextMenuText, var(--surfaceText, var(--text1)));
+  -webkit-app-region: no-drag;
+}
+
+.mira-context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+}
+
+.mira-context-menu-item {
+  width: 100%;
+  border: none;
+  border-radius: var(--layoutControlRadius, 6px);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.25;
+  cursor: default;
+}
+
+.mira-context-menu-item:hover:not(:disabled) {
+  background: var(--contextMenuBgHover, var(--surfaceBgHover));
+  color: var(--contextMenuTextHover, var(--surfaceTextHover, var(--text1)));
+}
+
+.mira-context-menu-item:active:not(:disabled) {
+  background: var(--contextMenuBgActive, var(--surfaceBgActive));
+}
+
+.mira-context-menu-item:disabled {
+  opacity: 0.48;
+}
+
+.mira-context-menu-divider {
+  border: 0;
+  height: 1px;
+  margin: 4px 2px;
+  background: var(
+    --contextMenuDivider,
+    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 70%, transparent)
+  );
 }
 
 @keyframes download-ring-spin {

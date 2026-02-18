@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
+import ContextMenu, { type ContextMenuEntry } from '../../components/ContextMenu';
 
 const TAB_TARGET_WIDTH = 'var(--layoutTabTargetWidth, 220px)';
 const TAB_MIN_WIDTH = 'var(--layoutTabMinWidth, 100px)';
@@ -44,10 +45,22 @@ function getDisplayFavicon(url: string, favicon?: string): string | undefined {
 }
 
 export default function TabBar() {
-  const { tabs, activeId, setActive, closeTab, moveTabToIndex, moveTabToNewWindow, newTab } =
-    useTabs();
-  const [menuTabId, setMenuTabId] = useState<string | null>(null);
-  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const {
+    tabs,
+    activeId,
+    setActive,
+    closeTab,
+    closeOtherTabs,
+    closeTabsToRight,
+    moveTabToIndex,
+    newTabToRight,
+    newTab,
+    reloadTab,
+    duplicateTab,
+  } = useTabs();
+  const [tabMenuState, setTabMenuState] = useState<{ tabId: string; x: number; y: number } | null>(
+    null,
+  );
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -104,20 +117,69 @@ export default function TabBar() {
   }, [tabs.length]);
 
   useEffect(() => {
-    if (!menuPos) return;
-    const closeMenu = () => {
-      setMenuTabId(null);
-      setMenuPos(null);
-    };
-    window.addEventListener('click', closeMenu);
-    window.addEventListener('contextmenu', closeMenu);
-    window.addEventListener('blur', closeMenu);
-    return () => {
-      window.removeEventListener('click', closeMenu);
-      window.removeEventListener('contextmenu', closeMenu);
-      window.removeEventListener('blur', closeMenu);
-    };
-  }, [menuPos]);
+    if (!tabMenuState) return;
+    const tabStillExists = tabs.some((tab) => tab.id === tabMenuState.tabId);
+    if (tabStillExists) return;
+    setTabMenuState(null);
+  }, [tabs, tabMenuState]);
+
+  const closeTabMenu = useCallback(() => {
+    setTabMenuState(null);
+  }, []);
+
+  const tabMenuEntries = useMemo<ContextMenuEntry[]>(() => {
+    if (!tabMenuState) return [];
+
+    const tabIndex = tabs.findIndex((tab) => tab.id === tabMenuState.tabId);
+    const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
+    const hasOtherTabs = tabs.length > 1;
+
+    return [
+      {
+        type: 'item',
+        label: 'New Tab to Right',
+        onSelect: () => newTabToRight(tabMenuState.tabId),
+      },
+      { type: 'separator' },
+      {
+        type: 'item',
+        label: 'Reload',
+        onSelect: () => reloadTab(tabMenuState.tabId),
+      },
+      {
+        type: 'item',
+        label: 'Duplicate',
+        onSelect: () => duplicateTab(tabMenuState.tabId),
+      },
+      { type: 'separator' },
+      {
+        type: 'item',
+        label: 'Close',
+        onSelect: () => closeTab(tabMenuState.tabId),
+      },
+      {
+        type: 'item',
+        label: 'Close Others',
+        disabled: !hasOtherTabs,
+        onSelect: () => closeOtherTabs(tabMenuState.tabId),
+      },
+      {
+        type: 'item',
+        label: 'Close to Right',
+        disabled: !hasTabsToRight,
+        onSelect: () => closeTabsToRight(tabMenuState.tabId),
+      },
+    ];
+  }, [
+    tabMenuState,
+    tabs,
+    newTabToRight,
+    reloadTab,
+    duplicateTab,
+    closeTab,
+    closeOtherTabs,
+    closeTabsToRight,
+  ]);
 
   useEffect(() => {
     if (!draggingTabId) return;
@@ -296,8 +358,7 @@ export default function TabBar() {
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  setMenuTabId(tab.id);
-                  setMenuPos({ x: event.clientX, y: event.clientY });
+                  setTabMenuState({ tabId: tab.id, x: event.clientX, y: event.clientY });
                 }}
                 className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
                 style={{
@@ -428,42 +489,13 @@ export default function TabBar() {
         />
       </div>
 
-      {menuPos && menuTabId ? (
-        <div
-          style={{
-            position: 'fixed',
-            left: menuPos.x,
-            top: menuPos.y,
-            zIndex: 9999,
-            minWidth: 170,
-            background: 'var(--surfaceBg, var(--tabBg))',
-            border: 'var(--layoutBorderWidth, 1px) solid var(--surfaceBorder, var(--tabBorder))',
-            borderRadius: 'var(--layoutPanelRadius, 8px)',
-            padding: 6,
-            boxShadow: 'var(--menuShadow, 0 10px 30px rgba(0, 0, 0, 0.35))',
-            WebkitAppRegion: 'no-drag',
-          }}
-          onClick={(event) => event.stopPropagation()}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          <button
-            className="theme-btn theme-btn-nav"
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '8px 10px',
-              justifyContent: 'flex-start',
-            }}
-            onClick={() => {
-              moveTabToNewWindow(menuTabId);
-              setMenuTabId(null);
-              setMenuPos(null);
-            }}
-          >
-            Move to New Window
-          </button>
-        </div>
-      ) : null}
+      <ContextMenu
+        open={!!tabMenuState}
+        anchor={tabMenuState ? { x: tabMenuState.x, y: tabMenuState.y } : null}
+        entries={tabMenuEntries}
+        onClose={closeTabMenu}
+        minWidth={196}
+      />
     </div>
   );
 }

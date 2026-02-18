@@ -54,10 +54,15 @@ type TabsContextType = {
   tabs: Tab[];
   activeId: string;
   newTab: (url?: string) => void;
+  newTabToRight: (id: string, url?: string) => void;
+  reloadTab: (id: string) => void;
+  duplicateTab: (id: string) => void;
   reopenLastClosedTab: () => void;
   openHistory: () => void;
   openDownloads: () => void;
   closeTab: (id: string) => void;
+  closeOtherTabs: (id: string) => void;
+  closeTabsToRight: (id: string) => void;
   moveTab: (fromId: string, toId: string) => void;
   moveTabToIndex: (tabId: string, toIndex: number) => void;
   moveTabToNewWindow: (id: string) => void;
@@ -533,9 +538,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       const defaultNewTabUrl = getBrowserSettings().newTabPage;
       const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
       const now = Date.now();
-      const id = crypto.randomUUID();
       const newEntry: Tab = {
-        id,
+        id: crypto.randomUUID(),
         url: targetUrl,
         title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
         favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
@@ -550,9 +554,56 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
           .concat(newEntry),
       );
-      setActiveId(id);
+      setActiveId(newEntry.id);
     },
     [activeId],
+  );
+
+  const newTabToRight = useCallback(
+    (id: string, url?: string) => {
+      if (!id) return;
+
+      const defaultNewTabUrl = getBrowserSettings().newTabPage;
+      const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+      const now = Date.now();
+      const newEntry: Tab = {
+        id: crypto.randomUUID(),
+        url: targetUrl,
+        title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
+        favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+        history: [targetUrl],
+        historyIndex: 0,
+        reloadToken: 0,
+        isSleeping: false,
+        lastActiveAt: now,
+      };
+
+      setTabs((currentTabs) => {
+        const sourceIndex = currentTabs.findIndex((tab) => tab.id === id);
+        if (sourceIndex === -1) return currentTabs;
+
+        const nextTabs = currentTabs.map((tab) =>
+          tab.id === activeId ? { ...tab, lastActiveAt: now } : tab,
+        );
+        nextTabs.splice(sourceIndex + 1, 0, newEntry);
+        return nextTabs;
+      });
+
+      setActiveId(newEntry.id);
+    },
+    [activeId],
+  );
+
+  const duplicateTab = useCallback(
+    (id: string) => {
+      if (!id) return;
+      const tabToDuplicate = tabs.find((tab) => tab.id === id);
+      if (!tabToDuplicate) return;
+
+      const sourceUrl = tabToDuplicate.history[tabToDuplicate.historyIndex] ?? tabToDuplicate.url;
+      newTabToRight(id, sourceUrl);
+    },
+    [tabs, newTabToRight],
   );
 
   const openHistory = () => {
@@ -603,6 +654,27 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     window.close();
   };
 
+  const clearTabRuntimeState = useCallback(
+    (id: string) => {
+      delete lastFindQueryByTabRef.current[id];
+      delete activeFindRequestIdByTabRef.current[id];
+      clearFindInPageMatchesForTab(id);
+    },
+    [clearFindInPageMatchesForTab],
+  );
+
+  const rememberRecentlyClosedTabs = useCallback((tabsToRemember: Tab[]) => {
+    if (!tabsToRemember.length) return;
+
+    const clonedTabs = tabsToRemember.map((tab) => ({
+      ...tab,
+      history: [...tab.history],
+    }));
+    recentlyClosedTabsRef.current = [...recentlyClosedTabsRef.current, ...clonedTabs].slice(
+      -MAX_RECENTLY_CLOSED_TABS,
+    );
+  }, []);
+
   const closeTab = (id: string) => {
     const shouldCloseWindow = tabs.length === 1 && tabs[0]?.id === id;
     if (shouldCloseWindow) {
@@ -612,14 +684,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
     const tabToClose = tabs.find((tab) => tab.id === id);
     if (tabToClose) {
-      recentlyClosedTabsRef.current = [
-        ...recentlyClosedTabsRef.current,
-        { ...tabToClose, history: [...tabToClose.history] },
-      ].slice(-MAX_RECENTLY_CLOSED_TABS);
+      rememberRecentlyClosedTabs([tabToClose]);
     }
-    delete lastFindQueryByTabRef.current[id];
-    delete activeFindRequestIdByTabRef.current[id];
-    clearFindInPageMatchesForTab(id);
+    clearTabRuntimeState(id);
 
     setTabs((t) => {
       const next = t.filter((tab) => tab.id !== id);
@@ -633,6 +700,66 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       );
     });
   };
+
+  const closeOtherTabs = useCallback(
+    (id: string) => {
+      if (!id) return;
+      const tabToKeep = tabs.find((tab) => tab.id === id);
+      if (!tabToKeep) return;
+
+      const tabsToClose = tabs.filter((tab) => tab.id !== id);
+      if (!tabsToClose.length) return;
+
+      rememberRecentlyClosedTabs(tabsToClose);
+      tabsToClose.forEach((tab) => {
+        clearTabRuntimeState(tab.id);
+      });
+
+      const now = Date.now();
+      setTabs([
+        {
+          ...tabToKeep,
+          isSleeping: false,
+          lastActiveAt: now,
+        },
+      ]);
+      setActiveId(id);
+    },
+    [tabs, clearTabRuntimeState, rememberRecentlyClosedTabs],
+  );
+
+  const closeTabsToRight = useCallback(
+    (id: string) => {
+      if (!id) return;
+
+      const currentIndex = tabs.findIndex((tab) => tab.id === id);
+      if (currentIndex < 0) return;
+
+      const tabsToClose = tabs.slice(currentIndex + 1);
+      if (!tabsToClose.length) return;
+
+      rememberRecentlyClosedTabs(tabsToClose);
+      const tabsToCloseIds = new Set(tabsToClose.map((tab) => tab.id));
+      tabsToClose.forEach((tab) => {
+        clearTabRuntimeState(tab.id);
+      });
+
+      const activeTabWillClose = tabsToCloseIds.has(activeId);
+      const now = Date.now();
+      setTabs((currentTabs) => {
+        const nextTabs = currentTabs.filter((tab) => !tabsToCloseIds.has(tab.id));
+        if (!activeTabWillClose) return nextTabs;
+        return nextTabs.map((tab) =>
+          tab.id === id ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+        );
+      });
+
+      if (activeTabWillClose) {
+        setActiveId(id);
+      }
+    },
+    [tabs, activeId, clearTabRuntimeState, rememberRecentlyClosedTabs],
+  );
 
   const reopenLastClosedTab = useCallback(() => {
     const lastClosedTab = recentlyClosedTabsRef.current[recentlyClosedTabsRef.current.length - 1];
@@ -897,17 +1024,25 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     );
   };
 
-  const reload = () => {
-    const wv = webviewMap.current[activeId];
+  const reloadTab = useCallback((id: string) => {
+    if (!id) return;
+
+    const wv = webviewMap.current[id];
     if (wv && typeof wv.reload === 'function') {
       wv.reload();
       return;
     }
 
-    setTabs((t) =>
-      t.map((tab) => (tab.id === activeId ? { ...tab, reloadToken: tab.reloadToken + 1 } : tab)),
+    setTabs((currentTabs) =>
+      currentTabs.map((tab) =>
+        tab.id === id ? { ...tab, isSleeping: false, reloadToken: tab.reloadToken + 1 } : tab,
+      ),
     );
-  };
+  }, []);
+
+  const reload = useCallback(() => {
+    reloadTab(activeId);
+  }, [activeId, reloadTab]);
 
   const searchInPage = useCallback(
     (query: string, options?: FindInPageOptions) => {
@@ -1140,10 +1275,15 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         tabs,
         activeId,
         newTab,
+        newTabToRight,
+        reloadTab,
+        duplicateTab,
         reopenLastClosedTab,
         openHistory,
         openDownloads,
         closeTab,
+        closeOtherTabs,
+        closeTabsToRight,
         moveTab,
         moveTabToIndex,
         moveTabToNewWindow,

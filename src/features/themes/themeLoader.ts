@@ -31,6 +31,14 @@ const NON_SPECIFIC_BASE_COLOR_KEYS = [
   'surfaceBorder',
   'surfaceBorderHover',
   'surfaceBorderActive',
+  'contextMenuBg',
+  'contextMenuBgHover',
+  'contextMenuBgActive',
+  'contextMenuText',
+  'contextMenuTextHover',
+  'contextMenuBorder',
+  'contextMenuDivider',
+  'contextMenuShadow',
 ] as const;
 
 type StoredTheme = { id: string; theme: Theme };

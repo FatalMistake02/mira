@@ -1,4 +1,14 @@
-import { app, BrowserWindow, ipcMain, Menu, shell, session, webContents as electronWebContents } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  shell,
+  session,
+  webContents as electronWebContents,
+} from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, WebContents } from 'electron';
 import { appendFileSync, promises as fs, unlinkSync, writeFileSync } from 'fs';
@@ -212,6 +222,37 @@ function isRestorableSessionTabUrl(url: string): boolean {
 
 function sanitizeUserAgent(userAgent: string): string {
   return userAgent.replace(/\sElectron\/[^\s)]+/g, '').trim();
+}
+
+function sanitizeFileNameFragment(value: string): string {
+  const withoutReservedChars = value.replace(/[<>:"/\\|?*]+/g, ' ');
+  const withoutControlChars = Array.from(withoutReservedChars)
+    .filter((char) => char.charCodeAt(0) >= 32)
+    .join('');
+  return withoutControlChars.replace(/\s+/g, ' ').trim();
+}
+
+function getPageSaveDefaultFileName(target: WebContents): string {
+  const titleCandidate = sanitizeFileNameFragment(target.getTitle?.() ?? '');
+  if (titleCandidate) {
+    return `${titleCandidate}.html`;
+  }
+
+  const urlCandidate = (target.getURL?.() ?? '').trim();
+  if (!urlCandidate) return 'page.html';
+
+  try {
+    const parsed = new URL(urlCandidate);
+    const hostname = sanitizeFileNameFragment(parsed.hostname || '');
+    const pathname = sanitizeFileNameFragment(parsed.pathname.split('/').filter(Boolean).join('-'));
+    if (hostname && pathname) return `${hostname}-${pathname}.html`;
+    if (hostname) return `${hostname}.html`;
+  } catch {
+    const fallback = sanitizeFileNameFragment(urlCandidate);
+    if (fallback) return `${fallback}.html`;
+  }
+
+  return 'page.html';
 }
 
 function getAdBlockCachePath(): string {
@@ -1410,24 +1451,6 @@ function setupWebviewTabOpenHandler() {
       triggerNewWindowFromShortcut(hostWindow);
     });
 
-    contents.on('context-menu', (event, params) => {
-      const linkUrl = (params.linkURL ?? '').trim();
-      if (!linkUrl) return;
-
-      const hostWindow = BrowserWindow.fromWebContents(host);
-      if (!hostWindow || hostWindow.isDestroyed()) return;
-
-      const menu = Menu.buildFromTemplate([
-        {
-          label: 'Open Link in New Window',
-          click: () => {
-            createWindow(hostWindow, linkUrl);
-          },
-        },
-      ]);
-      menu.popup({ window: hostWindow });
-    });
-
     contents.setWindowOpenHandler(({ url }) => {
       const normalized = (url ?? '').trim();
       if (!normalized || normalized === 'about:blank') {
@@ -1864,6 +1887,16 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('tab-open-url-in-new-tab', (event, url: unknown) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return false;
+
+    const normalizedUrl = typeof url === 'string' ? url.trim() : '';
+    if (!normalizedUrl) return false;
+    sourceWindow.webContents.send('open-url-in-new-tab', normalizedUrl);
+    return true;
+  });
+
   ipcMain.handle('webview-open-devtools', (event, payload: unknown) => {
     if (typeof payload !== 'object' || !payload) return false;
 
@@ -1918,6 +1951,120 @@ function setupWindowControlsHandlers() {
       if (releaseOverlaySuppression) {
         releaseOverlaySuppression();
       }
+      return false;
+    }
+  });
+
+  ipcMain.handle('webview-context-action', async (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return false;
+
+    const candidate = payload as {
+      webContentsId?: unknown;
+      action?: unknown;
+      x?: unknown;
+      y?: unknown;
+      url?: unknown;
+      text?: unknown;
+    };
+    const webContentsId =
+      typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+        ? Math.floor(candidate.webContentsId)
+        : -1;
+    if (webContentsId <= 0) return false;
+
+    const action = typeof candidate.action === 'string' ? candidate.action.trim() : '';
+    if (!action) return false;
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return false;
+
+    const host = target.hostWebContents;
+    if (!host || host.id !== event.sender.id) return false;
+    const hostWindow = BrowserWindow.fromWebContents(host);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x) ? Math.floor(candidate.x) : 0;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y) ? Math.floor(candidate.y) : 0;
+    const url = typeof candidate.url === 'string' ? candidate.url.trim() : '';
+    const text = typeof candidate.text === 'string' ? candidate.text : '';
+
+    try {
+      switch (action) {
+        case 'save-page-as': {
+          const defaultPath = path.join(app.getPath('downloads'), getPageSaveDefaultFileName(target));
+          const saveResult = await dialog.showSaveDialog(hostWindow, {
+            title: 'Save Page As',
+            defaultPath,
+            filters: [
+              { name: 'Web Page', extensions: ['html', 'htm'] },
+              { name: 'All Files', extensions: ['*'] },
+            ],
+          });
+          if (saveResult.canceled || !saveResult.filePath) return false;
+          await target.savePage(saveResult.filePath, 'HTMLComplete');
+          return true;
+        }
+        case 'download-url':
+          if (!url) return false;
+          {
+            const targetSession = target.session;
+            const cleanupDelayMs = 15000;
+            let removed = false;
+            const detachListener = () => {
+              if (removed) return;
+              removed = true;
+              targetSession.removeListener('will-download', onWillDownload);
+            };
+            const onWillDownload = (
+              _event: Electron.Event,
+              item: DownloadItem,
+              downloadContents: WebContents | undefined,
+            ) => {
+              if (downloadContents?.id !== target.id) return;
+              if (item.getURL() !== url) return;
+              item.setSaveDialogOptions({ title: 'Save As' });
+              detachListener();
+            };
+
+            targetSession.on('will-download', onWillDownload);
+            setTimeout(detachListener, cleanupDelayMs);
+          }
+          target.downloadURL(url);
+          return true;
+        case 'copy-text':
+          clipboard.writeText(text);
+          return true;
+        case 'copy-image-at':
+          target.copyImageAt(x, y);
+          return true;
+        case 'inspect-element':
+          target.inspectElement(x, y);
+          return true;
+        case 'edit-undo':
+          target.undo();
+          return true;
+        case 'edit-redo':
+          target.redo();
+          return true;
+        case 'edit-cut':
+          target.cut();
+          return true;
+        case 'edit-copy':
+          target.copy();
+          return true;
+        case 'edit-paste':
+          target.paste();
+          return true;
+        case 'edit-paste-as-plain-text':
+          target.pasteAndMatchStyle();
+          return true;
+        case 'edit-select-all':
+          target.selectAll();
+          return true;
+        default:
+          return false;
+      }
+    } catch {
       return false;
     }
   });

@@ -64,6 +64,14 @@ export const THEME_COLOR_DISPLAY_NAMES: Record<string, string> = {
   surfaceBorder: 'Surface Border',
   surfaceBorderHover: 'Surface Border Hover',
   surfaceBorderActive: 'Surface Border Active',
+  contextMenuBg: 'Context Menu Background',
+  contextMenuBgHover: 'Context Menu Background Hover',
+  contextMenuBgActive: 'Context Menu Background Active',
+  contextMenuText: 'Context Menu Text',
+  contextMenuTextHover: 'Context Menu Text Hover',
+  contextMenuBorder: 'Context Menu Border',
+  contextMenuDivider: 'Context Menu Divider',
+  contextMenuShadow: 'Context Menu Shadow',
 };
 
 function splitCamelCase(value: string): string {
