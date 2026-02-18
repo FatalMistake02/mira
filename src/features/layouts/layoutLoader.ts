@@ -184,4 +184,3 @@ export function deleteCustomLayout(layoutId: string): boolean {
   writeCustomLayouts(nextCustomLayouts);
   return true;
 }
-

@@ -5,4 +5,3 @@ export interface Layout {
   author: string;
   values: LayoutValues;
 }
-

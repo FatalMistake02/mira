@@ -5,19 +5,19 @@ body {
 }
 
 :root {
-  --bg: #12161d;
-  --tabBg: #1a2029;
-  --tabBgHover: #222b37;
-  --tabBgActive: #2c3745;
-  --tabText: #e8edf5;
-  --tabTextHover: #f2f6fc;
+  --bg: #141414;
+  --tabBg: #1d1d1d;
+  --tabBgHover: #272727;
+  --tabBgActive: #313131;
+  --tabText: #e8e8e8;
+  --tabTextHover: #f2f2f2;
   --tabTextActive: #ffffff;
-  --tabBorder: #2b3442;
-  --tabBorderHover: #3a4556;
-  --tabBorderActive: #4a576b;
-  --text1: #e8edf5;
-  --text2: #b6c0cf;
-  --text3: #8793a6;
+  --tabBorder: #353535;
+  --tabBorderHover: #464646;
+  --tabBorderActive: #595959;
+  --text1: #e8e8e8;
+  --text2: #b9b9b9;
+  --text3: #8f8f8f;
   --downloadButtonBg: #26362f;
   --downloadButtonBgHover: #30463d;
   --downloadButtonBgActive: #3a594d;
@@ -27,23 +27,23 @@ body {
   --downloadButtonBorder: #3b5a4d;
   --downloadButtonBorderHover: #4f7664;
   --downloadButtonBorderActive: #64957d;
-  --navButtonBg: #1f2b3b;
-  --navButtonBgHover: #293a50;
-  --navButtonBgActive: #345070;
-  --navButtonText: #eaf2ff;
-  --navButtonTextHover: #f4f8ff;
+  --navButtonBg: transparent;
+  --navButtonBgHover: rgba(255, 255, 255, 0.1);
+  --navButtonBgActive: rgba(255, 255, 255, 0.18);
+  --navButtonText: #ededed;
+  --navButtonTextHover: #f6f6f6;
   --navButtonTextActive: #ffffff;
-  --navButtonBorder: #384c66;
-  --navButtonBorderHover: #4d6789;
-  --navButtonBorderActive: #6384ae;
-  --urlBarBg: #0f141b;
-  --urlBarBgHover: #141b24;
-  --urlBarBgActive: #19222e;
-  --urlBarText: #eef3fb;
-  --urlBarTextPlaceholder: #7f8ba0;
-  --urlBarBorder: #2e3b4e;
-  --urlBarBorderHover: #43536a;
-  --urlBarBorderActive: #5a6f8d;
+  --navButtonBorder: #4a4a4a;
+  --navButtonBorderHover: #5b5b5b;
+  --navButtonBorderActive: #6f6f6f;
+  --urlBarBg: #181818;
+  --urlBarBgHover: #202020;
+  --urlBarBgActive: #282828;
+  --urlBarText: #efefef;
+  --urlBarTextPlaceholder: #8b8b8b;
+  --urlBarBorder: #3a3a3a;
+  --urlBarBorderHover: #4b4b4b;
+  --urlBarBorderActive: #5f5f5f;
   --buttonBg: var(--navButtonBg);
   --buttonBgHover: var(--navButtonBgHover);
   --buttonBgActive: var(--navButtonBgActive);
@@ -83,9 +83,9 @@ body {
   --layoutNavButtonHeight: 30px;
   --layoutDownloadButtonSize: 34px;
   --layoutDownloadIndicatorVisibility: always;
-  --accentPrimary: #3b82f6;
-  --accentPrimarySoft: #1d5cff;
-  --accentText: #9fd0ff;
+  --accentPrimary: #8f8f85;
+  --accentPrimarySoft: #77776f;
+  --accentText: #cfcfc8;
   --focusOutline: var(--navButtonBorderActive);
   --windowCloseButtonBgHover: #e81123;
   --windowCloseButtonBgActive: #c50f1f;
@@ -123,7 +123,7 @@ body {
   --toggleCheckedKnob: color-mix(
     in srgb,
     var(--navButtonTextActive, var(--buttonTextActive)) 76%,
-    #dbeafe 24%
+    #dfdfd7 24%
   );
 }
 
@@ -202,11 +202,17 @@ body {
 }
 
 .tab-close-btn:hover:not(:disabled) {
-  background: var(--tabCloseButtonBgHover, color-mix(in srgb, var(--tabText, var(--text1)) 14%, transparent));
+  background: var(
+    --tabCloseButtonBgHover,
+    color-mix(in srgb, var(--tabText, var(--text1)) 14%, transparent)
+  );
 }
 
 .tab-close-btn:active:not(:disabled) {
-  background: var(--tabCloseButtonBgActive, color-mix(in srgb, var(--tabText, var(--text1)) 20%, transparent));
+  background: var(
+    --tabCloseButtonBgActive,
+    color-mix(in srgb, var(--tabText, var(--text1)) 20%, transparent)
+  );
 }
 
 .theme-btn-nav {
@@ -547,7 +553,10 @@ body {
 
 .settings-dropdown-caret-icon {
   flex: 0 0 auto;
-  color: var(--dropdownCaretColor, color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white));
+  color: var(
+    --dropdownCaretColor,
+    color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white)
+  );
   opacity: 0.92;
 }
 
@@ -595,11 +604,19 @@ body {
 .settings-dropdown-choice-selected {
   background: var(
     --dropdownChoiceSelectedBg,
-    color-mix(in srgb, var(--navButtonBgActive, var(--buttonBgActive)) 86%, var(--accentPrimarySoft) 14%)
+    color-mix(
+      in srgb,
+      var(--navButtonBgActive, var(--buttonBgActive)) 86%,
+      var(--accentPrimarySoft) 14%
+    )
   );
   border-color: var(
     --dropdownChoiceSelectedBorder,
-    color-mix(in srgb, var(--navButtonBorderActive, var(--buttonBorderActive)) 74%, var(--accentPrimary) 26%)
+    color-mix(
+      in srgb,
+      var(--navButtonBorderActive, var(--buttonBorderActive)) 74%,
+      var(--accentPrimary) 26%
+    )
   );
   color: var(--navButtonTextActive, var(--buttonTextActive));
 }
@@ -682,12 +699,14 @@ body {
 }
 
 .creator-code-text {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
 }
 
 .creator-code-input {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
 }
 

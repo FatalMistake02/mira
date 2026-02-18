@@ -24,29 +24,33 @@ export default function FindBar({ open, focusToken, onClose }: FindBarProps) {
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const canSearchInPage = !!activeTab && !activeTab.url.startsWith('mira://');
   const hasQuery = query.trim().length > 0;
-  const runSearch = useCallback((nextQuery: string) => {
-    if (!canSearchInPage) {
-      stopFindInPage();
-      return;
-    }
+  const runSearch = useCallback(
+    (nextQuery: string) => {
+      if (!canSearchInPage) {
+        stopFindInPage();
+        return;
+      }
 
-    const normalizedQuery = nextQuery.trim();
-    if (!normalizedQuery) {
-      stopFindInPage();
-      return;
-    }
+      const normalizedQuery = nextQuery.trim();
+      if (!normalizedQuery) {
+        stopFindInPage();
+        return;
+      }
 
-    searchInPage(normalizedQuery, {
-      forward: true,
-      findNext: false,
-      matchCase,
-    });
-  }, [canSearchInPage, matchCase, searchInPage, stopFindInPage]);
+      searchInPage(normalizedQuery, {
+        forward: true,
+        findNext: false,
+        matchCase,
+      });
+    },
+    [canSearchInPage, matchCase, searchInPage, stopFindInPage],
+  );
 
   const visibleMatchCount = canSearchInPage && hasQuery ? findInPageMatches : 0;
-  const visibleActiveMatch = canSearchInPage && hasQuery
-    ? Math.min(Math.max(findInPageActiveMatchOrdinal, 0), visibleMatchCount)
-    : 0;
+  const visibleActiveMatch =
+    canSearchInPage && hasQuery
+      ? Math.min(Math.max(findInPageActiveMatchOrdinal, 0), visibleMatchCount)
+      : 0;
 
   useEffect(() => {
     if (!open) {

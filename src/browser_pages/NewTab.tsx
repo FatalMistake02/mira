@@ -99,7 +99,9 @@ export default function NewTab() {
                 height: 220,
                 objectFit: 'contain',
                 opacity: introState.showIntro ? 0 : 1,
-                animation: introState.showIntro ? 'miraLogoFadeIn 900ms ease-out forwards' : undefined,
+                animation: introState.showIntro
+                  ? 'miraLogoFadeIn 900ms ease-out forwards'
+                  : undefined,
               }}
             />
             <div style={{ width: '100%', textAlign: 'center', marginTop: 20 }}>

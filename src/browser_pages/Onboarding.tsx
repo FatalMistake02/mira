@@ -25,7 +25,11 @@ function getSystemThemeMode(): ThemeMode {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-function pickThemeIdForMode(mode: ThemeMode, themes: ThemeEntry[], fallbackThemeId: string): string {
+function pickThemeIdForMode(
+  mode: ThemeMode,
+  themes: ThemeEntry[],
+  fallbackThemeId: string,
+): string {
   const builtInId = mode === 'dark' ? 'default_dark' : 'default_light';
   if (themes.some((entry) => entry.id === builtInId)) {
     return builtInId;
@@ -61,12 +65,15 @@ export default function Onboarding() {
     return hasCurrentLayout ? initialSettings.layoutId : fallbackLayoutId;
   });
   const [runOnStartup, setRunOnStartup] = useState(() => initialSettings.runOnStartup);
-  const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(() => initialSettings.autoUpdateOnLaunch);
+  const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(
+    () => initialSettings.autoUpdateOnLaunch,
+  );
   const [canConfigureRunOnStartup, setCanConfigureRunOnStartup] = useState(false);
   const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
 
-  const resolvedThemeMode: ThemeMode = themePreference === 'system' ? systemThemeMode : themePreference;
+  const resolvedThemeMode: ThemeMode =
+    themePreference === 'system' ? systemThemeMode : themePreference;
   const resolvedThemeId = useMemo(
     () => pickThemeIdForMode(resolvedThemeMode, allThemes, initialSettings.themeId),
     [resolvedThemeMode, allThemes, initialSettings.themeId],
@@ -167,16 +174,8 @@ export default function Onboarding() {
     setStepIndex((index) => Math.min(index + 1, stepCount - 1));
   };
 
-  const titleByStep = [
-    '',
-    'Appearance',
-    'Startup and updates',
-  ];
-  const subtitleByStep = [
-    '',
-    'Customize the look of Mira.',
-    'Choose startup and update behavior.',
-  ];
+  const titleByStep = ['', 'Appearance', 'Startup and updates'];
+  const subtitleByStep = ['', 'Customize the look of Mira.', 'Choose startup and update behavior.'];
 
   return (
     <div
@@ -250,7 +249,9 @@ export default function Onboarding() {
           <div className="theme-text2" style={{ fontSize: 12 }}>
             Step {stepIndex + 1} of {stepCount}
           </div>
-          <h1 style={{ margin: '6px 0 0', fontSize: 26, lineHeight: 1.2 }}>{titleByStep[stepIndex]}</h1>
+          <h1 style={{ margin: '6px 0 0', fontSize: 26, lineHeight: 1.2 }}>
+            {titleByStep[stepIndex]}
+          </h1>
           <p className="theme-text2" style={{ margin: '6px 0 0', fontSize: 13 }}>
             {subtitleByStep[stepIndex]}
           </p>
@@ -396,7 +397,10 @@ export default function Onboarding() {
           )}
         </div>
 
-        <div className="onboarding-no-drag" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div
+          className="onboarding-no-drag"
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        >
           {stepIndex > 0 ? (
             <button
               type="button"

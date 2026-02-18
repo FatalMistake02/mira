@@ -76,10 +76,7 @@ type TabsContextType = {
     matches: number,
   ) => void;
   toggleDevTools: () => void;
-  updateTabMetadata: (
-    id: string,
-    metadata: { title?: string; favicon?: string | null },
-  ) => void;
+  updateTabMetadata: (id: string, metadata: { title?: string; favicon?: string | null }) => void;
   printPage: () => void;
   registerWebview: (id: string, el: WebviewElement) => void;
   setActive: (id: string) => void;
@@ -191,7 +188,8 @@ function parseSnapshot(raw: string | null, defaultTabUrl: string): SessionSnapsh
     const restorableTabs = filterRestorableTabs(tabs);
     if (!restorableTabs.length) return null;
 
-    const activeIdRaw = typeof parsed.activeId === 'string' ? parsed.activeId : restorableTabs[0].id;
+    const activeIdRaw =
+      typeof parsed.activeId === 'string' ? parsed.activeId : restorableTabs[0].id;
     const activeId = restorableTabs.some((tab) => tab.id === activeIdRaw)
       ? activeIdRaw
       : restorableTabs[0].id;
@@ -258,22 +256,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     setRestoreWindowCount(1);
   }, []);
 
-  const clearFindInPageMatchesForTab = useCallback((tabId: string) => {
-    setFindInPageMatchesByTab((current) => {
-      if (!(tabId in current)) return current;
-      const next = { ...current };
-      delete next[tabId];
-      return next;
-    });
-  }, [applyRestoredSnapshot]);
+  const clearFindInPageMatchesForTab = useCallback(
+    (tabId: string) => {
+      setFindInPageMatchesByTab((current) => {
+        if (!(tabId in current)) return current;
+        const next = { ...current };
+        delete next[tabId];
+        return next;
+      });
+    },
+    [applyRestoredSnapshot],
+  );
 
   const updateFindInPageMatches = useCallback(
-    (
-      tabId: string,
-      requestId: number,
-      activeMatchOrdinal: number,
-      matches: number,
-    ) => {
+    (tabId: string, requestId: number, activeMatchOrdinal: number, matches: number) => {
       const activeRequestId = activeFindRequestIdByTabRef.current[tabId];
       if (typeof activeRequestId === 'number' && requestId !== activeRequestId) {
         return;
@@ -360,7 +356,10 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       const settings = getBrowserSettings();
       const restoreBehavior: StartupRestoreBehavior = settings.startupRestoreBehavior;
       const currentDefaultTabUrl = getBrowserSettings().newTabPage;
-      const snapshot = parseSnapshot(localStorage.getItem(SESSION_STORAGE_KEY), currentDefaultTabUrl);
+      const snapshot = parseSnapshot(
+        localStorage.getItem(SESSION_STORAGE_KEY),
+        currentDefaultTabUrl,
+      );
       if (snapshot && !isDefaultSnapshot(snapshot, currentDefaultTabUrl)) {
         if (restoreBehavior === 'ask') {
           setPendingSession(snapshot);
@@ -394,7 +393,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (cancelled) return;
         startupIncomingUrlsRef.current = queuedUrls;
 
-        const windowRestore = await ipc.invoke<SessionSnapshot | null>('session-take-window-restore');
+        const windowRestore = await ipc.invoke<SessionSnapshot | null>(
+          'session-take-window-restore',
+        );
         if (cancelled) return;
 
         if (windowRestore && windowRestore.tabs.length > 0) {
@@ -406,7 +407,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (cancelled) return;
 
         if (restoreState?.hasPendingRestore && queuedUrls.length === 0) {
-          const restoreBehavior: StartupRestoreBehavior = getBrowserSettings().startupRestoreBehavior;
+          const restoreBehavior: StartupRestoreBehavior =
+            getBrowserSettings().startupRestoreBehavior;
           if (restoreBehavior === 'ask') {
             setRestorePromptOpen(true);
             setRestoreTabCountState(Math.max(restoreState.tabCount || 0, 0));
@@ -439,7 +441,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const restorePreviousSession = (mode: SessionRestoreMode) => {
     const ipc = electron?.ipcRenderer;
     if (ipc) {
-      ipc.invoke<SessionSnapshot | null>('session-accept-restore', mode)
+      ipc
+        .invoke<SessionSnapshot | null>('session-accept-restore', mode)
         .then((snapshot) => {
           if (!snapshot || !snapshot.tabs.length) {
             setRestorePromptOpen(false);
@@ -525,29 +528,32 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
   }
 
-  const newTab = useCallback((url?: string) => {
-    const defaultNewTabUrl = getBrowserSettings().newTabPage;
-    const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
-    const now = Date.now();
-    const id = crypto.randomUUID();
-    const newEntry: Tab = {
-      id,
-      url: targetUrl,
-      title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
-      favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
-      history: [targetUrl],
-      historyIndex: 0,
-      reloadToken: 0,
-      isSleeping: false,
-      lastActiveAt: now,
-    };
-    setTabs((t) =>
-      t
-        .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
-        .concat(newEntry),
-    );
-    setActiveId(id);
-  }, [activeId]);
+  const newTab = useCallback(
+    (url?: string) => {
+      const defaultNewTabUrl = getBrowserSettings().newTabPage;
+      const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+      const now = Date.now();
+      const id = crypto.randomUUID();
+      const newEntry: Tab = {
+        id,
+        url: targetUrl,
+        title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
+        favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+        history: [targetUrl],
+        historyIndex: 0,
+        reloadToken: 0,
+        isSleeping: false,
+        lastActiveAt: now,
+      };
+      setTabs((t) =>
+        t
+          .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
+          .concat(newEntry),
+      );
+      setActiveId(id);
+    },
+    [activeId],
+  );
 
   const openHistory = () => {
     const activeTab = tabs.find((t) => t.id === activeId);
@@ -629,8 +635,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   };
 
   const reopenLastClosedTab = useCallback(() => {
-    const lastClosedTab =
-      recentlyClosedTabsRef.current[recentlyClosedTabsRef.current.length - 1];
+    const lastClosedTab = recentlyClosedTabsRef.current[recentlyClosedTabsRef.current.length - 1];
     if (!lastClosedTab) return;
 
     recentlyClosedTabsRef.current = recentlyClosedTabsRef.current.slice(0, -1);
@@ -691,7 +696,6 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       return nextTabs;
     });
   }, []);
-
 
   const moveTabToNewWindow = useCallback(
     (id: string) => {
@@ -806,36 +810,41 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     [],
   );
 
-  const navigate = useCallback((url: string, tabId?: string) => {
-    const targetTabId = tabId ?? activeId;
-    const normalized = url.trim();
-    if (normalized && !normalized.startsWith('mira://')) {
-      addHistoryEntry(normalized, normalized).catch(() => undefined);
-    }
+  const navigate = useCallback(
+    (url: string, tabId?: string) => {
+      const targetTabId = tabId ?? activeId;
+      const normalized = url.trim();
+      if (normalized && !normalized.startsWith('mira://')) {
+        addHistoryEntry(normalized, normalized).catch(() => undefined);
+      }
 
-    setTabs((t) =>
-      t.map((tab) => {
-        if (tab.id !== targetTabId) return tab;
+      setTabs((t) =>
+        t.map((tab) => {
+          if (tab.id !== targetTabId) return tab;
 
-        const currentUrl = tab.history[tab.historyIndex];
-        if (currentUrl === normalized) {
-          return tab;
-        }
+          const currentUrl = tab.history[tab.historyIndex];
+          if (currentUrl === normalized) {
+            return tab;
+          }
 
-        const newHistory = tab.history.slice(0, tab.historyIndex + 1).concat(normalized);
-        const defaultTitle = normalized.startsWith('mira://') ? miraUrlToName(normalized) : normalized;
-        return {
-          ...tab,
-          url: normalized,
-          title: defaultTitle,
-          favicon: normalized.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
-          history: newHistory,
-          historyIndex: newHistory.length - 1,
-          reloadToken: tab.reloadToken,
-        };
-      }),
-    );
-  }, [activeId]);
+          const newHistory = tab.history.slice(0, tab.historyIndex + 1).concat(normalized);
+          const defaultTitle = normalized.startsWith('mira://')
+            ? miraUrlToName(normalized)
+            : normalized;
+          return {
+            ...tab,
+            url: normalized,
+            title: defaultTitle,
+            favicon: normalized.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+            history: newHistory,
+            historyIndex: newHistory.length - 1,
+            reloadToken: tab.reloadToken,
+          };
+        }),
+      );
+    },
+    [activeId],
+  );
 
   useEffect(() => {
     tabsRef.current = tabs;
@@ -900,42 +909,45 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     );
   };
 
-  const searchInPage = useCallback((query: string, options?: FindInPageOptions) => {
-    const wv = webviewMap.current[activeId];
-    if (!wv || typeof wv.findInPage !== 'function') return;
+  const searchInPage = useCallback(
+    (query: string, options?: FindInPageOptions) => {
+      const wv = webviewMap.current[activeId];
+      if (!wv || typeof wv.findInPage !== 'function') return;
 
-    const normalizedQuery = query.trim();
-    if (!normalizedQuery) {
-      if (typeof wv.stopFindInPage === 'function') {
-        wv.stopFindInPage('clearSelection');
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery) {
+        if (typeof wv.stopFindInPage === 'function') {
+          wv.stopFindInPage('clearSelection');
+        }
+        delete lastFindQueryByTabRef.current[activeId];
+        delete activeFindRequestIdByTabRef.current[activeId];
+        clearFindInPageMatchesForTab(activeId);
+        return;
       }
-      delete lastFindQueryByTabRef.current[activeId];
-      delete activeFindRequestIdByTabRef.current[activeId];
-      clearFindInPageMatchesForTab(activeId);
-      return;
-    }
 
-    const previousQuery = lastFindQueryByTabRef.current[activeId];
-    const isNewQuery = previousQuery !== normalizedQuery;
-    if (isNewQuery) {
-      clearFindInPageMatchesForTab(activeId);
-      if (typeof wv.stopFindInPage === 'function') {
-        wv.stopFindInPage('clearSelection');
+      const previousQuery = lastFindQueryByTabRef.current[activeId];
+      const isNewQuery = previousQuery !== normalizedQuery;
+      if (isNewQuery) {
+        clearFindInPageMatchesForTab(activeId);
+        if (typeof wv.stopFindInPage === 'function') {
+          wv.stopFindInPage('clearSelection');
+        }
       }
-    }
 
-    const requestId = wv.findInPage(normalizedQuery, {
-      forward: options?.forward ?? true,
-      findNext: options?.findNext ?? false,
-      matchCase: options?.matchCase ?? false,
-    });
-    if (typeof requestId === 'number' && Number.isFinite(requestId)) {
-      activeFindRequestIdByTabRef.current[activeId] = requestId;
-    } else {
-      delete activeFindRequestIdByTabRef.current[activeId];
-    }
-    lastFindQueryByTabRef.current[activeId] = normalizedQuery;
-  }, [activeId, clearFindInPageMatchesForTab]);
+      const requestId = wv.findInPage(normalizedQuery, {
+        forward: options?.forward ?? true,
+        findNext: options?.findNext ?? false,
+        matchCase: options?.matchCase ?? false,
+      });
+      if (typeof requestId === 'number' && Number.isFinite(requestId)) {
+        activeFindRequestIdByTabRef.current[activeId] = requestId;
+      } else {
+        delete activeFindRequestIdByTabRef.current[activeId];
+      }
+      lastFindQueryByTabRef.current[activeId] = normalizedQuery;
+    },
+    [activeId, clearFindInPageMatchesForTab],
+  );
 
   const stopFindInPage = useCallback(() => {
     const wv = webviewMap.current[activeId];

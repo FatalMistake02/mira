@@ -35,7 +35,10 @@ export default function DownloadButton() {
     if (!knownTotals.length) return null;
 
     const totalBytes = knownTotals.reduce((sum, d) => sum + d.totalBytes, 0);
-    const receivedBytes = knownTotals.reduce((sum, d) => sum + Math.min(d.receivedBytes, d.totalBytes), 0);
+    const receivedBytes = knownTotals.reduce(
+      (sum, d) => sum + Math.min(d.receivedBytes, d.totalBytes),
+      0,
+    );
     if (totalBytes <= 0) return null;
 
     return Math.max(0, Math.min(receivedBytes / totalBytes, 1));
@@ -175,13 +178,12 @@ export default function DownloadButton() {
   const ringVisible = indicatorPhase !== 'idle';
   const ringOpacity = indicatorPhase === 'fading' ? 0 : 1;
   const isIndeterminate = indicatorPhase === 'active' && ringProgress === null;
-  const progressRatio = indicatorPhase === 'active' ? ringProgress ?? 0.32 : 1;
+  const progressRatio = indicatorPhase === 'active' ? (ringProgress ?? 0.32) : 1;
   const radius = 11;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - progressRatio);
   const shouldShowButton =
-    visibilityMode === 'always' ||
-    (visibilityMode === 'sometimes' && sometimesVisible);
+    visibilityMode === 'always' || (visibilityMode === 'sometimes' && sometimesVisible);
   if (!shouldShowButton) return null;
 
   return (

@@ -74,9 +74,7 @@ export function getThemeColorDisplayName(key: string): string {
   const known = THEME_COLOR_DISPLAY_NAMES[key];
   if (known) return known;
 
-  const normalized = splitCamelCase(key)
-    .replace(/[_-]+/g, ' ')
-    .trim();
+  const normalized = splitCamelCase(key).replace(/[_-]+/g, ' ').trim();
   if (!normalized) return key;
 
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);

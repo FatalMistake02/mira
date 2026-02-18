@@ -69,12 +69,10 @@ export async function updateHistoryEntryTitle(url: string, title: string): Promi
   if (normalizedTitle === normalizedUrl) return false;
 
   if (electron?.ipcRenderer) {
-    return !!(
-      await electron.ipcRenderer.invoke<boolean>('history-update-title', {
-        url: normalizedUrl,
-        title: normalizedTitle,
-      })
-    );
+    return !!(await electron.ipcRenderer.invoke<boolean>('history-update-title', {
+      url: normalizedUrl,
+      title: normalizedTitle,
+    }));
   }
 
   const entries = loadLocal();

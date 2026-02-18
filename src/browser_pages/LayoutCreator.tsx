@@ -36,7 +36,8 @@ function createEditableValues(baseLayout: Layout): Record<string, string> {
 export default function LayoutCreator() {
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const settingsLayoutId = getBrowserSettings().layoutId;
-  const initialLayoutEntry = layouts.find((entry) => entry.id === settingsLayoutId) ?? layouts[0] ?? null;
+  const initialLayoutEntry =
+    layouts.find((entry) => entry.id === settingsLayoutId) ?? layouts[0] ?? null;
 
   const [baseLayoutId, setBaseLayoutId] = useState<string>(initialLayoutEntry?.id ?? '');
   const [layoutName, setLayoutName] = useState('My Layout');
@@ -55,10 +56,7 @@ export default function LayoutCreator() {
     setValues(createEditableValues(selectedLayoutEntry.layout));
   }, [baseLayoutId, selectedLayoutEntry]);
 
-  const editableKeys = useMemo(
-    () => LAYOUT_VALUE_DEFINITIONS.map((entry) => entry.key),
-    [],
-  );
+  const editableKeys = useMemo(() => LAYOUT_VALUE_DEFINITIONS.map((entry) => entry.key), []);
 
   useEffect(() => {
     if (!livePreviewEnabled) return;
@@ -112,9 +110,7 @@ export default function LayoutCreator() {
 
   if (!layouts.length) {
     return (
-      <div className="settings-page creator-page">
-        No layouts are available to use as a base.
-      </div>
+      <div className="settings-page creator-page">No layouts are available to use as a base.</div>
     );
   }
 
@@ -158,7 +154,9 @@ export default function LayoutCreator() {
             <span className="theme-text2">Live Preview</span>
           </label>
         </div>
-        {!!exportMessage && <div className="theme-text2 settings-inline-message">{exportMessage}</div>}
+        {!!exportMessage && (
+          <div className="theme-text2 settings-inline-message">{exportMessage}</div>
+        )}
       </section>
 
       <section className="theme-panel settings-card">

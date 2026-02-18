@@ -204,9 +204,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     quitOnLastWindowClose: normalizeQuitOnLastWindowClose(candidate.quitOnLastWindowClose),
     showNewTabBranding: normalizeShowNewTabBranding(candidate.showNewTabBranding),
     disableNewTabIntro: normalizeDisableNewTabIntro(candidate.disableNewTabIntro),
-    includePrereleaseUpdates: normalizeIncludePrereleaseUpdates(
-      candidate.includePrereleaseUpdates,
-    ),
+    includePrereleaseUpdates: normalizeIncludePrereleaseUpdates(candidate.includePrereleaseUpdates),
     autoUpdateOnLaunch: normalizeAutoUpdateOnLaunch(candidate.autoUpdateOnLaunch),
     runOnStartup: normalizeRunOnStartup(candidate.runOnStartup),
     startupRestoreBehavior: normalizeStartupRestoreBehavior(candidate.startupRestoreBehavior),

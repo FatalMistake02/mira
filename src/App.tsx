@@ -38,8 +38,7 @@ function Browser() {
     toggleDevTools,
     printPage,
     activeId,
-  } =
-    useTabs();
+  } = useTabs();
   const openFindBar = useCallback(() => {
     setFindBarOpen(true);
     setFindBarFocusToken((token) => token + 1);

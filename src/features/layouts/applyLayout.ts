@@ -23,4 +23,3 @@ export function applyLayout(layout: Layout | null | undefined) {
 
   previouslyAppliedLayoutKeys = nextKeys;
 }
-

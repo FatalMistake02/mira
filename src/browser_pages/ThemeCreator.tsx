@@ -7,7 +7,7 @@ import {
   type ThemeEntry,
 } from '../features/themes/themeLoader';
 import { getBrowserSettings, saveBrowserSettings } from '../features/settings/browserSettings';
-import type { Theme, ThemeMode } from '../themes/types';
+import { THEME_SCHEMA_VERSION, type Theme, type ThemeMode } from '../themes/types';
 import { getThemeColorDisplayName } from '../themes/colorVariableToDisplayName';
 
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -78,9 +78,11 @@ function downloadTextFile(filename: string, content: string) {
 
 export default function ThemeCreator() {
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
-  const fallbackTheme = themes.find((entry) => entry.id === 'default_dark')?.theme ?? themes[0]?.theme;
+  const fallbackTheme =
+    themes.find((entry) => entry.id === 'default_dark')?.theme ?? themes[0]?.theme;
   const settingsThemeId = getBrowserSettings().themeId;
-  const initialThemeEntry = themes.find((entry) => entry.id === settingsThemeId) ?? themes[0] ?? null;
+  const initialThemeEntry =
+    themes.find((entry) => entry.id === settingsThemeId) ?? themes[0] ?? null;
 
   const [baseThemeId, setBaseThemeId] = useState<string>(initialThemeEntry?.id ?? '');
   const [themeName, setThemeName] = useState('My Theme');
@@ -112,6 +114,7 @@ export default function ThemeCreator() {
     if (!livePreviewEnabled) return;
 
     const previewTheme: Theme = {
+      version: THEME_SCHEMA_VERSION,
       name: themeName.trim() || 'My Theme',
       author: themeAuthor.trim() || 'Me',
       mode: themeMode,
@@ -131,6 +134,7 @@ export default function ThemeCreator() {
     const trimmedName = themeName.trim() || 'My Theme';
     const trimmedAuthor = themeAuthor.trim() || 'Me';
     const payload: Theme = {
+      version: THEME_SCHEMA_VERSION,
       name: trimmedName,
       author: trimmedAuthor,
       mode: themeMode,
@@ -146,6 +150,7 @@ export default function ThemeCreator() {
       const trimmedName = themeName.trim() || 'My Theme';
       const trimmedAuthor = themeAuthor.trim() || 'Me';
       const payload: Theme = {
+        version: THEME_SCHEMA_VERSION,
         name: trimmedName,
         author: trimmedAuthor,
         mode: themeMode,
@@ -166,9 +171,7 @@ export default function ThemeCreator() {
 
   if (!themes.length || !fallbackTheme) {
     return (
-      <div className="settings-page creator-page">
-        No themes are available to use as a base.
-      </div>
+      <div className="settings-page creator-page">No themes are available to use as a base.</div>
     );
   }
 
@@ -210,7 +213,9 @@ export default function ThemeCreator() {
             <span className="theme-text2">Live Preview</span>
           </label>
         </div>
-        {!!exportMessage && <div className="theme-text2 settings-inline-message">{exportMessage}</div>}
+        {!!exportMessage && (
+          <div className="theme-text2 settings-inline-message">{exportMessage}</div>
+        )}
       </section>
 
       <section className="theme-panel settings-card">

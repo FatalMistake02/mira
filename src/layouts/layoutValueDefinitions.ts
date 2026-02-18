@@ -97,5 +97,7 @@ export function getLayoutValueDisplayName(key: string): string {
 }
 
 export function getDefaultLayoutValues(): Record<string, string> {
-  return Object.fromEntries(LAYOUT_VALUE_DEFINITIONS.map((entry) => [entry.key, entry.defaultValue]));
+  return Object.fromEntries(
+    LAYOUT_VALUE_DEFINITIONS.map((entry) => [entry.key, entry.defaultValue]),
+  );
 }

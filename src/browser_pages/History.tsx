@@ -142,7 +142,14 @@ export default function History() {
                     padding: '10px 12px',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 10,
+                      minWidth: 0,
+                    }}
+                  >
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div
                         style={{

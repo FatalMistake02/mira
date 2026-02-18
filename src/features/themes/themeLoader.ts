@@ -1,4 +1,4 @@
-import type { Theme, ThemeMode } from '../../themes/types';
+import { THEME_SCHEMA_VERSION, type Theme, type ThemeMode } from '../../themes/types';
 
 const modules = import.meta.glob('../../themes/*.json', { eager: true });
 
@@ -82,6 +82,9 @@ function inferThemeMode(colors: Record<string, string>): 'light' | 'dark' {
 function normalizeTheme(value: unknown): Theme | null {
   if (!isRecord(value)) return null;
 
+  const versionRaw = typeof value.version === 'string' ? value.version.trim().toLowerCase() : '';
+  if (versionRaw && versionRaw !== THEME_SCHEMA_VERSION) return null;
+
   const name = typeof value.name === 'string' ? value.name.trim() : '';
   const author = typeof value.author === 'string' ? value.author.trim() : '';
   if (!name || !author) return null;
@@ -99,6 +102,7 @@ function normalizeTheme(value: unknown): Theme | null {
   const mode = modeRaw === 'light' || modeRaw === 'dark' ? modeRaw : inferThemeMode(colors);
 
   return {
+    version: THEME_SCHEMA_VERSION,
     name,
     author,
     mode,
@@ -251,7 +255,7 @@ export function importThemeFromJson(jsonText: string): ThemeEntry {
   const theme = normalizeTheme(parsed);
   if (!theme) {
     throw new Error(
-      'Theme JSON must include name, author, and a colors object with string values.',
+      'Theme JSON must be version v1 and include name, author, and a colors object with string values.',
     );
   }
   const themeWithFallback = applyModeBaseColorFallback(theme, baseColorsByMode);

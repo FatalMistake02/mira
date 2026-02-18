@@ -36,23 +36,29 @@ export function useKeyboardShortcuts({
   addressInputRef,
 }: UseKeyboardShortcutsProps) {
   const lastReopenShortcutAtRef = useRef(0);
-  const activateRelativeTab = useCallback((delta: 1 | -1) => {
-    if (!tabs.length) return;
-    const currentIndex = activeId ? tabs.findIndex((tab) => tab.id === activeId) : -1;
-    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = (safeCurrentIndex + delta + tabs.length) % tabs.length;
-    const nextTab = tabs[nextIndex];
-    if (!nextTab) return;
-    setActive(nextTab.id);
-  }, [tabs, activeId, setActive]);
-  const activateTabByNumber = useCallback((number: number) => {
-    if (!Number.isInteger(number) || number < 1 || number > 9) return;
-    if (!tabs.length) return;
-    const index = number === 9 ? tabs.length - 1 : number - 1;
-    const nextTab = tabs[index];
-    if (!nextTab) return;
-    setActive(nextTab.id);
-  }, [tabs, setActive]);
+  const activateRelativeTab = useCallback(
+    (delta: 1 | -1) => {
+      if (!tabs.length) return;
+      const currentIndex = activeId ? tabs.findIndex((tab) => tab.id === activeId) : -1;
+      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+      const nextIndex = (safeCurrentIndex + delta + tabs.length) % tabs.length;
+      const nextTab = tabs[nextIndex];
+      if (!nextTab) return;
+      setActive(nextTab.id);
+    },
+    [tabs, activeId, setActive],
+  );
+  const activateTabByNumber = useCallback(
+    (number: number) => {
+      if (!Number.isInteger(number) || number < 1 || number > 9) return;
+      if (!tabs.length) return;
+      const index = number === 9 ? tabs.length - 1 : number - 1;
+      const nextTab = tabs[index];
+      if (!nextTab) return;
+      setActive(nextTab.id);
+    },
+    [tabs, setActive],
+  );
 
   useEffect(() => {
     const hasElectronBridge = !!electron?.ipcRenderer;
@@ -129,7 +135,6 @@ export function useKeyboardShortcuts({
         return;
       }
 
-
       if (!hasElectronBridge && isPrimaryModifier && !e.shiftKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         e.stopPropagation();
@@ -183,7 +188,22 @@ export function useKeyboardShortcuts({
     // Use capture phase (true) to intercept events before they reach the iframe
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newTab, reopenLastClosedTab, openHistory, openDownloads, openNewWindow, closeTab, reload, findInPage, toggleDevTools, printPage, activeId, addressInputRef, activateRelativeTab, activateTabByNumber]);
+  }, [
+    newTab,
+    reopenLastClosedTab,
+    openHistory,
+    openDownloads,
+    openNewWindow,
+    closeTab,
+    reload,
+    findInPage,
+    toggleDevTools,
+    printPage,
+    activeId,
+    addressInputRef,
+    activateRelativeTab,
+    activateTabByNumber,
+  ]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
@@ -239,5 +259,15 @@ export function useKeyboardShortcuts({
 
     ipc.on('app-shortcut', onShortcut);
     return () => ipc.off('app-shortcut', onShortcut);
-  }, [reload, findInPage, openDownloads, openNewWindow, reopenLastClosedTab, toggleDevTools, printPage, activateRelativeTab, activateTabByNumber]);
+  }, [
+    reload,
+    findInPage,
+    openDownloads,
+    openNewWindow,
+    reopenLastClosedTab,
+    toggleDevTools,
+    printPage,
+    activateRelativeTab,
+    activateTabByNumber,
+  ]);
 }

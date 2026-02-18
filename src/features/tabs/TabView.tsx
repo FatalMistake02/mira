@@ -65,10 +65,7 @@ function normalizeComparableUrl(url: string): string {
   }
 }
 
-function applyRawFileDarkModeStyle(
-  webview: WebviewElement,
-  shouldApply: boolean,
-) {
+function applyRawFileDarkModeStyle(webview: WebviewElement, shouldApply: boolean) {
   const script = `(() => {
   const shouldApply = ${shouldApply ? 'true' : 'false'};
   const styleId = ${JSON.stringify(RAW_FILE_DARK_STYLE_SCRIPT_ID)};
@@ -94,7 +91,7 @@ function applyRawFileDarkModeStyle(
         '  background: #000 !important;',
         '  color: #fff !important;',
         '}',
-        'a { color: #8ab4ff !important; }',
+        'a { color: #b9d88d !important; }',
       ].join('\\n');
       document.head?.appendChild(style) || document.documentElement.appendChild(style);
     }
@@ -141,14 +138,8 @@ function renderInternal(url: string, reloadToken: number) {
 }
 
 export default function TabView() {
-  const {
-    tabs,
-    activeId,
-    navigate,
-    updateTabMetadata,
-    registerWebview,
-    updateFindInPageMatches,
-  } = useTabs();
+  const { tabs, activeId, navigate, updateTabMetadata, registerWebview, updateFindInPageMatches } =
+    useTabs();
   const [tabSleepMode, setTabSleepMode] = useState(() => getBrowserSettings().tabSleepMode);
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => getBrowserSettings().rawFileDarkModeEnabled,
@@ -292,7 +283,9 @@ export default function TabView() {
                   wv.pageFaviconUpdatedHandler = pageFaviconUpdatedHandler as (
                     e: WebviewPageFaviconUpdatedEvent,
                   ) => void;
-                  wv.foundInPageHandler = foundInPageHandler as (e: WebviewFoundInPageEvent) => void;
+                  wv.foundInPageHandler = foundInPageHandler as (
+                    e: WebviewFoundInPageEvent,
+                  ) => void;
 
                   wv.addEventListener('did-navigate', didNavigateHandler);
                   wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);

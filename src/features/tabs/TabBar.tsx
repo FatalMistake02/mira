@@ -44,7 +44,8 @@ function getDisplayFavicon(url: string, favicon?: string): string | undefined {
 }
 
 export default function TabBar() {
-  const { tabs, activeId, setActive, closeTab, moveTabToIndex, moveTabToNewWindow, newTab } = useTabs();
+  const { tabs, activeId, setActive, closeTab, moveTabToIndex, moveTabToNewWindow, newTab } =
+    useTabs();
   const [menuTabId, setMenuTabId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -63,7 +64,9 @@ export default function TabBar() {
   const suppressClickRef = useRef(false);
 
   const getTabGapPx = () => {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue('--layoutTabGap').trim();
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue('--layoutTabGap')
+      .trim();
     const parsed = Number.parseFloat(raw);
     return Number.isFinite(parsed) ? parsed : 6;
   };
@@ -218,10 +221,10 @@ export default function TabBar() {
         animation.cancel();
       }
 
-      el.animate(
-        [{ transform: `translateX(${deltaX}px)` }, { transform: 'translateX(0px)' }],
-        { duration: 90, easing: 'cubic-bezier(0.2, 0, 0.2, 1)' },
-      );
+      el.animate([{ transform: `translateX(${deltaX}px)` }, { transform: 'translateX(0px)' }], {
+        duration: 90,
+        easing: 'cubic-bezier(0.2, 0, 0.2, 1)',
+      });
     }
     previousRectsRef.current = nextRects;
   }, [tabs, draggingTabId]);
@@ -258,7 +261,6 @@ export default function TabBar() {
             WebkitAppRegion: 'drag',
           }}
         >
-
           {tabs.map((tab) => {
             const displayFavicon = getDisplayFavicon(tab.url, tab.favicon);
             const displayTitle = getDisplayTitle(tab.url, tab.title);
@@ -320,19 +322,17 @@ export default function TabBar() {
                       ? 'calc(-1 * var(--layoutBorderWidth, 1px))'
                       : 'var(--layoutBorderWidth, 1px)',
                   background:
-                    tab.id === activeId
-                      ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                      : undefined,
+                    tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
                   opacity: draggingTabId === tab.id ? 0.75 : 1,
                   transform: draggingTabId === tab.id ? `translateX(${dragOffsetX}px)` : undefined,
                   borderBottomColor:
-                    tab.id === activeId
-                      ? 'var(--surfaceBgHover, var(--tabBgHover))'
-                      : undefined,
+                    tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
                   transition: draggingTabId === tab.id ? 'none' : 'opacity 110ms ease',
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
                   boxShadow:
-                    draggingTabId === tab.id ? 'var(--tabDragShadow, 0 6px 18px rgba(0, 0, 0, 0.28))' : undefined,
+                    draggingTabId === tab.id
+                      ? 'var(--tabDragShadow, 0 6px 18px rgba(0, 0, 0, 0.28))'
+                      : undefined,
                 }}
               >
                 {displayFavicon ? (
@@ -448,7 +448,12 @@ export default function TabBar() {
         >
           <button
             className="theme-btn theme-btn-nav"
-            style={{ width: '100%', textAlign: 'left', padding: '8px 10px', justifyContent: 'flex-start' }}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '8px 10px',
+              justifyContent: 'flex-start',
+            }}
             onClick={() => {
               moveTabToNewWindow(menuTabId);
               setMenuTabId(null);
