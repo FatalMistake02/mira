@@ -10,7 +10,9 @@
 - [x] Fix bugs/issues
 - [ ] Right-click menu (most actions don't work properly)
 - [ ] Improve performance
-- [ ] Fix links not able to open new tabs 
+- [ ] Fix links not able to open new tabs
+- [ ] Fix some link types not working
+- [ ] Add about:blank 
 
 ## v1.1.0
 - [ ] Bookmarks and favorites
