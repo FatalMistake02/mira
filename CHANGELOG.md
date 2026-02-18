@@ -7,6 +7,7 @@
 - Opens maximized
 - Update installer
 - Auto restore
+- Onboarding flow
 
 ## v0.8.1 - 2026-02-17
 

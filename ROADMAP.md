@@ -9,7 +9,7 @@
 - [x] Auto update
 - [x] Auto restore
 - [x] Start on startup
-- [ ] Onboarding
+- [x] Onboarding
 
 ## v1.1.0
 - [ ] Bookmarks and favorites

@@ -15,6 +15,7 @@ const isMacOS = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 const ENABLE_APP_DEBUG_LOGS = true; // Set to false for shipping builds.
 const incomingBrowserUrlQueue: string[] = [];
+const APP_STATE_FILE = 'app-state.json';
 
 interface HistoryEntry {
   id: string;
@@ -52,6 +53,10 @@ interface WindowSessionSnapshot {
 interface PersistedSessionSnapshot {
   windows: WindowSessionSnapshot[];
   savedAt: number;
+}
+
+interface PersistedAppState {
+  onboardingCompleted?: boolean;
 }
 
 type SessionRestoreMode = 'tabs' | 'windows';
@@ -93,10 +98,12 @@ const bootRestoreByWindowId = new Map<number, WindowSessionSnapshot>();
 let pendingRestoreSession: PersistedSessionSnapshot | null = null;
 let sessionPersistTimer: NodeJS.Timeout | null = null;
 const pendingClosedWindowCleanupTimers = new Map<number, NodeJS.Timeout>();
+const onboardingWindowIds = new Set<number>();
 let isQuitting = false;
 let adBlockEnabled = true;
 let quitOnLastWindowClose = false;
 let hasAttemptedLaunchAutoUpdate = false;
+let onboardingCompleted = false;
 const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/FatalMistake02/mira/releases?per_page=40';
 const isPortableBuild = process.platform === 'win32' && !!process.env.PORTABLE_EXECUTABLE_FILE;
 const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
@@ -624,6 +631,41 @@ function getRunOnStartupSupportInfo(): RunOnStartupSupportInfo {
 
 function getSessionFilePath() {
   return path.join(app.getPath('userData'), 'session.json');
+}
+
+function getAppStateFilePath() {
+  return path.join(app.getPath('userData'), APP_STATE_FILE);
+}
+
+function normalizeAppState(value: unknown): PersistedAppState {
+  if (typeof value !== 'object' || value === null) return {};
+  const candidate = value as PersistedAppState;
+  return {
+    onboardingCompleted: candidate.onboardingCompleted === true,
+  };
+}
+
+async function loadPersistedAppState(): Promise<void> {
+  try {
+    const raw = await fs.readFile(getAppStateFilePath(), 'utf-8');
+    const parsed = JSON.parse(raw) as unknown;
+    const normalized = normalizeAppState(parsed);
+    onboardingCompleted = normalized.onboardingCompleted === true;
+  } catch {
+    onboardingCompleted = false;
+  }
+}
+
+async function persistAppState(): Promise<void> {
+  const payload: PersistedAppState = {
+    onboardingCompleted,
+  };
+  await fs.writeFile(getAppStateFilePath(), JSON.stringify(payload), 'utf-8');
+}
+
+function shouldShowOnboarding(): boolean {
+  if (!app.isPackaged || process.defaultApp) return false;
+  return onboardingCompleted !== true;
 }
 
 function pruneHistory(entries: HistoryEntry[]): HistoryEntry[] {
@@ -2006,6 +2048,36 @@ function setupIncomingUrlHandlers() {
   });
 }
 
+function setupOnboardingHandlers() {
+  ipcMain.handle('onboarding-complete', async (event) => {
+    onboardingCompleted = true;
+    await persistAppState().catch(() => undefined);
+
+    let browserWindow = getFirstBrowserWindow();
+    if (!browserWindow) {
+      browserWindow = createWindow();
+    }
+
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      if (browserWindow.isMinimized()) browserWindow.restore();
+      browserWindow.focus();
+    }
+
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (sourceWindow && !sourceWindow.isDestroyed()) {
+      sourceWindow.close();
+    }
+
+    return true;
+  });
+
+  ipcMain.handle('onboarding-reset', async () => {
+    onboardingCompleted = false;
+    await persistAppState().catch(() => undefined);
+    return true;
+  });
+}
+
 function setupMacDockMenu() {
   if (!isMacOS) return;
   const dockMenu = Menu.buildFromTemplate([
@@ -2123,6 +2195,72 @@ function setupApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+function getFirstBrowserWindow(): BrowserWindow | null {
+  return BrowserWindow.getAllWindows().find((win) => !win.isDestroyed() && !onboardingWindowIds.has(win.id))
+    ?? null;
+}
+
+function loadRendererShell(win: BrowserWindow, options?: { onboarding?: boolean }): void {
+  const onboarding = options?.onboarding === true;
+  if (!app.isPackaged) {
+    const onboardingQuery = onboarding ? '?onboarding=1' : '';
+    win.loadURL(`http://localhost:5173${onboardingQuery}`);
+    return;
+  }
+
+  if (onboarding) {
+    win.loadFile('dist/index.html', {
+      query: {
+        onboarding: '1',
+      },
+    });
+    return;
+  }
+
+  win.loadFile('dist/index.html');
+}
+
+function createOnboardingWindow(): BrowserWindow {
+  const existing = BrowserWindow.getAllWindows().find(
+    (win) => !win.isDestroyed() && onboardingWindowIds.has(win.id),
+  );
+  if (existing) {
+    if (existing.isMinimized()) existing.restore();
+    existing.focus();
+    return existing;
+  }
+
+  const win = new BrowserWindow({
+    width: 760,
+    height: 540,
+    minWidth: 760,
+    minHeight: 540,
+    maximizable: false,
+    fullscreenable: false,
+    resizable: false,
+    autoHideMenuBar: true,
+    frame: false,
+    backgroundColor: '#12161d',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      webviewTag: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  onboardingWindowIds.add(win.id);
+  loadRendererShell(win, { onboarding: true });
+  win.setMenuBarVisibility(false);
+
+  win.on('closed', () => {
+    onboardingWindowIds.delete(win.id);
+  });
+
+  return win;
+}
+
 function createWindow(
   sourceWindow?: BrowserWindow,
   initialUrl?: string,
@@ -2168,11 +2306,7 @@ function createWindow(
     applyWindowTitleBarOverlay(win);
   }
 
-  if (!app.isPackaged) {
-    win.loadURL('http://localhost:5173');
-  } else {
-    win.loadFile('dist/index.html');
-  }
+  loadRendererShell(win);
 
   if (restoreSnapshot) {
     bootRestoreByWindowId.set(win.id, restoreSnapshot);
@@ -2384,8 +2518,12 @@ function routeIncomingBrowserUrl(rawUrl: string): void {
   if (!normalized) return;
 
   const focusedWindow = BrowserWindow.getFocusedWindow();
-  const fallbackWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
-  const targetWindow = focusedWindow && !focusedWindow.isDestroyed() ? focusedWindow : fallbackWindow;
+  const focusedBrowserWindow =
+    focusedWindow && !focusedWindow.isDestroyed() && !onboardingWindowIds.has(focusedWindow.id)
+      ? focusedWindow
+      : null;
+  const fallbackWindow = getFirstBrowserWindow();
+  const targetWindow = focusedBrowserWindow ?? fallbackWindow;
 
   if (targetWindow && !targetWindow.isDestroyed()) {
     if (targetWindow.isMinimized()) targetWindow.restore();
@@ -2422,7 +2560,10 @@ if (!hasSingleInstanceLock) {
       return;
     }
 
-    const firstWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+    const firstWindow =
+      getFirstBrowserWindow()
+      ?? BrowserWindow.getAllWindows().find((win) => !win.isDestroyed())
+      ?? null;
     if (!firstWindow) return;
     if (firstWindow.isMinimized()) firstWindow.restore();
     firstWindow.focus();
@@ -2461,6 +2602,7 @@ app.whenReady().then(async () => {
 
   await loadHistory().catch(() => undefined);
   await loadCachedAdBlockHosts().catch(() => undefined);
+  await loadPersistedAppState().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
   setupSessionHandlers();
@@ -2470,17 +2612,26 @@ app.whenReady().then(async () => {
   setupWindowControlsHandlers();
   setupDefaultBrowserHandlers();
   setupIncomingUrlHandlers();
+  setupOnboardingHandlers();
   setupApplicationMenu();
   setupMacDockMenu();
   scheduleAdBlockListRefresh();
   setupDownloadHandlers();
 
-  createWindow();
+  if (shouldShowOnboarding()) {
+    createOnboardingWindow();
+  } else {
+    createWindow();
+  }
 });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    if (shouldShowOnboarding()) {
+      createOnboardingWindow();
+    } else {
+      createWindow();
+    }
   }
 });
 

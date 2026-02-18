@@ -10,6 +10,7 @@ import RestoreTabsPrompt from './components/RestoreTabsPrompt';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import DownloadProvider from './features/downloads/DownloadProvider';
 import { electron } from './electronBridge';
+import Onboarding from './browser_pages/Onboarding';
 import {
   BROWSER_SETTINGS_CHANGED_EVENT,
   getBrowserSettings,
@@ -158,6 +159,11 @@ function Browser() {
 }
 
 export default function App() {
+  const isOnboardingWindow = new URLSearchParams(window.location.search).get('onboarding') === '1';
+  if (isOnboardingWindow) {
+    return <Onboarding />;
+  }
+
   return (
     <TabsProvider>
       <DownloadProvider>

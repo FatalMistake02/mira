@@ -46,6 +46,8 @@ type UpdateLaunchAutoSupportResponse = {
   canAutoInstall: boolean;
 };
 
+type OnboardingResetResponse = boolean;
+
 type RunOnStartupStatusResponse = {
   ok: boolean;
   canConfigure: boolean;
@@ -164,9 +166,11 @@ export default function Settings() {
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckPayload | null>(null);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
+  const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
   const [canConfigureRunOnStartup, setCanConfigureRunOnStartup] = useState(false);
   const [runOnStartupStatus, setRunOnStartupStatus] = useState('');
+  const [onboardingResetStatus, setOnboardingResetStatus] = useState('');
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
   const [canAttemptDefaultBrowserRegistration, setCanAttemptDefaultBrowserRegistration] = useState(
@@ -461,6 +465,28 @@ export default function Settings() {
       setUpdateStatus('Failed to run update action.');
     } finally {
       setIsRunningUpdateAction(false);
+    }
+  };
+
+  const resetOnboarding = async () => {
+    if (!electron?.ipcRenderer) {
+      setOnboardingResetStatus('Onboarding reset is only available in the desktop app.');
+      return;
+    }
+
+    setIsResettingOnboarding(true);
+    setOnboardingResetStatus('');
+    try {
+      const response = await electron.ipcRenderer.invoke<OnboardingResetResponse>('onboarding-reset');
+      if (response !== true) {
+        setOnboardingResetStatus('Failed to reset onboarding.');
+        return;
+      }
+      setOnboardingResetStatus('Onboarding reset. It will show again on next app open.');
+    } catch {
+      setOnboardingResetStatus('Failed to reset onboarding.');
+    } finally {
+      setIsResettingOnboarding(false);
     }
   };
 
@@ -1287,6 +1313,33 @@ export default function Settings() {
                 </div>
               </div>
               {!!updateStatus && <div className="theme-text2 settings-status">{updateStatus}</div>}
+            </section>
+
+            <section className="theme-panel settings-card">
+              <div className="settings-card-header">
+                <h2 className="settings-card-title">Onboarding</h2>
+              </div>
+              <div className="settings-setting-row">
+                <div className="settings-setting-meta">
+                  <span className="settings-setting-label">Show onboarding again</span>
+                  <span className="settings-setting-description">
+                    Reset first-run onboarding so it appears the next time you open Mira.
+                  </span>
+                </div>
+                <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                  <button
+                    type="button"
+                    onClick={resetOnboarding}
+                    className="theme-btn theme-btn-nav settings-btn-pad"
+                    disabled={isResettingOnboarding}
+                  >
+                    {isResettingOnboarding ? 'Resetting...' : 'Reset Onboarding'}
+                  </button>
+                </div>
+              </div>
+              {!!onboardingResetStatus && (
+                <div className="theme-text2 settings-status">{onboardingResetStatus}</div>
+              )}
             </section>
           </>
         )}
