@@ -2064,6 +2064,13 @@ function setupWindowControlsHandlers() {
     const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y) ? Math.floor(candidate.y) : 0;
     const url = typeof candidate.url === 'string' ? candidate.url.trim() : '';
     const text = typeof candidate.text === 'string' ? candidate.text : '';
+    const focusTargetForEditAction = () => {
+      try {
+        target.focus();
+      } catch {
+        // Ignore focus failures; action methods below will return false on failure.
+      }
+    };
 
     try {
       switch (action) {
@@ -2118,24 +2125,31 @@ function setupWindowControlsHandlers() {
           target.inspectElement(x, y);
           return true;
         case 'edit-undo':
+          focusTargetForEditAction();
           target.undo();
           return true;
         case 'edit-redo':
+          focusTargetForEditAction();
           target.redo();
           return true;
         case 'edit-cut':
+          focusTargetForEditAction();
           target.cut();
           return true;
         case 'edit-copy':
+          focusTargetForEditAction();
           target.copy();
           return true;
         case 'edit-paste':
+          focusTargetForEditAction();
           target.paste();
           return true;
         case 'edit-paste-as-plain-text':
+          focusTargetForEditAction();
           target.pasteAndMatchStyle();
           return true;
         case 'edit-select-all':
+          focusTargetForEditAction();
           target.selectAll();
           return true;
         default:

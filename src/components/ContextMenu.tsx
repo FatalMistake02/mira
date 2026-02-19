@@ -131,6 +131,11 @@ export default function ContextMenu({
             role="menuitem"
             className="mira-context-menu-item"
             disabled={entry.disabled}
+            onMouseDown={(event) => {
+              // Keep focus in the underlying webview/field so edit actions apply
+              // to the original target instead of this menu button.
+              event.preventDefault();
+            }}
             onClick={() => {
               onClose();
               window.setTimeout(() => {

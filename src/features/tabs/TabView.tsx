@@ -461,7 +461,6 @@ export default function TabView() {
       item('View Source', () => openInNewTabFromMenu(`view-source:${sourceUrl}`), {
         disabled: !sourceUrl,
       }),
-      separator(),
       inspectEntry,
     ];
   }, [
@@ -578,13 +577,19 @@ export default function TabView() {
                     updateFindInPageMatches(tab.id, requestId, activeMatchOrdinal, matches);
                   };
                   const contextMenuHandler = (e: Event) => {
+                    const ev = e as WebviewContextMenuEvent;
+                    const params = normalizeContextMenuParams(ev.params);
+                    if (params.isEditable) {
+                      e.preventDefault();
+                      setPageMenuState(null);
+                      return;
+                    }
+
                     e.preventDefault();
 
                     const webContentsId = typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
                     if (!Number.isFinite(webContentsId) || webContentsId <= 0) return;
 
-                    const ev = e as WebviewContextMenuEvent;
-                    const params = normalizeContextMenuParams(ev.params);
                     let x = params.x;
                     let y = params.y;
 
