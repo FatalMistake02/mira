@@ -810,7 +810,7 @@ export default function Settings() {
                   <span className="settings-setting-meta">
                     <span className="settings-setting-label">Enable tracker blocking</span>
                     <span className="settings-setting-description">
-                      Block known analytics and tracking scripts like Google Tag Manager.
+                      Blocks many analytics trackers, but may also block resources some sites need.
                     </span>
                   </span>
                   <input
