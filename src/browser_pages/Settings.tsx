@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
+import { useDownloads } from '../features/downloads/DownloadProvider';
+import { clearHistoryEntries } from '../features/history/clientHistory';
 import {
   DEFAULT_BROWSER_SETTINGS,
   SEARCH_ENGINE_OPTIONS,
@@ -99,7 +101,7 @@ type SetDefaultBrowserResponse = {
   };
 };
 
-type SettingsSectionId = 'general' | 'search' | 'appearance' | 'app';
+type SettingsSectionId = 'general' | 'search' | 'appearance' | 'app' | 'dev';
 
 const SETTINGS_SECTION_TABS: Array<{
   id: SettingsSectionId;
@@ -121,6 +123,13 @@ const SETTINGS_SECTION_TABS: Array<{
     id: 'app',
     label: 'App',
   },
+];
+
+const APP_DATA_STORAGE_KEYS = [
+  'mira.settings.browser.v1',
+  'mira.themes.custom.v1',
+  'mira.layouts.custom.v1',
+  'mira.session.tabs.v1',
 ];
 
 export default function Settings() {
@@ -170,6 +179,7 @@ export default function Settings() {
   const [startupRestoreBehavior, setStartupRestoreBehavior] = useState<StartupRestoreBehavior>(
     () => initialSettings.startupRestoreBehavior,
   );
+  const [showPerfOverlay, setShowPerfOverlay] = useState(() => initialSettings.showPerfOverlay);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -185,10 +195,12 @@ export default function Settings() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
+  const [isResettingAppData, setIsResettingAppData] = useState(false);
   const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
   const [canConfigureRunOnStartup, setCanConfigureRunOnStartup] = useState(false);
   const [runOnStartupStatus, setRunOnStartupStatus] = useState('');
   const [onboardingResetStatus, setOnboardingResetStatus] = useState('');
+  const [appDataResetStatus, setAppDataResetStatus] = useState('');
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
   const [canAttemptDefaultBrowserRegistration, setCanAttemptDefaultBrowserRegistration] =
@@ -199,6 +211,7 @@ export default function Settings() {
   const isFirstAutoSaveRef = useRef(true);
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { navigate } = useTabs();
+  const { clear: clearDownloads } = useDownloads();
 
   const handleThemeChange = (nextThemeId: string) => {
     setThemeId(nextThemeId);
@@ -297,6 +310,7 @@ export default function Settings() {
         autoUpdateOnLaunch,
         runOnStartup,
         startupRestoreBehavior,
+        showPerfOverlay,
       });
       setSaveStatus('saved');
 
@@ -331,6 +345,7 @@ export default function Settings() {
     autoUpdateOnLaunch,
     runOnStartup,
     startupRestoreBehavior,
+    showPerfOverlay,
   ]);
 
   useEffect(() => {
@@ -542,6 +557,40 @@ export default function Settings() {
     }
   };
 
+  const resetAppData = async () => {
+    const confirmed = window.confirm(
+      'This will clear history, session, downloads, and settings for this profile. Continue?',
+    );
+    if (!confirmed) return;
+
+    setIsResettingAppData(true);
+    setAppDataResetStatus('');
+    try {
+      clearDownloads();
+      await clearHistoryEntries().catch(() => undefined);
+
+      if (electron?.ipcRenderer) {
+        await Promise.allSettled([
+          electron.ipcRenderer.invoke('session-save-window', null),
+          electron.ipcRenderer.invoke('session-discard-restore'),
+        ]);
+      }
+
+      for (const storageKey of APP_DATA_STORAGE_KEYS) {
+        localStorage.removeItem(storageKey);
+      }
+
+      setAppDataResetStatus('App data cleared. Reloading...');
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 250);
+    } catch {
+      setAppDataResetStatus('Failed to reset app data.');
+    } finally {
+      setIsResettingAppData(false);
+    }
+  };
+
   const refreshDefaultBrowserStatus = async () => {
     if (!electron?.ipcRenderer) {
       setDefaultBrowserStatus('Default browser controls are only available in the desktop app.');
@@ -648,6 +697,11 @@ export default function Settings() {
   }, []);
 
   const canConfigureRunOnStartupSetting = electron?.isMacOS || electron?.platform === 'win32';
+  const isDevSettingsEnabled = initialSettings.dev;
+  const settingsSectionTabs: Array<{ id: SettingsSectionId; label: string }> =
+    isDevSettingsEnabled
+      ? [...SETTINGS_SECTION_TABS, { id: 'dev', label: 'Dev' }]
+      : SETTINGS_SECTION_TABS;
 
   return (
     <div className="settings-page">
@@ -667,7 +721,7 @@ export default function Settings() {
 
       <div className="settings-body">
         <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-          {SETTINGS_SECTION_TABS.map((section) => (
+          {settingsSectionTabs.map((section) => (
             <button
               key={section.id}
               id={`settings-tab-${section.id}`}
@@ -1465,6 +1519,62 @@ export default function Settings() {
                 </div>
                 {!!updateStatus && (
                   <div className="theme-text2 settings-status">{updateStatus}</div>
+                )}
+              </section>
+            </>
+          )}
+
+          {isDevSettingsEnabled && activeSection === 'dev' && (
+            <>
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Diagnostics</h2>
+                </div>
+                <label htmlFor="show-perf-overlay" className="settings-setting-row">
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Performance overlay (WIP)</span>
+                    <span className="settings-setting-description">
+                      Show a performance overlay.
+                      May be inaccurate.
+                    </span>
+                  </span>
+                  <input
+                    id="show-perf-overlay"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={showPerfOverlay}
+                    onChange={(e) => {
+                      setShowPerfOverlay(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+              </section>
+
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">App Data</h2>
+                </div>
+                <div className="settings-setting-row">
+                  <div className="settings-setting-meta">
+                    <span className="settings-setting-label">Reset app data</span>
+                    <span className="settings-setting-description">
+                      Clear history, session, downloads list, and settings in one action.
+                    </span>
+                  </div>
+                  <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                    <button
+                      type="button"
+                      onClick={resetAppData}
+                      className="theme-btn theme-btn-nav settings-btn-pad"
+                      disabled={isResettingAppData}
+                    >
+                      {isResettingAppData ? 'Resetting...' : 'Reset App Data'}
+                    </button>
+                  </div>
+                </div>
+                {!!appDataResetStatus && (
+                  <div className="theme-text2 settings-status">{appDataResetStatus}</div>
                 )}
               </section>
 

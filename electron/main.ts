@@ -1292,6 +1292,53 @@ async function downloadAssetToDownloads(downloadUrl: string, assetName: string):
   return targetPath;
 }
 
+function normalizeKilobytes(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+function getComparableProcessMemoryKb(memory: Record<string, unknown>): number | null {
+  const workingSetKb = normalizeKilobytes(memory.workingSetSize ?? memory.residentSet);
+  const sharedKb = normalizeKilobytes(memory.sharedBytes);
+  if (workingSetKb !== null && sharedKb !== null) {
+    return Math.max(workingSetKb - sharedKb, 0);
+  }
+
+  // Fallback for platforms/versions that expose only private-style metrics.
+  const privateKb = normalizeKilobytes(memory.privateBytes ?? memory.private);
+  if (privateKb !== null) return privateKb;
+
+  return workingSetKb;
+}
+
+function setupPerformanceHandlers() {
+  ipcMain.handle('perf-memory-snapshot', async () => {
+    try {
+      const metrics = app.getAppMetrics();
+      let totalComparableKb = 0;
+
+      for (const metric of metrics) {
+        if (typeof metric.memory !== 'object' || metric.memory === null) continue;
+        const memory = metric.memory as Record<string, unknown>;
+        const comparableKb = getComparableProcessMemoryKb(memory);
+        if (comparableKb !== null) {
+          totalComparableKb += comparableKb;
+        }
+      }
+
+      return {
+        totalMemoryMb: totalComparableKb > 0 ? totalComparableKb / 1024 : null,
+      };
+    } catch {
+      return {
+        totalMemoryMb: null,
+      };
+    }
+  });
+}
+
 function setupHistoryHandlers() {
   ipcMain.handle('history-add', async (_, payload: { url?: string; title?: string }) => {
     await addHistoryEntry(payload ?? {});
@@ -2922,6 +2969,7 @@ app.whenReady().then(async () => {
   await loadPersistedAppState().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
+  setupPerformanceHandlers();
   setupSessionHandlers();
   setupUpdateHandlers();
   setupWebviewTabOpenHandler();

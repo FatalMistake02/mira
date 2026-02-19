@@ -69,7 +69,8 @@ export type BrowserSettings = {
   searchEngineShortcutsEnabled: boolean;
   searchEngineShortcutPrefix: string;
   searchEngineShortcutChars: SearchEngineShortcutChars;
-  hiddenDevSettingEnabled: boolean;
+  showPerfOverlay: boolean;
+  dev: boolean;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -94,12 +95,13 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   searchEngineShortcutsEnabled: false,
   searchEngineShortcutPrefix: DEFAULT_SEARCH_ENGINE_SHORTCUT_PREFIX,
   searchEngineShortcutChars: DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS,
-  hiddenDevSettingEnabled: import.meta.env.DEV,
+  showPerfOverlay: false,
+  dev: true,
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
 export const BROWSER_SETTINGS_CHANGED_EVENT = 'mira:settings-changed';
-const IS_DEV_BUILD = import.meta.env.DEV;
+const FORCE_DISABLE_DEV_SETTING = import.meta.env.VITE_DEV === 'false';
 
 const TAB_SLEEP_UNIT_TO_MS: Record<TabSleepUnit, number> = {
   seconds: 1000,
@@ -327,14 +329,22 @@ function normalizeSearchEngineShortcutChars(value: unknown): SearchEngineShortcu
   };
 }
 
-function normalizeHiddenDevSettingEnabled(value: unknown): boolean {
-  // Never allow this setting in production builds.
-  if (!IS_DEV_BUILD) {
+function normalizeShowPerfOverlay(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.showPerfOverlay;
+  }
+
+  return value;
+}
+
+function normalizeDevSetting(value: unknown): boolean {
+  // Only force-disable this in explicit release builds.
+  if (FORCE_DISABLE_DEV_SETTING) {
     return false;
   }
 
   if (typeof value !== 'boolean') {
-    return DEFAULT_BROWSER_SETTINGS.hiddenDevSettingEnabled;
+    return DEFAULT_BROWSER_SETTINGS.dev;
   }
 
   return value;
@@ -345,7 +355,9 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     return DEFAULT_BROWSER_SETTINGS;
   }
 
-  const candidate = value as Partial<BrowserSettings>;
+  const candidate = value as Partial<BrowserSettings> & {
+    hiddenDevSettingEnabled?: unknown;
+  };
   return {
     newTabPage: normalizeNewTabPage(candidate.newTabPage),
     themeId: normalizeThemeId(candidate.themeId),
@@ -377,7 +389,8 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     searchEngineShortcutChars: normalizeSearchEngineShortcutChars(
       candidate.searchEngineShortcutChars,
     ),
-    hiddenDevSettingEnabled: normalizeHiddenDevSettingEnabled(candidate.hiddenDevSettingEnabled),
+    showPerfOverlay: normalizeShowPerfOverlay(candidate.showPerfOverlay),
+    dev: normalizeDevSetting(candidate.dev ?? candidate.hiddenDevSettingEnabled),
   };
 }
 

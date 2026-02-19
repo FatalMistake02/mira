@@ -147,6 +147,8 @@ jobs:
 
       - name: Build app
         run: npm run build -- --publish never
+        env:
+          VITE_DEV: "false"
 
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v1
@@ -184,6 +186,8 @@ jobs:
 
       - name: Build app
         run: npm run build -- --mac --x64 --arm64 --publish never
+        env:
+          VITE_DEV: "false"
 
       - name: Upload macOS Assets to Existing Release
         uses: softprops/action-gh-release@v1
@@ -223,6 +227,8 @@ jobs:
 
       - name: Build app
         run: npm run build -- --linux --x64 --publish never
+        env:
+          VITE_DEV: "false"
 
       - name: Upload Linux Assets to Existing Release
         uses: softprops/action-gh-release@v1

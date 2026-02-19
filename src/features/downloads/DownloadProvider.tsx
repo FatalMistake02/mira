@@ -33,7 +33,8 @@ type Action =
   | { type: 'PROGRESS'; payload: { id: string; receivedBytes: number; totalBytes: number } }
   | { type: 'DONE'; payload: { id: string; savePath: string } }
   | { type: 'ERROR'; payload: { id: string; error: string } }
-  | { type: 'CANCEL'; payload: { id: string } };
+  | { type: 'CANCEL'; payload: { id: string } }
+  | { type: 'CLEAR' };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -73,6 +74,8 @@ function reducer(state: State, action: Action): State {
       return state.map((d) =>
         d.id === action.payload.id ? { ...d, status: 'canceled', endedAt: Date.now() } : d,
       );
+    case 'CLEAR':
+      return [];
     default:
       return state;
   }
@@ -81,6 +84,7 @@ function reducer(state: State, action: Action): State {
 const DownloadContext = createContext<{
   downloads: DownloadItem[];
   cancel: (id: string) => void;
+  clear: () => void;
   openFolder: (path: string) => void;
 } | null>(null);
 
@@ -141,12 +145,21 @@ export default function DownloadProvider({ children }: { children: React.ReactNo
     dispatch({ type: 'CANCEL', payload: { id } });
   };
 
+  const clear = () => {
+    for (const item of downloads) {
+      if (item.status === 'pending' || item.status === 'in-progress') {
+        electron?.ipcRenderer?.invoke('download-cancel', item.id).catch(() => undefined);
+      }
+    }
+    dispatch({ type: 'CLEAR' });
+  };
+
   const openFolder = (savePath: string) => {
     electron?.ipcRenderer?.invoke('download-open', savePath);
   };
 
   return (
-    <DownloadContext.Provider value={{ downloads, cancel, openFolder }}>
+    <DownloadContext.Provider value={{ downloads, cancel, clear, openFolder }}>
       {children}
     </DownloadContext.Provider>
   );
