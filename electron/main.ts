@@ -143,6 +143,8 @@ const DEFAULT_BLOCKED_AD_HOSTS = [
   "ads.google.com",
   "ads.youtube.com",
   "ads.mopub.com",
+  "youtube.com/pagead",
+  "youtube.com/api/stats/ads",
 ];
 const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'googletagmanager.com',
@@ -168,12 +170,49 @@ const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'branch.io',
   'app.adjust.com',
 ];
-let blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
+let blockedTrackerRules = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
 const AD_BLOCK_LIST_URLS = [
   'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
   'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/light.txt',
 ];
-let blockedAdHosts = new Set<string>(DEFAULT_BLOCKED_AD_HOSTS);
+let blockedAdRules = new Set<string>(DEFAULT_BLOCKED_AD_HOSTS);
+
+interface BlockRuleIndex {
+  hosts: Set<string>;
+  hostPaths: Map<string, string[]>;
+}
+
+function buildBlockRuleIndex(rules: Set<string>): BlockRuleIndex {
+  const hosts = new Set<string>();
+  const hostPaths = new Map<string, string[]>();
+
+  for (const rule of rules) {
+    const slashIndex = rule.indexOf('/');
+    if (slashIndex === -1) {
+      hosts.add(rule);
+      continue;
+    }
+
+    const host = rule.slice(0, slashIndex);
+    const path = rule.slice(slashIndex);
+    if (!host || !path || path === '/') {
+      hosts.add(host);
+      continue;
+    }
+
+    const existing = hostPaths.get(host);
+    if (existing) {
+      existing.push(path);
+    } else {
+      hostPaths.set(host, [path]);
+    }
+  }
+
+  return { hosts, hostPaths };
+}
+
+let blockedTrackerRuleIndex = buildBlockRuleIndex(blockedTrackerRules);
+let blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
 
 interface WindowTitleBarOverlayState {
   color: string;
@@ -313,7 +352,38 @@ function normalizeBlockedHostToken(token: string): string | null {
   return normalized;
 }
 
-function extractHostFromBlocklistLine(line: string): string | null {
+function normalizeBlockedRuleToken(token: string): string | null {
+  const trimmedToken = token.trim();
+  if (!trimmedToken) return null;
+
+  if (/^https?:\/\//i.test(trimmedToken)) {
+    try {
+      const parsed = new URL(trimmedToken);
+      const host = normalizeBlockedHostToken(parsed.hostname);
+      if (!host) return null;
+      const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.toLowerCase() : '';
+      return path ? `${host}${path}` : host;
+    } catch {
+      return null;
+    }
+  }
+
+  const normalizedToken = trimmedToken.toLowerCase();
+
+  const slashIndex = normalizedToken.indexOf('/');
+  const rawHost = slashIndex === -1 ? normalizedToken : normalizedToken.slice(0, slashIndex);
+  const normalizedHost = normalizeBlockedHostToken(rawHost);
+  if (!normalizedHost) return null;
+
+  if (slashIndex === -1) return normalizedHost;
+
+  const rawPath = normalizedToken.slice(slashIndex);
+  const normalizedPath = `/${rawPath.replace(/^\/+/, '')}`;
+  if (normalizedPath === '/') return normalizedHost;
+  return `${normalizedHost}${normalizedPath}`;
+}
+
+function extractRuleFromBlocklistLine(line: string): string | null {
   const withoutComment = line.split('#', 1)[0]?.trim() ?? '';
   if (!withoutComment) return null;
   if (withoutComment.startsWith('!')) return null;
@@ -332,15 +402,15 @@ function extractHostFromBlocklistLine(line: string): string | null {
       : parts[0];
   if (!hostToken) return null;
 
-  return normalizeBlockedHostToken(hostToken);
+  return normalizeBlockedRuleToken(hostToken);
 }
 
-function parseHostsFromBlocklist(raw: string): Set<string> {
+function parseRulesFromBlocklist(raw: string): Set<string> {
   const parsed = new Set<string>();
 
   for (const line of raw.split(/\r?\n/)) {
-    const host = extractHostFromBlocklistLine(line);
-    if (host) parsed.add(host);
+    const rule = extractRuleFromBlocklistLine(line);
+    if (rule) parsed.add(rule);
   }
 
   return parsed;
@@ -363,10 +433,11 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<str
 async function loadCachedAdBlockHosts(): Promise<void> {
   try {
     const raw = await fs.readFile(getAdBlockCachePath(), 'utf-8');
-    const cachedHosts = parseHostsFromBlocklist(raw);
+    const cachedHosts = parseRulesFromBlocklist(raw);
     if (!cachedHosts.size) return;
 
-    blockedAdHosts = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...cachedHosts]);
+    blockedAdRules = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...cachedHosts]);
+    blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
   } catch {
     // No cache yet.
   }
@@ -375,10 +446,11 @@ async function loadCachedAdBlockHosts(): Promise<void> {
 async function loadBundledTrackerBlockHosts(): Promise<void> {
   try {
     const raw = await fs.readFile(getBundledTrackerListPath(), 'utf-8');
-    const parsedHosts = parseHostsFromBlocklist(raw);
+    const parsedHosts = parseRulesFromBlocklist(raw);
     if (!parsedHosts.size) return;
 
-    blockedTrackerHosts = new Set([...DEFAULT_BLOCKED_TRACKER_HOSTS, ...parsedHosts]);
+    blockedTrackerRules = new Set([...DEFAULT_BLOCKED_TRACKER_HOSTS, ...parsedHosts]);
+    blockedTrackerRuleIndex = buildBlockRuleIndex(blockedTrackerRules);
   } catch {
     // Missing local tracker list should not disable default tracker blocking.
   }
@@ -390,7 +462,7 @@ async function refreshAdBlockHostsFromLists(): Promise<void> {
   for (const listUrl of AD_BLOCK_LIST_URLS) {
     try {
       const listText = await fetchTextWithTimeout(listUrl, AD_BLOCK_FETCH_TIMEOUT_MS);
-      const parsedHosts = parseHostsFromBlocklist(listText);
+      const parsedHosts = parseRulesFromBlocklist(listText);
       for (const host of parsedHosts) {
         downloadedHosts.add(host);
       }
@@ -401,7 +473,8 @@ async function refreshAdBlockHostsFromLists(): Promise<void> {
 
   if (!downloadedHosts.size) return;
 
-  blockedAdHosts = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...downloadedHosts]);
+  blockedAdRules = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...downloadedHosts]);
+  blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
   try {
     await fs.writeFile(getAdBlockCachePath(), Array.from(downloadedHosts).join('\n'), 'utf-8');
   } catch {
@@ -417,10 +490,19 @@ function scheduleAdBlockListRefresh(): void {
   interval.unref();
 }
 
-function isHostBlocked(hostname: string): boolean {
+function isBlockedByRules(hostname: string, pathname: string, index: BlockRuleIndex): boolean {
+  const normalizedPathname = pathname.toLowerCase() || '/';
   let candidate = hostname;
   while (candidate) {
-    if (blockedAdHosts.has(candidate)) return true;
+    if (index.hosts.has(candidate)) return true;
+
+    const pathRules = index.hostPaths.get(candidate);
+    if (pathRules) {
+      for (const pathRule of pathRules) {
+        if (normalizedPathname.startsWith(pathRule)) return true;
+      }
+    }
+
     const nextDot = candidate.indexOf('.');
     if (nextDot === -1) return false;
     candidate = candidate.slice(nextDot + 1);
@@ -437,23 +519,13 @@ function shouldBlockRequest(url: string, resourceType: string): boolean {
     if (protocol !== 'http:' && protocol !== 'https:') return false;
 
     const host = parsed.hostname.toLowerCase();
-    const adBlocked = adBlockEnabled && isHostBlocked(host);
-    const trackerBlocked = trackerBlockEnabled && isTrackerHostBlocked(host);
+    const pathname = parsed.pathname.toLowerCase();
+    const adBlocked = adBlockEnabled && isBlockedByRules(host, pathname, blockedAdRuleIndex);
+    const trackerBlocked = trackerBlockEnabled && isBlockedByRules(host, pathname, blockedTrackerRuleIndex);
     return adBlocked || trackerBlocked;
   } catch {
     return false;
   }
-}
-
-function isTrackerHostBlocked(hostname: string): boolean {
-  let candidate = hostname;
-  while (candidate) {
-    if (blockedTrackerHosts.has(candidate)) return true;
-    const nextDot = candidate.indexOf('.');
-    if (nextDot === -1) return false;
-    candidate = candidate.slice(nextDot + 1);
-  }
-  return false;
 }
 
 function getHistoryFilePath() {

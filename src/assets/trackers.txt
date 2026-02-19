@@ -133,3 +133,4 @@ ads.smartadserver.com
 everesttech.net
 
 zedo.com
+youtube.com/api/stats
