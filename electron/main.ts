@@ -194,17 +194,17 @@ function buildBlockRuleIndex(rules: Set<string>): BlockRuleIndex {
     }
 
     const host = rule.slice(0, slashIndex);
-    const path = rule.slice(slashIndex);
-    if (!host || !path || path === '/') {
+    const rulePath = rule.slice(slashIndex);
+    if (!host || !rulePath || rulePath === '/') {
       hosts.add(host);
       continue;
     }
 
     const existing = hostPaths.get(host);
     if (existing) {
-      existing.push(path);
+      existing.push(rulePath);
     } else {
-      hostPaths.set(host, [path]);
+      hostPaths.set(host, [rulePath]);
     }
   }
 
@@ -361,8 +361,8 @@ function normalizeBlockedRuleToken(token: string): string | null {
       const parsed = new URL(trimmedToken);
       const host = normalizeBlockedHostToken(parsed.hostname);
       if (!host) return null;
-      const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.toLowerCase() : '';
-      return path ? `${host}${path}` : host;
+      const rulePath = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.toLowerCase() : '';
+      return rulePath ? `${host}${rulePath}` : host;
     } catch {
       return null;
     }
