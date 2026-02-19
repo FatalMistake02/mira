@@ -132,6 +132,4 @@ ads.smartadserver.com
 
 everesttech.net
 
-trafficmanager.net
-
 zedo.com

@@ -134,6 +134,12 @@ const DEFAULT_BLOCKED_AD_HOSTS = [
   'scorecardresearch.com',
   'zedo.com',
   'adform.net',
+  "googleads.g.doubleclick.net",
+  "adservice.google.com",
+  "pagead2.googlesyndication.com",
+  "ads.google.com",
+  "ads.youtube.com",
+  "ads.mopub.com",
 ];
 const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'googletagmanager.com',
