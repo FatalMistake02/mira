@@ -464,7 +464,9 @@ function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
   try {
     const parsed = new URL(trimmed);
     const protocol = parsed.protocol.toLowerCase();
-    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'file:') return null;
+    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'file:' && protocol !== 'about:') {
+      return null;
+    }
     return parsed.toString();
   } catch {
     return null;

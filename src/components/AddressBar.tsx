@@ -56,6 +56,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       normalized.startsWith('http://') ||
       normalized.startsWith('https://') ||
       normalized.startsWith('file://') ||
+      normalized.startsWith('about:') ||
       normalized.startsWith('mira://') ||
       normalized.startsWith('data:')
     );

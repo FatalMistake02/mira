@@ -8,6 +8,10 @@
 - Update installer
 - Auto restore
 - Onboarding flow
+- Add about:blank
+- Add tracker blocking
+- Add tracker and ad blocker settings to the onboarding flow
+- Context menu
 
 ## v0.8.1 - 2026-02-17
 
