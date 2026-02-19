@@ -12,7 +12,8 @@
 - Add tracker blocking
 - Add tracker and ad blocker settings to the onboarding flow
 - Context menu
-- Add faster build scripts for local packaging (`build:fast`, `build:portable`, `build:nsis`, `build:renderer`)
+- Add faster build scripts for testing (`build:fast`, `build:portable`, `build:nsis`, `build:renderer`)
+- Open in new tab works
 
 ## v0.8.1 - 2026-02-17
 

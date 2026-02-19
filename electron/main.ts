@@ -101,6 +101,8 @@ const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
 const NEW_WINDOW_SHORTCUT_DEDUPE_MS = 250;
 const recentNewWindowShortcutByWindow = new Map<number, number>();
+const RENDERER_RECOVERY_COOLDOWN_MS = 3000;
+const recentRendererRecoveryByWindow = new Map<number, number>();
 const SHORTCUT_DEVTOOLS_SUPPRESS_MS = 500;
 const suppressHostDevToolsUntilByWindowId = new Map<number, number>();
 const windowSessionCache = new Map<number, WindowSessionSnapshot>();
@@ -1956,12 +1958,10 @@ function setupWindowControlsHandlers() {
   });
 
   ipcMain.handle('tab-open-url-in-new-tab', (event, url: unknown) => {
-    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
-    if (!sourceWindow || sourceWindow.isDestroyed()) return false;
-
     const normalizedUrl = typeof url === 'string' ? url.trim() : '';
     if (!normalizedUrl) return false;
-    sourceWindow.webContents.send('open-url-in-new-tab', normalizedUrl);
+    if (event.sender.isDestroyed()) return false;
+    event.sender.send('open-url-in-new-tab', normalizedUrl);
     return true;
   });
 
@@ -2590,6 +2590,37 @@ function createWindow(
   win.webContents.send('window-maximized-changed', win.isMaximized());
   win.webContents.send('window-fullscreen-changed', win.isFullScreen());
 
+  win.webContents.on('render-process-gone', (_event, details) => {
+    logDebug('renderer', 'window-render-process-gone', {
+      windowId: win.id,
+      reason: details.reason,
+      exitCode: details.exitCode,
+    });
+
+    if (isQuitting || win.isDestroyed()) return;
+    if (details.reason === 'clean-exit') return;
+
+    const now = Date.now();
+    const lastRecoveryAt = recentRendererRecoveryByWindow.get(win.id) ?? 0;
+    if (now - lastRecoveryAt < RENDERER_RECOVERY_COOLDOWN_MS) return;
+    recentRendererRecoveryByWindow.set(win.id, now);
+
+    setTimeout(() => {
+      if (isQuitting || win.isDestroyed()) return;
+      loadRendererShell(win);
+    }, 150);
+  });
+
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    logDebug('renderer', 'window-main-frame-failed-load', {
+      windowId: win.id,
+      errorCode,
+      errorDescription,
+      url: validatedURL,
+    });
+  });
+
   win.on('maximize', () => {
     if (!win.isDestroyed()) {
       win.webContents.send('window-maximized-changed', true);
@@ -2617,6 +2648,7 @@ function createWindow(
   win.on('closed', () => {
     bootRestoreByWindowId.delete(win.id);
     windowTitleBarOverlayState.delete(win.id);
+    recentRendererRecoveryByWindow.delete(win.id);
     const noWindowsRemaining = BrowserWindow.getAllWindows().length === 0;
 
     // Do not remove this snapshot immediately. Users may be closing windows

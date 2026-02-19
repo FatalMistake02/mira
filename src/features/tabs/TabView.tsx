@@ -122,6 +122,37 @@ function normalizeComparableUrl(url: string): string {
   }
 }
 
+function resolveContextMenuUrl(rawUrl: string, baseUrl?: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+
+  try {
+    const normalizedBase = typeof baseUrl === 'string' ? baseUrl.trim() : '';
+    return normalizedBase ? new URL(trimmed, normalizedBase).toString() : new URL(trimmed).toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+function canOpenInNewTab(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+
+  try {
+    const protocol = new URL(trimmed).protocol.toLowerCase();
+    return (
+      protocol === 'http:' ||
+      protocol === 'https:' ||
+      protocol === 'file:' ||
+      protocol === 'about:' ||
+      protocol === 'mira:' ||
+      protocol === 'view-source:'
+    );
+  } catch {
+    return false;
+  }
+}
+
 function normalizeContextMenuParams(params?: WebviewContextMenuParams): NormalizedContextMenuParams {
   const editFlags = params?.editFlags;
   return {
@@ -304,21 +335,12 @@ export default function TabView() {
   );
 
   const openInNewTabFromMenu = useCallback(
-    (url: string) => {
-      const normalized = url.trim();
-      if (!normalized) return;
+    (url: string, baseUrl?: string) => {
+      const normalized = resolveContextMenuUrl(url, baseUrl);
+      if (!canOpenInNewTab(normalized)) return;
       closePageMenu();
-      const ipc = electron?.ipcRenderer;
-      if (ipc) {
-        void ipc.invoke<boolean>('tab-open-url-in-new-tab', normalized).catch(() => {
-          window.setTimeout(() => {
-            newTab(normalized);
-          }, 0);
-        });
-        return;
-      }
       window.setTimeout(() => {
-        newTab(normalized);
+        newTab(normalized, { activate: false });
       }, 0);
     },
     [closePageMenu, newTab],
@@ -380,16 +402,18 @@ export default function TabView() {
     }
 
     if (params.mediaType === 'image' || !!params.srcURL) {
+      const resolvedSrcUrl = resolveContextMenuUrl(params.srcURL, params.pageURL);
+      const canOpenImageInNewTab = canOpenInNewTab(resolvedSrcUrl);
       return [
-        item('Open Image in New Tab', () => openInNewTabFromMenu(params.srcURL), {
-          disabled: !params.srcURL,
+        item('Open Image in New Tab', () => openInNewTabFromMenu(resolvedSrcUrl, params.pageURL), {
+          disabled: !canOpenImageInNewTab,
         }),
-        item('Save Image As', () => runWebviewContextAction('download-url', { url: params.srcURL }), {
-          disabled: !params.srcURL,
+        item('Save Image As', () => runWebviewContextAction('download-url', { url: resolvedSrcUrl }), {
+          disabled: !resolvedSrcUrl,
         }),
         item('Copy Image', () => runWebviewContextAction('copy-image-at', { x: params.x, y: params.y })),
-        item('Copy Image Address', () => runWebviewContextAction('copy-text', { text: params.srcURL }), {
-          disabled: !params.srcURL,
+        item('Copy Image Address', () => runWebviewContextAction('copy-text', { text: resolvedSrcUrl }), {
+          disabled: !resolvedSrcUrl,
         }),
         separator(),
         inspectEntry,
@@ -397,19 +421,30 @@ export default function TabView() {
     }
 
     if (params.linkURL) {
+      const resolvedLinkUrl = resolveContextMenuUrl(params.linkURL, params.pageURL);
+      const canOpenLinkInNewTab = canOpenInNewTab(resolvedLinkUrl);
       return [
-        item('Open in New Tab', () => openInNewTabFromMenu(params.linkURL)),
+        item('Open in New Tab', () => openInNewTabFromMenu(resolvedLinkUrl, params.pageURL), {
+          disabled: !canOpenLinkInNewTab,
+        }),
         item('Open in New Window', () => {
+          if (!canOpenLinkInNewTab) return;
           const ipc = electron?.ipcRenderer;
           if (ipc) {
-            void ipc.invoke('window-new-with-url', params.linkURL).catch(() => undefined);
+            void ipc.invoke('window-new-with-url', resolvedLinkUrl).catch(() => undefined);
             return;
           }
-          window.open(params.linkURL, '_blank', 'noopener,noreferrer');
+          window.open(resolvedLinkUrl, '_blank', 'noopener,noreferrer');
+        }, {
+          disabled: !canOpenLinkInNewTab,
         }),
         separator(),
-        item('Copy Link Address', () => runWebviewContextAction('copy-text', { text: params.linkURL })),
-        item('Save Link As', () => runWebviewContextAction('download-url', { url: params.linkURL })),
+        item('Copy Link Address', () => runWebviewContextAction('copy-text', { text: resolvedLinkUrl }), {
+          disabled: !resolvedLinkUrl,
+        }),
+        item('Save Link As', () => runWebviewContextAction('download-url', { url: resolvedLinkUrl }), {
+          disabled: !resolvedLinkUrl,
+        }),
         separator(),
         inspectEntry,
       ];

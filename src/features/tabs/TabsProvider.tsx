@@ -53,7 +53,7 @@ type SessionRestoreMode = 'tabs' | 'windows';
 type TabsContextType = {
   tabs: Tab[];
   activeId: string;
-  newTab: (url?: string) => void;
+  newTab: (url?: string, options?: { activate?: boolean }) => void;
   newTabToRight: (id: string, url?: string) => void;
   reloadTab: (id: string) => void;
   duplicateTab: (id: string) => void;
@@ -534,7 +534,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   }
 
   const newTab = useCallback(
-    (url?: string) => {
+    (url?: string, options?: { activate?: boolean }) => {
+      const shouldActivate = options?.activate !== false;
       const defaultNewTabUrl = getBrowserSettings().newTabPage;
       const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
       const now = Date.now();
@@ -554,7 +555,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
           .concat(newEntry),
       );
-      setActiveId(newEntry.id);
+      if (shouldActivate) {
+        setActiveId(newEntry.id);
+      }
     },
     [activeId],
   );
@@ -976,6 +979,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     tabsRef.current = tabs;
     activeIdRef.current = activeId;
+  }, [tabs, activeId]);
+
+  useEffect(() => {
+    if (!tabs.length) {
+      const replacement = createInitialTab(getBrowserSettings().newTabPage);
+      setTabs([replacement]);
+      setActiveId(replacement.id);
+      return;
+    }
+
+    const activeTabStillExists = tabs.some((tab) => tab.id === activeId);
+    if (!activeTabStillExists) {
+      setActiveId(tabs[0].id);
+    }
   }, [tabs, activeId]);
 
   useEffect(() => {
