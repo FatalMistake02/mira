@@ -2489,6 +2489,7 @@ function createOnboardingWindow(): BrowserWindow {
     autoHideMenuBar: true,
     frame: false,
     backgroundColor: '#12161d',
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       webviewTag: true,
@@ -2500,6 +2501,11 @@ function createOnboardingWindow(): BrowserWindow {
 
   onboardingWindowIds.add(win.id);
   loadRendererShell(win, { onboarding: true });
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed()) {
+      win.show();
+    }
+  });
   win.setMenuBarVisibility(false);
 
   win.on('closed', () => {
@@ -2531,6 +2537,8 @@ function createWindow(
         }
       : undefined,
     autoHideMenuBar: true,
+    backgroundColor: '#12161d',
+    show: false,
     webPreferences: {
       // devTools: false,
       preload: path.join(__dirname, 'preload.js'),
@@ -2555,6 +2563,11 @@ function createWindow(
   }
 
   loadRendererShell(win);
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed()) {
+      win.show();
+    }
+  });
 
   if (restoreSnapshot) {
     bootRestoreByWindowId.set(win.id, restoreSnapshot);
