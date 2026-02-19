@@ -12,14 +12,14 @@
 - [ ] Improve performance
 - [ ] Fix links not able to open new tabs
 - [ ] Fix some link types not working
-- [ ] Add about:blank 
+- [x] Add about:blank 
 
 ## v1.1.0
 - [ ] Bookmarks and favorites
 - [ ] Site settings
 - [ ] HTTPS first
 - [ ] Site permissions controls
-- [ ] Tracker blocking
+- [x] Tracker blocking
 
 ## v1.2.0
 - [ ] Tab groups and colors
