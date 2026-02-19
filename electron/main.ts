@@ -156,7 +156,7 @@ const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'snap.licdn.com',
   'ads-twitter.com',
   'static.ads-twitter.com',
-  'link.branch.io',
+  'branch.io',
   'app.adjust.com',
 ];
 const blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
