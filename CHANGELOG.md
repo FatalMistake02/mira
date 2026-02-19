@@ -14,6 +14,7 @@
 - Context menu
 - Add faster build scripts for testing (`build:fast`, `build:portable`, `build:nsis`, `build:renderer`)
 - Open in new tab works
+- Open in new window works
 
 ## v0.8.1 - 2026-02-17
 

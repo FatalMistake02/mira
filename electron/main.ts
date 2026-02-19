@@ -103,6 +103,7 @@ const NEW_WINDOW_SHORTCUT_DEDUPE_MS = 250;
 const recentNewWindowShortcutByWindow = new Map<number, number>();
 const RENDERER_RECOVERY_COOLDOWN_MS = 3000;
 const recentRendererRecoveryByWindow = new Map<number, number>();
+const pendingInitialUrlByWindowId = new Map<number, string>();
 const SHORTCUT_DEVTOOLS_SUPPRESS_MS = 500;
 const suppressHostDevToolsUntilByWindowId = new Map<number, number>();
 const windowSessionCache = new Map<number, WindowSessionSnapshot>();
@@ -1957,6 +1958,14 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('window-consume-initial-url', (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return '';
+    const pending = pendingInitialUrlByWindowId.get(sourceWindow.id) ?? '';
+    pendingInitialUrlByWindowId.delete(sourceWindow.id);
+    return pending;
+  });
+
   ipcMain.handle('tab-open-url-in-new-tab', (event, url: unknown) => {
     const normalizedUrl = typeof url === 'string' ? url.trim() : '';
     if (!normalizedUrl) return false;
@@ -2580,10 +2589,9 @@ function createWindow(
 
   const normalizedInitialUrl = initialUrl?.trim();
   if (normalizedInitialUrl) {
-    win.webContents.once('did-finish-load', () => {
-      if (win.isDestroyed()) return;
-      win.webContents.send('open-url-in-current-tab', normalizedInitialUrl);
-    });
+    pendingInitialUrlByWindowId.set(win.id, normalizedInitialUrl);
+  } else {
+    pendingInitialUrlByWindowId.delete(win.id);
   }
 
   win.setMenuBarVisibility(false);
@@ -2649,6 +2657,7 @@ function createWindow(
     bootRestoreByWindowId.delete(win.id);
     windowTitleBarOverlayState.delete(win.id);
     recentRendererRecoveryByWindow.delete(win.id);
+    pendingInitialUrlByWindowId.delete(win.id);
     const noWindowsRemaining = BrowserWindow.getAllWindows().length === 0;
 
     // Do not remove this snapshot immediately. Users may be closing windows

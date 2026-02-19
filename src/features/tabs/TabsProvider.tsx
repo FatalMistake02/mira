@@ -384,18 +384,25 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     const bootstrapSessionRestore = async () => {
       try {
-        const queuedUrls = await ipc
-          .invoke<string[]>('incoming-urls-consume')
-          .then((urls) =>
-            Array.isArray(urls)
-              ? urls
-                  .filter((candidate): candidate is string => typeof candidate === 'string')
-                  .map((candidate) => candidate.trim())
-                  .filter(Boolean)
-              : [],
-          )
-          .catch(() => []);
+        const [queuedUrlsRaw, initialWindowUrlRaw] = await Promise.all([
+          ipc
+            .invoke<string[]>('incoming-urls-consume')
+            .then((urls) =>
+              Array.isArray(urls)
+                ? urls
+                    .filter((candidate): candidate is string => typeof candidate === 'string')
+                    .map((candidate) => candidate.trim())
+                    .filter(Boolean)
+                : [],
+            )
+            .catch(() => []),
+          ipc
+            .invoke<string>('window-consume-initial-url')
+            .then((url) => (typeof url === 'string' ? url.trim() : ''))
+            .catch(() => ''),
+        ]);
         if (cancelled) return;
+        const queuedUrls = initialWindowUrlRaw ? [initialWindowUrlRaw, ...queuedUrlsRaw] : queuedUrlsRaw;
         startupIncomingUrlsRef.current = queuedUrls;
 
         const windowRestore = await ipc.invoke<SessionSnapshot | null>(
@@ -411,7 +418,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
         if (cancelled) return;
 
-        if (restoreState?.hasPendingRestore && queuedUrls.length === 0) {
+        if (restoreState?.hasPendingRestore && startupIncomingUrlsRef.current.length === 0) {
           const restoreBehavior: StartupRestoreBehavior =
             getBrowserSettings().startupRestoreBehavior;
           if (restoreBehavior === 'ask') {
