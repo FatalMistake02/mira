@@ -122,8 +122,22 @@ jobs:
           git commit -m "chore: set version to ${{ steps.tag_version.outputs.version }} from tag ${{ steps.tag_version.outputs.release_tag }}"
           git push origin HEAD:"$default_branch"
 
-  build-windows:
+  create-release:
     needs: prepare-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create draft release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ needs.prepare-version.outputs.release_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    needs:
+      - prepare-version
+      - create-release
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -148,7 +162,7 @@ jobs:
       - name: Build app
         run: npm run build -- --publish never
 
-      - name: Create Release and Upload Assets
+      - name: Upload Windows Assets to Existing Release
         uses: softprops/action-gh-release@v1
         with:
           draft: true
@@ -160,7 +174,7 @@ jobs:
   build-macos:
     needs:
       - prepare-version
-      - build-windows
+      - create-release
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -199,7 +213,7 @@ jobs:
   build-linux:
     needs:
       - prepare-version
-      - build-macos
+      - create-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
