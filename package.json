@@ -29,6 +29,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "src/assets/trackers.txt",
       "package.json"
     ],
     "protocols": [
