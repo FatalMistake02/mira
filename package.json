@@ -14,6 +14,10 @@
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
     "build": "vite build && electron-builder",
+    "build:renderer": "vite build",
+    "build:fast": "vite build && electron-builder --publish never --dir --win",
+    "build:portable": "vite build && electron-builder --publish never --win portable --config.compression=store",
+    "build:nsis": "vite build && electron-builder --publish never --win nsis",
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""

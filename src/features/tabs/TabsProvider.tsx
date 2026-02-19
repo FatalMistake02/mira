@@ -53,7 +53,7 @@ type SessionRestoreMode = 'tabs' | 'windows';
 type TabsContextType = {
   tabs: Tab[];
   activeId: string;
-  newTab: (url?: string) => void;
+  newTab: (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => void;
   newTabToRight: (id: string, url?: string) => void;
   reloadTab: (id: string) => void;
   duplicateTab: (id: string) => void;
@@ -384,18 +384,25 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     const bootstrapSessionRestore = async () => {
       try {
-        const queuedUrls = await ipc
-          .invoke<string[]>('incoming-urls-consume')
-          .then((urls) =>
-            Array.isArray(urls)
-              ? urls
-                  .filter((candidate): candidate is string => typeof candidate === 'string')
-                  .map((candidate) => candidate.trim())
-                  .filter(Boolean)
-              : [],
-          )
-          .catch(() => []);
+        const [queuedUrlsRaw, initialWindowUrlRaw] = await Promise.all([
+          ipc
+            .invoke<string[]>('incoming-urls-consume')
+            .then((urls) =>
+              Array.isArray(urls)
+                ? urls
+                    .filter((candidate): candidate is string => typeof candidate === 'string')
+                    .map((candidate) => candidate.trim())
+                    .filter(Boolean)
+                : [],
+            )
+            .catch(() => []),
+          ipc
+            .invoke<string>('window-consume-initial-url')
+            .then((url) => (typeof url === 'string' ? url.trim() : ''))
+            .catch(() => ''),
+        ]);
         if (cancelled) return;
+        const queuedUrls = initialWindowUrlRaw ? [initialWindowUrlRaw, ...queuedUrlsRaw] : queuedUrlsRaw;
         startupIncomingUrlsRef.current = queuedUrls;
 
         const windowRestore = await ipc.invoke<SessionSnapshot | null>(
@@ -411,7 +418,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
         if (cancelled) return;
 
-        if (restoreState?.hasPendingRestore && queuedUrls.length === 0) {
+        if (restoreState?.hasPendingRestore && startupIncomingUrlsRef.current.length === 0) {
           const restoreBehavior: StartupRestoreBehavior =
             getBrowserSettings().startupRestoreBehavior;
           if (restoreBehavior === 'ask') {
@@ -534,7 +541,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   }
 
   const newTab = useCallback(
-    (url?: string) => {
+    (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => {
+      const shouldActivate = options?.activate !== false;
+      const activateDelayMsRaw = options?.activateDelayMs;
+      const activateDelayMs =
+        typeof activateDelayMsRaw === 'number' && Number.isFinite(activateDelayMsRaw)
+          ? Math.max(0, Math.floor(activateDelayMsRaw))
+          : 0;
       const defaultNewTabUrl = getBrowserSettings().newTabPage;
       const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
       const now = Date.now();
@@ -554,7 +567,15 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
           .concat(newEntry),
       );
-      setActiveId(newEntry.id);
+      if (shouldActivate) {
+        if (activateDelayMs > 0) {
+          window.setTimeout(() => {
+            setActiveId(newEntry.id);
+          }, activateDelayMs);
+        } else {
+          setActiveId(newEntry.id);
+        }
+      }
     },
     [activeId],
   );
@@ -976,6 +997,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     tabsRef.current = tabs;
     activeIdRef.current = activeId;
+  }, [tabs, activeId]);
+
+  useEffect(() => {
+    if (!tabs.length) {
+      const replacement = createInitialTab(getBrowserSettings().newTabPage);
+      setTabs([replacement]);
+      setActiveId(replacement.id);
+      return;
+    }
+
+    const activeTabStillExists = tabs.some((tab) => tab.id === activeId);
+    if (!activeTabStillExists) {
+      setActiveId(tabs[0].id);
+    }
   }, [tabs, activeId]);
 
   useEffect(() => {

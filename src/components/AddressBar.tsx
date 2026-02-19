@@ -50,16 +50,65 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     }
   }, [tabs, activeId]);
 
-  const isSupportedProtocol = (url: string) => {
-    const normalized = url.toLowerCase();
+  const isSupportedProtocol = (value: string) => {
+    const schemeMatch = value.match(/^([a-z][a-z0-9+.-]*:)/i);
+    if (!schemeMatch) return false;
+    const scheme = schemeMatch[1].toLowerCase();
     return (
-      normalized.startsWith('http://') ||
-      normalized.startsWith('https://') ||
-      normalized.startsWith('file://') ||
-      normalized.startsWith('about:') ||
-      normalized.startsWith('mira://') ||
-      normalized.startsWith('data:')
+      scheme === 'http:' ||
+      scheme === 'https:' ||
+      scheme === 'file:' ||
+      scheme === 'about:' ||
+      scheme === 'mira:' ||
+      scheme === 'data:' ||
+      scheme === 'view-source:'
     );
+  };
+
+  const isIpv4Host = (hostname: string) => {
+    const parts = hostname.split('.');
+    if (parts.length !== 4) return false;
+    return parts.every((part) => {
+      if (!/^\d{1,3}$/.test(part)) return false;
+      const value = Number.parseInt(part, 10);
+      return value >= 0 && value <= 255;
+    });
+  };
+
+  const isLikelyDomainOrHost = (hostname: string) => {
+    const normalized = hostname.trim().toLowerCase();
+    if (!normalized) return false;
+    if (normalized === 'localhost') return true;
+    if (isIpv4Host(normalized)) return true;
+    if (normalized.includes(':')) return true; // IPv6 style host
+    if (!normalized.includes('.')) return false;
+
+    const labels = normalized.split('.');
+    return labels.every(
+      (label) =>
+        label.length > 0 &&
+        label.length <= 63 &&
+        /^[a-z0-9-]+$/i.test(label) &&
+        !label.startsWith('-') &&
+        !label.endsWith('-'),
+    );
+  };
+
+  const isLikelyDomainOrUrl = (value: string) => {
+    if (/\s/.test(value)) return false;
+    if (isSupportedProtocol(value)) return true;
+
+    // Unknown explicit schemes (for example "javascript:") should be searched.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return false;
+
+    const candidate = value.startsWith('//') ? `https:${value}` : `https://${value}`;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+      return isLikelyDomainOrHost(parsed.hostname);
+    } catch {
+      return false;
+    }
   };
 
   const go = () => {
@@ -69,8 +118,8 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     let finalUrl: string;
     if (isSupportedProtocol(raw)) {
       finalUrl = raw;
-    } else if (raw.includes('.')) {
-      finalUrl = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
+    } else if (isLikelyDomainOrUrl(raw)) {
+      finalUrl = raw.startsWith('//') ? `https:${raw}` : `https://${raw}`;
     } else {
       const query = new URLSearchParams({ q: raw }).toString();
       finalUrl = `https://www.google.com/search?${query}`;

@@ -13,7 +13,10 @@
 - [ ] Fix links not able to open new tabs
 - [ ] Fix some link types not working
 - [x] Add about:blank 
-
+- [ ] All shortcuts
+- [ ] Fix shortcuts not always working
+- [ ] Default search engine and search engine "shortcuts"
+ 
 ## v1.1.0
 - [ ] Bookmarks and favorites
 - [ ] Site settings
@@ -25,6 +28,9 @@
 - [ ] Tab groups and colors
 - [ ] Vertical tabs sidebar
 - [ ] Split view tabs
+- [ ] Pinned tabs
+- [ ] Mute tabs
+- [ ] Tab move to window
 
 ## v1.3.0
 - [ ] Reader mode view
