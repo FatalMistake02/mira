@@ -53,7 +53,7 @@ type SessionRestoreMode = 'tabs' | 'windows';
 type TabsContextType = {
   tabs: Tab[];
   activeId: string;
-  newTab: (url?: string, options?: { activate?: boolean }) => void;
+  newTab: (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => void;
   newTabToRight: (id: string, url?: string) => void;
   reloadTab: (id: string) => void;
   duplicateTab: (id: string) => void;
@@ -534,8 +534,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   }
 
   const newTab = useCallback(
-    (url?: string, options?: { activate?: boolean }) => {
+    (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => {
       const shouldActivate = options?.activate !== false;
+      const activateDelayMsRaw = options?.activateDelayMs;
+      const activateDelayMs =
+        typeof activateDelayMsRaw === 'number' && Number.isFinite(activateDelayMsRaw)
+          ? Math.max(0, Math.floor(activateDelayMsRaw))
+          : 0;
       const defaultNewTabUrl = getBrowserSettings().newTabPage;
       const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
       const now = Date.now();
@@ -556,7 +561,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           .concat(newEntry),
       );
       if (shouldActivate) {
-        setActiveId(newEntry.id);
+        if (activateDelayMs > 0) {
+          window.setTimeout(() => {
+            setActiveId(newEntry.id);
+          }, activateDelayMs);
+        } else {
+          setActiveId(newEntry.id);
+        }
       }
     },
     [activeId],

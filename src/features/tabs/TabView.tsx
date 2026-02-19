@@ -340,7 +340,7 @@ export default function TabView() {
       if (!canOpenInNewTab(normalized)) return;
       closePageMenu();
       window.setTimeout(() => {
-        newTab(normalized, { activate: false });
+        newTab(normalized, { activate: true, activateDelayMs: 120 });
       }, 0);
     },
     [closePageMenu, newTab],
