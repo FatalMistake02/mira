@@ -19,10 +19,16 @@
  
 ## v1.1.0
 - [ ] Bookmarks and favorites
+      Bookmark page: Ctrl+D
+      Bookmark all tabs: Ctrl+Shift+D
+      Show/hide bookmarks bar: Ctrl+Shift+B
+      Bookmark manager: Ctrl+Shift+O
 - [ ] Site settings
 - [ ] HTTPS first
 - [ ] Site permissions controls
 - [x] Tracker blocking
+- [ ] Private mode
+      New private window: Ctrl+Shift+N
 
 ## v1.2.0
 - [ ] Tab groups and colors
