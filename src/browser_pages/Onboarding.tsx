@@ -72,6 +72,7 @@ export default function Onboarding() {
     () => initialSettings.startupRestoreBehavior,
   );
   const [runOnStartup, setRunOnStartup] = useState(() => initialSettings.runOnStartup);
+  const [adBlockEnabled, setAdBlockEnabled] = useState(() => initialSettings.adBlockEnabled);
   const [trackerBlockEnabled, setTrackerBlockEnabled] = useState(
     () => initialSettings.trackerBlockEnabled,
   );
@@ -88,7 +89,7 @@ export default function Onboarding() {
     () => pickThemeIdForMode(resolvedThemeMode, allThemes, initialSettings.themeId),
     [resolvedThemeMode, allThemes, initialSettings.themeId],
   );
-  const stepCount = 3;
+  const stepCount = 4;
   const isLastStep = stepIndex === stepCount - 1;
 
   useEffect(() => {
@@ -162,6 +163,7 @@ export default function Onboarding() {
       layoutId,
       startupRestoreBehavior,
       runOnStartup: canConfigureRunOnStartup ? runOnStartup : false,
+      adBlockEnabled,
       trackerBlockEnabled,
       autoUpdateOnLaunch: canAutoInstallOnLaunch ? autoUpdateOnLaunch : false,
     });
@@ -186,8 +188,13 @@ export default function Onboarding() {
     setStepIndex((index) => Math.min(index + 1, stepCount - 1));
   };
 
-  const titleByStep = ['', 'Appearance', 'Startup and updates'];
-  const subtitleByStep = ['', 'Customize the look of Mira.', 'Choose startup and update behavior.'];
+  const titleByStep = ['', 'Appearance', 'Startup and updates', 'Privacy'];
+  const subtitleByStep = [
+    '',
+    'Customize the look of Mira.',
+    'Choose startup and update behavior.',
+    'Set ad and tracker blocking defaults.',
+  ];
 
   return (
     <div
@@ -430,11 +437,37 @@ export default function Onboarding() {
                 />
               </label>
 
+              {!canAutoInstallOnLaunch && (
+                <div className="theme-text2" style={{ fontSize: 12 }}>
+                  Auto-update on launch is unavailable in this build.
+                </div>
+              )}
+            </div>
+          )}
+
+          {stepIndex === 3 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label className="settings-setting-row" htmlFor="onboarding-ad-blocking">
+                <span className="settings-setting-meta">
+                  <span className="settings-setting-label">Enable ad blocking</span>
+                  <span className="settings-setting-description">
+                    Block known ad and marketing hosts while browsing.
+                  </span>
+                </span>
+                <input
+                  id="onboarding-ad-blocking"
+                  type="checkbox"
+                  className="settings-toggle settings-setting-control"
+                  checked={adBlockEnabled}
+                  onChange={(event) => setAdBlockEnabled(event.currentTarget.checked)}
+                />
+              </label>
+
               <label className="settings-setting-row" htmlFor="onboarding-tracker-blocking">
                 <span className="settings-setting-meta">
                   <span className="settings-setting-label">Enable tracker blocking</span>
                   <span className="settings-setting-description">
-                    Block known analytics and tracking scripts like Google Tag Manager.
+                    Blocks many analytics trackers, but may also block resources some sites need.
                   </span>
                 </span>
                 <input
@@ -445,12 +478,6 @@ export default function Onboarding() {
                   onChange={(event) => setTrackerBlockEnabled(event.currentTarget.checked)}
                 />
               </label>
-
-              {!canAutoInstallOnLaunch && (
-                <div className="theme-text2" style={{ fontSize: 12 }}>
-                  Auto-update on launch is unavailable in this build.
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -469,7 +496,16 @@ export default function Onboarding() {
               Back
             </button>
           ) : (
-            <div />
+            <button
+              type="button"
+              className="theme-btn theme-btn-nav settings-btn-pad"
+              onClick={() => {
+                void finishOnboarding();
+              }}
+              disabled={isFinishing}
+            >
+              {isFinishing ? 'Skipping...' : 'Skip'}
+            </button>
           )}
 
           <button
