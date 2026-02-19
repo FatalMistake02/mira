@@ -13,7 +13,7 @@
 - [ ] Fix links not able to open new tabs
 - [ ] Fix some link types not working
 - [x] Add about:blank 
-- [ ] All shortcuts
+- [x] All shortcuts
 - [ ] Fix shortcuts not always working
 - [x] Default search engine and search engine "shortcuts"
  

@@ -17,6 +17,7 @@
 - Open in new window works
 - Add search engine settings
 - Add dev settings
+- Add most common shortcuts
 
 ## v0.8.1 - 2026-02-17
 

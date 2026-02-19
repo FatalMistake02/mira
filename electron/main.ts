@@ -1495,15 +1495,39 @@ function setupWebviewTabOpenHandler() {
       const isPrimaryChord = hasPrimaryModifier && !input.shift;
       const isNewWindowChord = isPrimaryChord && key === 'n';
       const isFindChord = isPrimaryChord && key === 'f';
+      const isFindNextChord = isPrimaryChord && key === 'g';
+      const isFindPreviousChord = hasPrimaryModifier && input.shift && key === 'g';
       const isNextTabChord = isPrimaryChord && key === 'tab';
       const isPreviousTabChord = hasPrimaryModifier && input.shift && key === 'tab';
       const tabNumberShortcut = isPrimaryChord && /^[1-9]$/.test(key)
         ? Number.parseInt(key, 10)
         : null;
-      const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
-      const isDevToolsChord = isMacOS
+      const isCloseWindowChord = hasPrimaryModifier && input.shift && key === 'w';
+      const isMoveTabLeftChord = hasPrimaryModifier && input.shift && key === 'pageup';
+      const isMoveTabRightChord = hasPrimaryModifier && input.shift && key === 'pagedown';
+      const isBackChord = !hasPrimaryModifier && input.alt && !input.shift && key === 'arrowleft';
+      const isForwardChord = !hasPrimaryModifier && input.alt && !input.shift && key === 'arrowright';
+      const isNewTabPageChord = !hasPrimaryModifier && input.alt && !input.shift && key === 'home';
+      const isFocusAddressBarChord =
+        (!hasPrimaryModifier && input.alt && !input.shift && key === 'd')
+        || (!hasPrimaryModifier && !input.alt && !input.shift && key === 'f6');
+      const isHardReloadChord = hasPrimaryModifier && input.shift && key === 'r';
+      const isHardReloadFunctionChord = hasPrimaryModifier && key === 'f5';
+      const isStopLoadingKey = !hasPrimaryModifier && !input.alt && !input.shift && key === 'escape';
+      const isSavePageChord = isPrimaryChord && key === 's';
+      const isOpenFileChord = isPrimaryChord && key === 'o';
+      const isViewSourceChord = isPrimaryChord && key === 'u';
+      const isZoomInChord = hasPrimaryModifier && !input.alt && (key === '+' || key === '=');
+      const isZoomOutChord = isPrimaryChord && key === '-';
+      const isZoomResetChord = isPrimaryChord && key === '0';
+      const isToggleFullScreenKey = !hasPrimaryModifier && !input.alt && !input.shift && key === 'f11';
+      const isAppDevToolsChord = hasPrimaryModifier && input.alt && input.shift && key === 'j';
+      const isBrowserConsoleChord = isMacOS
+        ? input.meta && input.alt && key === 'j'
+        : hasPrimaryModifier && input.shift && key === 'j';
+      const isDevToolsChord = key === 'f12' || isBrowserConsoleChord || (isMacOS
         ? input.meta && input.alt && key === 'i'
-        : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i');
+        : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i'));
 
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
@@ -1511,9 +1535,28 @@ function setupWebviewTabOpenHandler() {
       if (
         !isNewWindowChord
         && !isFindChord
+        && !isFindNextChord
+        && !isFindPreviousChord
         && !isNextTabChord
         && !isPreviousTabChord
         && tabNumberShortcut === null
+        && !isCloseWindowChord
+        && !isMoveTabLeftChord
+        && !isMoveTabRightChord
+        && !isBackChord
+        && !isForwardChord
+        && !isNewTabPageChord
+        && !isFocusAddressBarChord
+        && !isHardReloadChord
+        && !isHardReloadFunctionChord
+        && !isStopLoadingKey
+        && !isSavePageChord
+        && !isOpenFileChord
+        && !isViewSourceChord
+        && !isZoomInChord
+        && !isZoomOutChord
+        && !isZoomResetChord
+        && !isToggleFullScreenKey
         && !isDevToolsChord
         && !isAppDevToolsChord
       ) return;
@@ -1526,6 +1569,7 @@ function setupWebviewTabOpenHandler() {
           key,
           control: input.control,
           meta: input.meta,
+          alt: input.alt,
           shift: input.shift,
         });
         toggleWindowDevTools(hostWindow);
@@ -1533,9 +1577,7 @@ function setupWebviewTabOpenHandler() {
       }
 
       if (isDevToolsChord) {
-        if (toggleFocusedBrowserDevTools()) {
-          return;
-        }
+        if (toggleFocusedBrowserDevTools()) return;
         markHostDevToolsSuppressedForShortcut(hostWindow);
         hostWindow.webContents.send('app-shortcut', 'toggle-devtools');
         return;
@@ -1543,6 +1585,16 @@ function setupWebviewTabOpenHandler() {
 
       if (isFindChord) {
         hostWindow.webContents.send('app-shortcut', 'find-in-page');
+        return;
+      }
+
+      if (isFindNextChord) {
+        hostWindow.webContents.send('app-shortcut', 'find-next');
+        return;
+      }
+
+      if (isFindPreviousChord) {
+        hostWindow.webContents.send('app-shortcut', 'find-previous');
         return;
       }
 
@@ -1558,6 +1610,86 @@ function setupWebviewTabOpenHandler() {
 
       if (tabNumberShortcut !== null) {
         hostWindow.webContents.send('app-shortcut', 'activate-tab-index', tabNumberShortcut);
+        return;
+      }
+
+      if (isCloseWindowChord) {
+        hostWindow.webContents.send('app-shortcut', 'close-window');
+        return;
+      }
+
+      if (isMoveTabLeftChord) {
+        hostWindow.webContents.send('app-shortcut', 'move-active-tab-left');
+        return;
+      }
+
+      if (isMoveTabRightChord) {
+        hostWindow.webContents.send('app-shortcut', 'move-active-tab-right');
+        return;
+      }
+
+      if (isBackChord) {
+        hostWindow.webContents.send('app-shortcut', 'go-back');
+        return;
+      }
+
+      if (isForwardChord) {
+        hostWindow.webContents.send('app-shortcut', 'go-forward');
+        return;
+      }
+
+      if (isNewTabPageChord) {
+        hostWindow.webContents.send('app-shortcut', 'navigate-new-tab-page');
+        return;
+      }
+
+      if (isFocusAddressBarChord) {
+        hostWindow.webContents.send('app-shortcut', 'focus-address-bar');
+        return;
+      }
+
+      if (isHardReloadChord || isHardReloadFunctionChord) {
+        hostWindow.webContents.send('app-shortcut', 'reload-tab-ignore-cache');
+        return;
+      }
+
+      if (isStopLoadingKey) {
+        hostWindow.webContents.send('app-shortcut', 'stop-loading');
+        return;
+      }
+
+      if (isSavePageChord) {
+        hostWindow.webContents.send('app-shortcut', 'save-page');
+        return;
+      }
+
+      if (isOpenFileChord) {
+        hostWindow.webContents.send('app-shortcut', 'open-file');
+        return;
+      }
+
+      if (isViewSourceChord) {
+        hostWindow.webContents.send('app-shortcut', 'view-source');
+        return;
+      }
+
+      if (isZoomInChord) {
+        hostWindow.webContents.send('app-shortcut', 'zoom-in');
+        return;
+      }
+
+      if (isZoomOutChord) {
+        hostWindow.webContents.send('app-shortcut', 'zoom-out');
+        return;
+      }
+
+      if (isZoomResetChord) {
+        hostWindow.webContents.send('app-shortcut', 'zoom-reset');
+        return;
+      }
+
+      if (isToggleFullScreenKey) {
+        hostWindow.webContents.send('app-shortcut', 'toggle-fullscreen');
         return;
       }
 
@@ -2237,6 +2369,13 @@ function setupWindowControlsHandlers() {
     return win.isFullScreen();
   });
 
+  ipcMain.handle('window-fullscreen-toggle', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return false;
+    win.setFullScreen(!win.isFullScreen());
+    return true;
+  });
+
   ipcMain.handle('window-is-titlebar-overlay-enabled', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return false;
@@ -2248,6 +2387,16 @@ function setupWindowControlsHandlers() {
     if (!win || win.isDestroyed()) return false;
     win.close();
     return true;
+  });
+
+  ipcMain.handle('dialog-open-file-url', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, {
+      title: 'Open File',
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths[0]) return '';
+    return pathToFileURL(result.filePaths[0]).toString();
   });
 
   ipcMain.handle(
@@ -2496,7 +2645,7 @@ function setupApplicationMenu() {
         },
         {
           label: 'Toggle App DevTools',
-          accelerator: 'CmdOrCtrl+Shift+J',
+          accelerator: 'CmdOrCtrl+Alt+Shift+J',
           click: () => {
             const focusedWindow = BrowserWindow.getFocusedWindow();
             if (!focusedWindow || focusedWindow.isDestroyed()) return;
@@ -2780,6 +2929,8 @@ function createWindow(
     const hasPrimaryModifier = input.control || input.meta;
     const isPrimaryChord = hasPrimaryModifier && !input.shift;
     const isReloadChord = isPrimaryChord && key === 'r';
+    const isHardReloadChord = hasPrimaryModifier && input.shift && key === 'r';
+    const isHardReloadFunctionKey = hasPrimaryModifier && key === 'f5';
     const isFindChord = isPrimaryChord && key === 'f';
     const isNewWindowChord = isPrimaryChord && key === 'n';
     const isNextTabChord = isPrimaryChord && key === 'tab';
@@ -2790,11 +2941,20 @@ function createWindow(
     const isDownloadsChord = isPrimaryChord && key === 'j';
     const isPrintChord = isPrimaryChord && key === 'p';
     const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
-    const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
+    const isAppDevToolsChord = hasPrimaryModifier && input.alt && input.shift && key === 'j';
+    const isBrowserConsoleChord = isMacOS
+      ? input.meta && input.alt && key === 'j'
+      : hasPrimaryModifier && input.shift && key === 'j';
     const isReloadKey = key === 'f5';
-    const isDevToolsChord = key === 'f12' || (isMacOS
+    const isDevToolsChord = key === 'f12' || isBrowserConsoleChord || (isMacOS
       ? input.meta && input.alt && key === 'i'
       : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i'));
+
+    if (isHardReloadChord || isHardReloadFunctionKey) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'reload-tab-ignore-cache');
+      return;
+    }
 
     if (isReloadChord || isReloadKey) {
       event.preventDefault();

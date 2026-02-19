@@ -20,6 +20,8 @@ type FindInPageOptions = {
   matchCase?: boolean;
 };
 
+type ScrollPageCommand = 'page-down' | 'page-up' | 'top' | 'bottom';
+
 type FindInPageMatchState = {
   activeMatchOrdinal: number;
   matches: number;
@@ -27,6 +29,11 @@ type FindInPageMatchState = {
 
 type WebviewElement = {
   reload: () => void;
+  reloadIgnoringCache?: () => void;
+  stop?: () => void;
+  executeJavaScript?: (code: string, userGesture?: boolean) => Promise<unknown>;
+  setZoomFactor?: (factor: number) => void;
+  getZoomFactor?: (callback: (factor: number) => void) => void;
   findInPage: (text: string, options?: FindInPageOptions) => number;
   stopFindInPage?: (action: 'clearSelection' | 'keepSelection' | 'activateSelection') => void;
   openDevTools: () => void;
@@ -60,17 +67,23 @@ type TabsContextType = {
   reopenLastClosedTab: () => void;
   openHistory: () => void;
   openDownloads: () => void;
+  closeWindow: () => void;
   closeTab: (id: string) => void;
   closeOtherTabs: (id: string) => void;
   closeTabsToRight: (id: string) => void;
   moveTab: (fromId: string, toId: string) => void;
   moveTabToIndex: (tabId: string, toIndex: number) => void;
+  moveActiveTabBy: (delta: -1 | 1) => void;
   moveTabToNewWindow: (id: string) => void;
   navigate: (url: string, tabId?: string) => void;
+  navigateToNewTabPage: () => void;
   goBack: () => void;
   goForward: () => void;
   reload: () => void;
+  reloadIgnoringCache: () => void;
+  stopLoading: () => void;
   searchInPage: (query: string, options?: FindInPageOptions) => void;
+  findInPageNext: (forward?: boolean) => void;
   stopFindInPage: () => void;
   findInPageActiveMatchOrdinal: number;
   findInPageMatches: number;
@@ -83,6 +96,14 @@ type TabsContextType = {
   toggleDevTools: () => void;
   updateTabMetadata: (id: string, metadata: { title?: string; favicon?: string | null }) => void;
   printPage: () => void;
+  savePage: () => void;
+  openFile: () => void;
+  openViewSource: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
+  toggleFullScreen: () => void;
+  scrollPage: (command: ScrollPageCommand) => void;
   registerWebview: (id: string, el: WebviewElement) => void;
   setActive: (id: string) => void;
   restorePromptOpen: boolean;
@@ -96,6 +117,9 @@ type TabsContextType = {
 const TabsContext = createContext<TabsContextType>(null!);
 export const useTabs = () => useContext(TabsContext);
 const MAX_RECENTLY_CLOSED_TABS = 25;
+const ZOOM_STEP = 0.1;
+const MIN_ZOOM_FACTOR = 0.25;
+const MAX_ZOOM_FACTOR = 5;
 
 function isNewTabUrl(url: string, defaultTabUrl: string): boolean {
   const normalized = url.trim().toLowerCase();
@@ -243,6 +267,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const newTabRef = useRef<(url?: string) => void>(() => undefined);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
+  const zoomFactorByTabRef = useRef<Record<string, number>>({});
   const activeFindInPageMatches = findInPageMatchesByTab[activeId] ?? {
     activeMatchOrdinal: 0,
     matches: 0,
@@ -659,7 +684,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     newTab('mira://downloads');
   };
 
-  const closeCurrentWindow = () => {
+  const closeWindow = useCallback(() => {
     const ipc = electron?.ipcRenderer;
     if (ipc) {
       ipc.invoke('session-save-window', null).catch(() => undefined);
@@ -673,12 +698,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       // Ignore storage failures.
     }
     window.close();
-  };
+  }, []);
 
   const clearTabRuntimeState = useCallback(
     (id: string) => {
       delete lastFindQueryByTabRef.current[id];
       delete activeFindRequestIdByTabRef.current[id];
+      delete zoomFactorByTabRef.current[id];
       clearFindInPageMatchesForTab(id);
     },
     [clearFindInPageMatchesForTab],
@@ -699,7 +725,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const closeTab = (id: string) => {
     const shouldCloseWindow = tabs.length === 1 && tabs[0]?.id === id;
     if (shouldCloseWindow) {
-      closeCurrentWindow();
+      closeWindow();
       return;
     }
 
@@ -845,6 +871,18 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     });
   }, []);
 
+  const moveActiveTabBy = useCallback(
+    (delta: -1 | 1) => {
+      if (!tabs.length || !activeId) return;
+      const currentIndex = tabs.findIndex((tab) => tab.id === activeId);
+      if (currentIndex < 0) return;
+      const targetIndex = Math.max(0, Math.min(currentIndex + delta, tabs.length - 1));
+      if (targetIndex === currentIndex) return;
+      moveTabToIndex(activeId, targetIndex);
+    },
+    [tabs, activeId, moveTabToIndex],
+  );
+
   const moveTabToNewWindow = useCallback(
     (id: string) => {
       const tabToMove = tabs.find((tab) => tab.id === id);
@@ -856,9 +894,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       } else {
         window.open(url || window.location.href, '_blank', 'noopener,noreferrer');
       }
-      delete lastFindQueryByTabRef.current[id];
-      delete activeFindRequestIdByTabRef.current[id];
-      clearFindInPageMatchesForTab(id);
+      clearTabRuntimeState(id);
 
       setTabs((currentTabs) => {
         const nextTabs = currentTabs.filter((tab) => tab.id !== id);
@@ -878,7 +914,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         );
       });
     },
-    [tabs, activeId, clearFindInPageMatchesForTab],
+    [tabs, activeId, clearTabRuntimeState],
   );
 
   const setActive = useCallback(
@@ -994,6 +1030,10 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     [activeId],
   );
 
+  const navigateToNewTabPage = useCallback(() => {
+    navigate(getBrowserSettings().newTabPage);
+  }, [navigate]);
+
   useEffect(() => {
     tabsRef.current = tabs;
     activeIdRef.current = activeId;
@@ -1079,6 +1119,21 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     reloadTab(activeId);
   }, [activeId, reloadTab]);
 
+  const reloadIgnoringCache = useCallback(() => {
+    const wv = webviewMap.current[activeId];
+    if (wv && typeof wv.reloadIgnoringCache === 'function') {
+      wv.reloadIgnoringCache();
+      return;
+    }
+    reload();
+  }, [activeId, reload]);
+
+  const stopLoading = useCallback(() => {
+    const wv = webviewMap.current[activeId];
+    if (!wv || typeof wv.stop !== 'function') return;
+    wv.stop();
+  }, [activeId]);
+
   const searchInPage = useCallback(
     (query: string, options?: FindInPageOptions) => {
       const wv = webviewMap.current[activeId];
@@ -1117,6 +1172,19 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       lastFindQueryByTabRef.current[activeId] = normalizedQuery;
     },
     [activeId, clearFindInPageMatchesForTab],
+  );
+
+  const findInPageNext = useCallback(
+    (forward = true) => {
+      const query = lastFindQueryByTabRef.current[activeId];
+      if (!query) return;
+
+      searchInPage(query, {
+        forward,
+        findNext: true,
+      });
+    },
+    [activeId, searchInPage],
   );
 
   const stopFindInPage = useCallback(() => {
@@ -1181,6 +1249,163 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
     wv.print({ printBackground: true });
   }, [tabs, activeId]);
+
+  const savePage = useCallback(() => {
+    const activeTab = tabs.find((tab) => tab.id === activeId);
+    if (!activeTab || activeTab.url.startsWith('mira://')) return;
+
+    const wv = webviewMap.current[activeId];
+    if (!wv || typeof wv.getWebContentsId !== 'function') return;
+    const webContentsId = wv.getWebContentsId();
+    if (typeof webContentsId !== 'number' || !Number.isFinite(webContentsId)) return;
+
+    electron?.ipcRenderer
+      ?.invoke('webview-context-action', {
+        webContentsId,
+        action: 'save-page-as',
+      })
+      .catch(() => undefined);
+  }, [tabs, activeId]);
+
+  const openFile = useCallback(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    ipc
+      .invoke<string>('dialog-open-file-url')
+      .then((fileUrl) => {
+        if (typeof fileUrl !== 'string') return;
+        const normalized = fileUrl.trim();
+        if (!normalized) return;
+        navigate(normalized);
+      })
+      .catch(() => undefined);
+  }, [navigate]);
+
+  const openViewSource = useCallback(() => {
+    const activeTab = tabs.find((tab) => tab.id === activeId);
+    if (!activeTab) return;
+
+    const sourceUrl = activeTab.url.trim();
+    if (!sourceUrl || sourceUrl.startsWith('mira://')) return;
+
+    newTab(`view-source:${sourceUrl}`);
+  }, [tabs, activeId, newTab]);
+
+  const applyZoomFactor = useCallback(
+    (nextFactor: number) => {
+      const wv = webviewMap.current[activeId];
+      if (!wv || typeof wv.setZoomFactor !== 'function') return;
+
+      const bounded = Math.max(MIN_ZOOM_FACTOR, Math.min(nextFactor, MAX_ZOOM_FACTOR));
+      wv.setZoomFactor(bounded);
+      zoomFactorByTabRef.current[activeId] = bounded;
+    },
+    [activeId],
+  );
+
+  const withCurrentZoomFactor = useCallback(
+    (onRead: (factor: number) => void) => {
+      const fallback = zoomFactorByTabRef.current[activeId] ?? 1;
+      const wv = webviewMap.current[activeId];
+      if (!wv || typeof wv.getZoomFactor !== 'function') {
+        onRead(fallback);
+        return;
+      }
+
+      try {
+        wv.getZoomFactor((rawFactor) => {
+          const normalized =
+            typeof rawFactor === 'number' && Number.isFinite(rawFactor) && rawFactor > 0
+              ? rawFactor
+              : fallback;
+          onRead(normalized);
+        });
+      } catch {
+        onRead(fallback);
+      }
+    },
+    [activeId],
+  );
+
+  const zoomIn = useCallback(() => {
+    withCurrentZoomFactor((factor) => {
+      applyZoomFactor(factor + ZOOM_STEP);
+    });
+  }, [applyZoomFactor, withCurrentZoomFactor]);
+
+  const zoomOut = useCallback(() => {
+    withCurrentZoomFactor((factor) => {
+      applyZoomFactor(factor - ZOOM_STEP);
+    });
+  }, [applyZoomFactor, withCurrentZoomFactor]);
+
+  const resetZoom = useCallback(() => {
+    applyZoomFactor(1);
+  }, [applyZoomFactor]);
+
+  const toggleFullScreen = useCallback(() => {
+    const ipc = electron?.ipcRenderer;
+    if (ipc) {
+      ipc.invoke('window-fullscreen-toggle').catch(() => undefined);
+      return;
+    }
+
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+
+    void document.documentElement.requestFullscreen().catch(() => undefined);
+  }, []);
+
+  const scrollPage = useCallback(
+    (command: ScrollPageCommand) => {
+      const wv = webviewMap.current[activeId];
+      if (wv && typeof wv.executeJavaScript === 'function') {
+        const script = `(() => {
+  const command = ${JSON.stringify(command)};
+  const pageStep = Math.max(window.innerHeight * 0.9, 120);
+  switch (command) {
+    case 'page-down':
+      window.scrollBy({ top: pageStep, left: 0, behavior: 'auto' });
+      break;
+    case 'page-up':
+      window.scrollBy({ top: -pageStep, left: 0, behavior: 'auto' });
+      break;
+    case 'top':
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      break;
+    case 'bottom':
+      window.scrollTo({ top: document.documentElement.scrollHeight, left: 0, behavior: 'auto' });
+      break;
+    default:
+      break;
+  }
+})();`;
+        wv.executeJavaScript(script).catch(() => undefined);
+        return;
+      }
+
+      const pageStep = Math.max(window.innerHeight * 0.9, 120);
+      if (command === 'page-down') {
+        window.scrollBy({ top: pageStep, left: 0, behavior: 'auto' });
+        return;
+      }
+      if (command === 'page-up') {
+        window.scrollBy({ top: -pageStep, left: 0, behavior: 'auto' });
+        return;
+      }
+      if (command === 'top') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        return;
+      }
+      if (command === 'bottom') {
+        window.scrollTo({ top: document.documentElement.scrollHeight, left: 0, behavior: 'auto' });
+      }
+    },
+    [activeId],
+  );
 
   useEffect(() => {
     const sleepInactiveTabs = () => {
@@ -1316,17 +1541,23 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         reopenLastClosedTab,
         openHistory,
         openDownloads,
+        closeWindow,
         closeTab,
         closeOtherTabs,
         closeTabsToRight,
         moveTab,
         moveTabToIndex,
+        moveActiveTabBy,
         moveTabToNewWindow,
         navigate,
+        navigateToNewTabPage,
         goBack,
         goForward,
         reload,
+        reloadIgnoringCache,
+        stopLoading,
         searchInPage,
+        findInPageNext,
         stopFindInPage,
         findInPageActiveMatchOrdinal: activeFindInPageMatches.activeMatchOrdinal,
         findInPageMatches: activeFindInPageMatches.matches,
@@ -1334,6 +1565,14 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         toggleDevTools,
         updateTabMetadata,
         printPage,
+        savePage,
+        openFile,
+        openViewSource,
+        zoomIn,
+        zoomOut,
+        resetZoom,
+        toggleFullScreen,
+        scrollPage,
         registerWebview,
         setActive,
         restorePromptOpen,
