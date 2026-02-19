@@ -3,9 +3,13 @@ import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import {
   DEFAULT_BROWSER_SETTINGS,
+  SEARCH_ENGINE_OPTIONS,
   getBrowserSettings,
+  getSearchEngineShortcuts,
   saveBrowserSettings,
   type DevToolsOpenMode,
+  type SearchEngine,
+  type SearchEngineShortcutChars,
   type StartupRestoreBehavior,
   type TabSleepMode,
 } from '../features/settings/browserSettings';
@@ -95,7 +99,7 @@ type SetDefaultBrowserResponse = {
   };
 };
 
-type SettingsSectionId = 'general' | 'appearance' | 'app';
+type SettingsSectionId = 'general' | 'search' | 'appearance' | 'app';
 
 const SETTINGS_SECTION_TABS: Array<{
   id: SettingsSectionId;
@@ -104,6 +108,10 @@ const SETTINGS_SECTION_TABS: Array<{
   {
     id: 'general',
     label: 'General',
+  },
+  {
+    id: 'search',
+    label: 'Search',
   },
   {
     id: 'appearance',
@@ -121,6 +129,15 @@ export default function Settings() {
 
   const initialSettings = getBrowserSettings();
   const [newTabPage, setNewTabPage] = useState(() => initialSettings.newTabPage);
+  const [searchEngine, setSearchEngine] = useState<SearchEngine>(() => initialSettings.searchEngine);
+  const [searchEngineShortcutsEnabled, setSearchEngineShortcutsEnabled] = useState(
+    () => initialSettings.searchEngineShortcutsEnabled,
+  );
+  const [searchEngineShortcutPrefix, setSearchEngineShortcutPrefix] = useState(
+    () => initialSettings.searchEngineShortcutPrefix,
+  );
+  const [searchEngineShortcutChars, setSearchEngineShortcutChars] =
+    useState<SearchEngineShortcutChars>(() => initialSettings.searchEngineShortcutChars);
   const [themeId, setThemeId] = useState(() => initialSettings.themeId);
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => initialSettings.rawFileDarkModeEnabled,
@@ -260,6 +277,10 @@ export default function Settings() {
     const timer = setTimeout(() => {
       saveBrowserSettings({
         newTabPage,
+        searchEngine,
+        searchEngineShortcutsEnabled,
+        searchEngineShortcutPrefix,
+        searchEngineShortcutChars,
         themeId,
         rawFileDarkModeEnabled,
         layoutId,
@@ -290,6 +311,10 @@ export default function Settings() {
     return () => clearTimeout(timer);
   }, [
     newTabPage,
+    searchEngine,
+    searchEngineShortcutsEnabled,
+    searchEngineShortcutPrefix,
+    searchEngineShortcutChars,
     themeId,
     rawFileDarkModeEnabled,
     layoutId,
@@ -387,6 +412,29 @@ export default function Settings() {
     }
   };
   const formatLayoutLabel = (entry: LayoutEntry) => `${entry.layout.name} - ${entry.layout.author}`;
+  const searchEngineShortcuts = getSearchEngineShortcuts(
+    searchEngineShortcutPrefix,
+    searchEngineShortcutChars,
+  );
+  const shortcutExample = searchEngineShortcuts[0]?.shortcut ?? '!g';
+  const secondShortcutExample = searchEngineShortcuts[1]?.shortcut ?? '!d';
+
+  const handleSearchShortcutPrefixChange = (value: string) => {
+    const normalized = value.replace(/\s+/g, '');
+    if (!normalized) return;
+    setSearchEngineShortcutPrefix(normalized[normalized.length - 1]);
+    setSaveStatus('saving');
+  };
+
+  const handleSearchShortcutCharChange = (engine: SearchEngine, value: string) => {
+    const normalized = value.replace(/\s+/g, '').toLowerCase();
+    if (!normalized) return;
+    setSearchEngineShortcutChars((current) => ({
+      ...current,
+      [engine]: normalized[normalized.length - 1],
+    }));
+    setSaveStatus('saving');
+  };
 
   const checkForUpdates = async () => {
     if (!electron?.ipcRenderer) {
@@ -824,6 +872,121 @@ export default function Settings() {
                     }}
                   />
                 </label>
+              </section>
+            </>
+          )}
+
+          {activeSection === 'search' && (
+            <>
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Search Engine</h2>
+                </div>
+                <div className="settings-setting-row">
+                  <label htmlFor="search-engine" className="settings-setting-meta">
+                    <span className="settings-setting-label">Default search engine</span>
+                    <span className="settings-setting-description">
+                      Used when you type non-URL text in the address bar or New Tab search.
+                    </span>
+                  </label>
+                  <select
+                    id="search-engine"
+                    value={searchEngine}
+                    onChange={(e) => {
+                      const nextEngine = e.currentTarget.value;
+                      if (SEARCH_ENGINE_OPTIONS.some((option) => option.value === nextEngine)) {
+                        setSearchEngine(nextEngine as SearchEngine);
+                        setSaveStatus('saving');
+                      }
+                    }}
+                    className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                  >
+                    {SEARCH_ENGINE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label
+                  htmlFor="search-engine-shortcuts-enabled"
+                  className="settings-setting-row"
+                >
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Enable engine shortcuts</span>
+                    <span className="settings-setting-description">
+                      Allow prefixes like <code>{shortcutExample}</code> and{' '}
+                      <code>{secondShortcutExample}</code> to override the selected engine for a
+                      single search.
+                    </span>
+                  </span>
+                  <input
+                    id="search-engine-shortcuts-enabled"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={searchEngineShortcutsEnabled}
+                    onChange={(e) => {
+                      setSearchEngineShortcutsEnabled(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+                {searchEngineShortcutsEnabled && (
+                  <>
+                    <div className="settings-setting-row">
+                      <label htmlFor="search-shortcut-prefix" className="settings-setting-meta">
+                        <span className="settings-setting-label">Shortcut prefix character</span>
+                        <span className="settings-setting-description">
+                          Character used before each engine shortcut.
+                        </span>
+                      </label>
+                      <input
+                        id="search-shortcut-prefix"
+                        type="text"
+                        inputMode="text"
+                        autoComplete="off"
+                        value={searchEngineShortcutPrefix}
+                        onChange={(e) => handleSearchShortcutPrefixChange(e.currentTarget.value)}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="theme-input settings-number-input settings-setting-control"
+                      />
+                    </div>
+                    <div className="settings-setting-row">
+                      <div className="settings-setting-meta">
+                        <span className="settings-setting-label">Engine shortcuts</span>
+                        <span className="settings-setting-description">
+                          Type the shortcut first, then your query (example:{' '}
+                          <code>{shortcutExample} cats</code>).
+                        </span>
+                        <div className="settings-shortcuts-list">
+                          {searchEngineShortcuts.map((entry) => (
+                            <div key={entry.engine} className="settings-shortcuts-item">
+                              <span className="settings-shortcuts-engine">{entry.label}</span>
+                              <span className="settings-shortcuts-current">
+                                Current: <code>{entry.shortcut}</code>
+                              </span>
+                              <input
+                                id={`search-shortcut-char-${entry.engine}`}
+                                type="text"
+                                inputMode="text"
+                                autoComplete="off"
+                                value={searchEngineShortcutChars[entry.engine]}
+                                onChange={(e) =>
+                                  handleSearchShortcutCharChange(
+                                    entry.engine,
+                                    e.currentTarget.value,
+                                  )
+                                }
+                                onFocus={(e) => e.currentTarget.select()}
+                                className="theme-input settings-shortcuts-input"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             </>
           )}

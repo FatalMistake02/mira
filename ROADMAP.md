@@ -15,7 +15,7 @@
 - [x] Add about:blank 
 - [ ] All shortcuts
 - [ ] Fix shortcuts not always working
-- [ ] Default search engine and search engine "shortcuts"
+- [x] Default search engine and search engine "shortcuts"
  
 ## v1.1.0
 - [ ] Bookmarks and favorites

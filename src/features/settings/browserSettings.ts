@@ -5,6 +5,47 @@ export type TabSleepUnit = 'seconds' | 'minutes' | 'hours';
 export type TabSleepMode = 'freeze' | 'discard';
 export type DevToolsOpenMode = 'side' | 'window';
 export type StartupRestoreBehavior = 'ask' | 'windows' | 'tabs' | 'fresh';
+export type SearchEngine =
+  | 'google'
+  | 'duckduckgo'
+  | 'bing'
+  | 'yahoo'
+  | 'startpage'
+  | 'qwant'
+  | 'yandex'
+  | 'brave'
+  | 'ecosia';
+
+export const SEARCH_ENGINE_OPTIONS: ReadonlyArray<{
+  value: SearchEngine;
+  label: string;
+}> = [
+  { value: 'google', label: 'Google' },
+  { value: 'duckduckgo', label: 'DuckDuckGo' },
+  { value: 'bing', label: 'Bing' },
+  { value: 'yahoo', label: 'Yahoo' },
+  { value: 'startpage', label: 'Startpage' },
+  { value: 'qwant', label: 'Qwant' },
+  { value: 'yandex', label: 'Yandex' },
+  { value: 'brave', label: 'Brave Search' },
+  { value: 'ecosia', label: 'Ecosia' },
+];
+
+export type SearchEngineShortcutChars = Record<SearchEngine, string>;
+
+export const DEFAULT_SEARCH_ENGINE_SHORTCUT_PREFIX = '!';
+
+export const DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS: SearchEngineShortcutChars = {
+  google: 'g',
+  duckduckgo: 'd',
+  bing: 'b',
+  yahoo: 'y',
+  startpage: 's',
+  qwant: 'q',
+  yandex: 'a',
+  brave: 'r',
+  ecosia: 'e',
+};
 
 export type BrowserSettings = {
   newTabPage: string;
@@ -24,6 +65,11 @@ export type BrowserSettings = {
   autoUpdateOnLaunch: boolean;
   runOnStartup: boolean;
   startupRestoreBehavior: StartupRestoreBehavior;
+  searchEngine: SearchEngine;
+  searchEngineShortcutsEnabled: boolean;
+  searchEngineShortcutPrefix: string;
+  searchEngineShortcutChars: SearchEngineShortcutChars;
+  hiddenDevSettingEnabled: boolean;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -44,10 +90,16 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   autoUpdateOnLaunch: false,
   runOnStartup: false,
   startupRestoreBehavior: 'ask',
+  searchEngine: 'google',
+  searchEngineShortcutsEnabled: false,
+  searchEngineShortcutPrefix: DEFAULT_SEARCH_ENGINE_SHORTCUT_PREFIX,
+  searchEngineShortcutChars: DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS,
+  hiddenDevSettingEnabled: import.meta.env.DEV,
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
 export const BROWSER_SETTINGS_CHANGED_EVENT = 'mira:settings-changed';
+const IS_DEV_BUILD = import.meta.env.DEV;
 
 const TAB_SLEEP_UNIT_TO_MS: Record<TabSleepUnit, number> = {
   seconds: 1000,
@@ -198,6 +250,96 @@ function normalizeStartupRestoreBehavior(value: unknown): StartupRestoreBehavior
   return DEFAULT_BROWSER_SETTINGS.startupRestoreBehavior;
 }
 
+function normalizeSearchEngine(value: unknown): SearchEngine {
+  if (
+    value === 'google' ||
+    value === 'duckduckgo' ||
+    value === 'bing' ||
+    value === 'yahoo' ||
+    value === 'startpage' ||
+    value === 'qwant' ||
+    value === 'yandex' ||
+    value === 'brave' ||
+    value === 'ecosia'
+  ) {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_SETTINGS.searchEngine;
+}
+
+function normalizeSearchEngineShortcutsEnabled(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.searchEngineShortcutsEnabled;
+  }
+
+  return value;
+}
+
+function normalizeSearchEngineShortcutPrefix(value: unknown): string {
+  if (typeof value !== 'string') {
+    return DEFAULT_BROWSER_SETTINGS.searchEngineShortcutPrefix;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return DEFAULT_BROWSER_SETTINGS.searchEngineShortcutPrefix;
+  }
+
+  return normalized[0];
+}
+
+function normalizeShortcutChar(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized[0];
+}
+
+function normalizeSearchEngineShortcutChars(value: unknown): SearchEngineShortcutChars {
+  const source =
+    typeof value === 'object' && value !== null
+      ? (value as Partial<Record<SearchEngine, unknown>>)
+      : {};
+
+  return {
+    google: normalizeShortcutChar(source.google, DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.google),
+    duckduckgo: normalizeShortcutChar(
+      source.duckduckgo,
+      DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.duckduckgo,
+    ),
+    bing: normalizeShortcutChar(source.bing, DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.bing),
+    yahoo: normalizeShortcutChar(source.yahoo, DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.yahoo),
+    startpage: normalizeShortcutChar(
+      source.startpage,
+      DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.startpage,
+    ),
+    qwant: normalizeShortcutChar(source.qwant, DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.qwant),
+    yandex: normalizeShortcutChar(source.yandex, DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.yandex),
+    brave: normalizeShortcutChar(source.brave, DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.brave),
+    ecosia: normalizeShortcutChar(source.ecosia, DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS.ecosia),
+  };
+}
+
+function normalizeHiddenDevSettingEnabled(value: unknown): boolean {
+  // Never allow this setting in production builds.
+  if (!IS_DEV_BUILD) {
+    return false;
+  }
+
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.hiddenDevSettingEnabled;
+  }
+
+  return value;
+}
+
 export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   if (typeof value !== 'object' || value === null) {
     return DEFAULT_BROWSER_SETTINGS;
@@ -225,11 +367,129 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     autoUpdateOnLaunch: normalizeAutoUpdateOnLaunch(candidate.autoUpdateOnLaunch),
     runOnStartup: normalizeRunOnStartup(candidate.runOnStartup),
     startupRestoreBehavior: normalizeStartupRestoreBehavior(candidate.startupRestoreBehavior),
+    searchEngine: normalizeSearchEngine(candidate.searchEngine),
+    searchEngineShortcutsEnabled: normalizeSearchEngineShortcutsEnabled(
+      candidate.searchEngineShortcutsEnabled,
+    ),
+    searchEngineShortcutPrefix: normalizeSearchEngineShortcutPrefix(
+      candidate.searchEngineShortcutPrefix,
+    ),
+    searchEngineShortcutChars: normalizeSearchEngineShortcutChars(
+      candidate.searchEngineShortcutChars,
+    ),
+    hiddenDevSettingEnabled: normalizeHiddenDevSettingEnabled(candidate.hiddenDevSettingEnabled),
   };
 }
 
 export function getTabSleepAfterMs(settings: BrowserSettings): number {
   return settings.tabSleepValue * TAB_SLEEP_UNIT_TO_MS[settings.tabSleepUnit];
+}
+
+export function getSearchUrlForQuery(query: string, engine: SearchEngine): string {
+  const searchQuery = new URLSearchParams({ q: query }).toString();
+
+  switch (engine) {
+    case 'duckduckgo':
+      return `https://duckduckgo.com/?${searchQuery}`;
+    case 'bing':
+      return `https://www.bing.com/search?${searchQuery}`;
+    case 'yahoo':
+      return `https://search.yahoo.com/search?${searchQuery}`;
+    case 'startpage':
+      return `https://www.startpage.com/sp/search?${searchQuery}`;
+    case 'qwant':
+      return `https://www.qwant.com/?${searchQuery}&t=web`;
+    case 'yandex':
+      return `https://yandex.com/search/?${searchQuery}`;
+    case 'brave':
+      return `https://search.brave.com/search?${searchQuery}`;
+    case 'ecosia':
+      return `https://www.ecosia.org/search?${searchQuery}`;
+    case 'google':
+    default:
+      return `https://www.google.com/search?${searchQuery}`;
+  }
+}
+
+export function getSearchEngineShortcuts(
+  shortcutPrefix: string,
+  shortcutChars: SearchEngineShortcutChars,
+): Array<{ shortcut: string; engine: SearchEngine; label: string }> {
+  const normalizedPrefix = normalizeSearchEngineShortcutPrefix(shortcutPrefix);
+  const normalizedChars = normalizeSearchEngineShortcutChars(shortcutChars);
+
+  return SEARCH_ENGINE_OPTIONS.map((option) => ({
+    shortcut: `${normalizedPrefix}${normalizedChars[option.value]}`,
+    engine: option.value,
+    label: option.label,
+  }));
+}
+
+export function parseSearchInput(
+  input: string,
+  fallbackEngine: SearchEngine,
+  shortcutsEnabled: boolean,
+  shortcutPrefix: string,
+  shortcutChars: SearchEngineShortcutChars,
+): { query: string; engine: SearchEngine } {
+  const normalizedInput = input.trim();
+  if (!normalizedInput) {
+    return {
+      query: '',
+      engine: fallbackEngine,
+    };
+  }
+
+  if (!shortcutsEnabled) {
+    return {
+      query: normalizedInput,
+      engine: fallbackEngine,
+    };
+  }
+
+  const shortcuts = getSearchEngineShortcuts(shortcutPrefix, shortcutChars);
+  const [prefix, ...rest] = normalizedInput.split(/\s+/);
+  const normalizedPrefixToken = prefix.toLowerCase();
+  const shortcutMatch = shortcuts.find(
+    (entry) => entry.shortcut.toLowerCase() === normalizedPrefixToken,
+  );
+
+  if (!shortcutMatch) {
+    return {
+      query: normalizedInput,
+      engine: fallbackEngine,
+    };
+  }
+
+  const queryAfterShortcut = rest.join(' ').trim();
+  if (!queryAfterShortcut) {
+    return {
+      query: normalizedInput,
+      engine: fallbackEngine,
+    };
+  }
+
+  return {
+    query: queryAfterShortcut,
+    engine: shortcutMatch.engine,
+  };
+}
+
+export function getSearchUrlFromInput(
+  input: string,
+  fallbackEngine: SearchEngine,
+  shortcutsEnabled = true,
+  shortcutPrefix = DEFAULT_SEARCH_ENGINE_SHORTCUT_PREFIX,
+  shortcutChars = DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS,
+): string {
+  const { query, engine } = parseSearchInput(
+    input,
+    fallbackEngine,
+    shortcutsEnabled,
+    shortcutPrefix,
+    shortcutChars,
+  );
+  return getSearchUrlForQuery(query, engine);
 }
 
 export function getBrowserSettings(): BrowserSettings {

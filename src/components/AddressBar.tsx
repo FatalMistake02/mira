@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import DownloadButton from './DownloadButton';
-import { getBrowserSettings } from '../features/settings/browserSettings';
+import { getBrowserSettings, getSearchUrlFromInput } from '../features/settings/browserSettings';
 import { electron } from '../electronBridge';
 
 function ReloadIcon() {
@@ -121,8 +121,14 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     } else if (isLikelyDomainOrUrl(raw)) {
       finalUrl = raw.startsWith('//') ? `https:${raw}` : `https://${raw}`;
     } else {
-      const query = new URLSearchParams({ q: raw }).toString();
-      finalUrl = `https://www.google.com/search?${query}`;
+      const settings = getBrowserSettings();
+      finalUrl = getSearchUrlFromInput(
+        raw,
+        settings.searchEngine,
+        settings.searchEngineShortcutsEnabled,
+        settings.searchEngineShortcutPrefix,
+        settings.searchEngineShortcutChars,
+      );
     }
 
     navigate(finalUrl);
