@@ -165,7 +165,7 @@ const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'branch.io',
   'app.adjust.com',
 ];
-const blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
+let blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
 const AD_BLOCK_LIST_URLS = [
   'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
   'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/light.txt',
