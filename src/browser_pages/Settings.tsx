@@ -151,6 +151,9 @@ export default function Settings() {
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => initialSettings.rawFileDarkModeEnabled,
   );
+  const [nativeTextFieldContextMenu, setNativeTextFieldContextMenu] = useState(
+    () => initialSettings.nativeTextFieldContextMenu,
+  );
   const [layoutId, setLayoutId] = useState(() => initialSettings.layoutId);
   const [tabSleepValue, setTabSleepValue] = useState(() => initialSettings.tabSleepValue);
   const [tabSleepUnit, setTabSleepUnit] = useState(() => initialSettings.tabSleepUnit);
@@ -160,9 +163,7 @@ export default function Settings() {
   const [trackerBlockEnabled, setTrackerBlockEnabled] = useState(
     () => initialSettings.trackerBlockEnabled,
   );
-  const [quitOnLastWindowClose, setQuitOnLastWindowClose] = useState(
-    () => initialSettings.quitOnLastWindowClose,
-  );
+  const [quitOnLastWindowClose] = useState(() => initialSettings.quitOnLastWindowClose);
   const [showNewTabBranding, setShowNewTabBranding] = useState(
     () => initialSettings.showNewTabBranding,
   );
@@ -296,6 +297,7 @@ export default function Settings() {
         searchEngineShortcutChars,
         themeId,
         rawFileDarkModeEnabled,
+        nativeTextFieldContextMenu,
         layoutId,
         tabSleepValue,
         tabSleepUnit,
@@ -331,6 +333,7 @@ export default function Settings() {
     searchEngineShortcutChars,
     themeId,
     rawFileDarkModeEnabled,
+    nativeTextFieldContextMenu,
     layoutId,
     tabSleepValue,
     tabSleepUnit,
@@ -1333,6 +1336,30 @@ export default function Settings() {
                     <option value="window">Separate window</option>
                   </select>
                 </div>
+              </section>
+
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Context Menu</h2>
+                </div>
+                <label htmlFor="native-text-field-context-menu" className="settings-setting-row">
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Use native context menus</span>
+                    <span className="settings-setting-description">
+                      Show your OS context menu. Turn off to use Mira&apos;s custom menus. (not recomended)
+                    </span>
+                  </span>
+                  <input
+                    id="native-text-field-context-menu"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={nativeTextFieldContextMenu}
+                    onChange={(e) => {
+                      setNativeTextFieldContextMenu(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
               </section>
 
               <section className="theme-panel settings-card">

@@ -51,6 +51,7 @@ export type BrowserSettings = {
   newTabPage: string;
   themeId: string;
   rawFileDarkModeEnabled: boolean;
+  nativeTextFieldContextMenu: boolean;
   layoutId: string;
   tabSleepValue: number;
   tabSleepUnit: TabSleepUnit;
@@ -77,6 +78,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   newTabPage: 'mira://NewTab',
   themeId: DEFAULT_THEME_ID,
   rawFileDarkModeEnabled: true,
+  nativeTextFieldContextMenu: true,
   layoutId: DEFAULT_LAYOUT_ID,
   tabSleepValue: 10,
   tabSleepUnit: 'minutes',
@@ -130,6 +132,14 @@ function normalizeThemeId(value: unknown): string {
 function normalizeRawFileDarkModeEnabled(value: unknown): boolean {
   if (typeof value !== 'boolean') {
     return DEFAULT_BROWSER_SETTINGS.rawFileDarkModeEnabled;
+  }
+
+  return value;
+}
+
+function normalizeNativeTextFieldContextMenu(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.nativeTextFieldContextMenu;
   }
 
   return value;
@@ -362,6 +372,9 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     newTabPage: normalizeNewTabPage(candidate.newTabPage),
     themeId: normalizeThemeId(candidate.themeId),
     rawFileDarkModeEnabled: normalizeRawFileDarkModeEnabled(candidate.rawFileDarkModeEnabled),
+    nativeTextFieldContextMenu: normalizeNativeTextFieldContextMenu(
+      candidate.nativeTextFieldContextMenu,
+    ),
     layoutId: normalizeLayoutId(candidate.layoutId),
     tabSleepValue: normalizeTabSleepValue(candidate.tabSleepValue),
     tabSleepUnit: normalizeTabSleepUnit(candidate.tabSleepUnit),

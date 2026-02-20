@@ -10,7 +10,7 @@ import {
   webContents as electronWebContents,
 } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import type { DownloadItem, WebContents } from 'electron';
+import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'electron';
 import { appendFileSync, promises as fs, unlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -2260,6 +2260,285 @@ function setupWindowControlsHandlers() {
       if (releaseOverlaySuppression) {
         releaseOverlaySuppression();
       }
+      return false;
+    }
+  });
+
+  ipcMain.handle('webview-show-native-context-menu', (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return false;
+
+    const candidate = payload as {
+      webContentsId?: unknown;
+      x?: unknown;
+      y?: unknown;
+      params?: unknown;
+      context?: unknown;
+    };
+    const webContentsId =
+      typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+        ? Math.floor(candidate.webContentsId)
+        : -1;
+    if (webContentsId <= 0) return false;
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return false;
+
+    const host = target.hostWebContents;
+    if (!host || host.id !== event.sender.id) return false;
+    const hostWindow = BrowserWindow.fromWebContents(host);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const rawParams =
+      typeof candidate.params === 'object' && candidate.params !== null
+        ? (candidate.params as Record<string, unknown>)
+        : {};
+    const rawContext =
+      typeof candidate.context === 'object' && candidate.context !== null
+        ? (candidate.context as Record<string, unknown>)
+        : {};
+
+    const pageURL = typeof rawParams.pageURL === 'string' ? rawParams.pageURL.trim() : '';
+    const linkURL = typeof rawParams.linkURL === 'string' ? rawParams.linkURL.trim() : '';
+    const srcURL = typeof rawParams.srcURL === 'string' ? rawParams.srcURL.trim() : '';
+    const mediaType = typeof rawParams.mediaType === 'string' ? rawParams.mediaType.trim().toLowerCase() : '';
+    const isEditable = rawParams.isEditable === true;
+    const canGoBack = rawContext.canGoBack === true;
+    const canGoForward = rawContext.canGoForward === true;
+    const sourceUrl = typeof rawContext.sourceUrl === 'string' ? rawContext.sourceUrl.trim() : '';
+
+    const rawEditFlags =
+      typeof rawParams.editFlags === 'object' && rawParams.editFlags !== null
+        ? (rawParams.editFlags as Record<string, unknown>)
+        : {};
+    const canUndo = rawEditFlags.canUndo !== false;
+    const canRedo = rawEditFlags.canRedo !== false;
+    const canCut = rawEditFlags.canCut !== false;
+    const canCopy = rawEditFlags.canCopy !== false;
+    const canPaste = rawEditFlags.canPaste !== false;
+    const canPasteAndMatchStyle = rawEditFlags.canPasteAndMatchStyle !== false;
+    const canSelectAll = rawEditFlags.canSelectAll !== false;
+
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+      ? Math.max(0, Math.floor(candidate.x))
+      : null;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+      ? Math.max(0, Math.floor(candidate.y))
+      : null;
+
+    const resolveContextMenuUrl = (rawUrl: string, baseUrl?: string): string => {
+      const trimmed = rawUrl.trim();
+      if (!trimmed) return '';
+
+      try {
+        const normalizedBase = typeof baseUrl === 'string' ? baseUrl.trim() : '';
+        return normalizedBase ? new URL(trimmed, normalizedBase).toString() : new URL(trimmed).toString();
+      } catch {
+        return trimmed;
+      }
+    };
+
+    const canOpenInNewTab = (url: string): boolean => {
+      const trimmed = url.trim();
+      if (!trimmed) return false;
+
+      try {
+        const protocol = new URL(trimmed).protocol.toLowerCase();
+        return (
+          protocol === 'http:' ||
+          protocol === 'https:' ||
+          protocol === 'file:' ||
+          protocol === 'about:' ||
+          protocol === 'mira:' ||
+          protocol === 'view-source:'
+        );
+      } catch {
+        return false;
+      }
+    };
+
+    const resolvedSrcUrl = resolveContextMenuUrl(srcURL, pageURL);
+    const resolvedLinkUrl = resolveContextMenuUrl(linkURL, pageURL);
+    const resolvedSourceUrl = resolveContextMenuUrl(sourceUrl, pageURL);
+    const viewSourceUrl = resolvedSourceUrl ? `view-source:${resolvedSourceUrl}` : '';
+
+    const sendCommand = (command: string, extra?: Record<string, unknown>) => {
+      hostWindow.webContents.send('webview-native-context-command', {
+        command,
+        webContentsId,
+        ...extra,
+      });
+    };
+
+    const menuItem = (
+      label: string,
+      command: string,
+      options?: {
+        enabled?: boolean;
+        extra?: Record<string, unknown>;
+      },
+    ) => ({
+      label,
+      enabled: options?.enabled ?? true,
+      click: () => {
+        sendCommand(command, options?.extra);
+      },
+    });
+
+    const inspectEntry = menuItem('Inspect', 'inspect-element', {
+      extra: {
+        x: x ?? 0,
+        y: y ?? 0,
+      },
+    });
+
+    let template: MenuItemConstructorOptions[] = [];
+    if (isEditable) {
+      template = [
+        menuItem('Undo', 'edit-undo', { enabled: canUndo }),
+        menuItem('Redo', 'edit-redo', { enabled: canRedo }),
+        { type: 'separator' },
+        menuItem('Cut', 'edit-cut', { enabled: canCut }),
+        menuItem('Copy', 'edit-copy', { enabled: canCopy }),
+        menuItem('Paste', 'edit-paste', { enabled: canPaste }),
+        menuItem('Paste as Plain Text', 'edit-paste-as-plain-text', {
+          enabled: canPasteAndMatchStyle,
+        }),
+        { type: 'separator' },
+        menuItem('Select All', 'edit-select-all', { enabled: canSelectAll }),
+        { type: 'separator' },
+        inspectEntry,
+      ];
+    } else if (mediaType === 'image' || !!resolvedSrcUrl) {
+      const canOpenImageInNewTab = canOpenInNewTab(resolvedSrcUrl);
+      template = [
+        menuItem('Open Image in New Tab', 'open-url-in-new-tab', {
+          enabled: canOpenImageInNewTab,
+          extra: {
+            url: resolvedSrcUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        menuItem('Save Image As', 'download-url', {
+          enabled: !!resolvedSrcUrl,
+          extra: {
+            url: resolvedSrcUrl,
+          },
+        }),
+        menuItem('Copy Image', 'copy-image-at', {
+          extra: {
+            x: x ?? 0,
+            y: y ?? 0,
+          },
+        }),
+        menuItem('Copy Image Address', 'copy-text', {
+          enabled: !!resolvedSrcUrl,
+          extra: {
+            text: resolvedSrcUrl,
+          },
+        }),
+        { type: 'separator' },
+        inspectEntry,
+      ];
+    } else if (resolvedLinkUrl) {
+      const canOpenLinkInNewTab = canOpenInNewTab(resolvedLinkUrl);
+      template = [
+        menuItem('Open in New Tab', 'open-url-in-new-tab', {
+          enabled: canOpenLinkInNewTab,
+          extra: {
+            url: resolvedLinkUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        menuItem('Open in New Window', 'open-url-in-new-window', {
+          enabled: canOpenLinkInNewTab,
+          extra: {
+            url: resolvedLinkUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        { type: 'separator' },
+        menuItem('Copy Link Address', 'copy-text', {
+          enabled: !!resolvedLinkUrl,
+          extra: {
+            text: resolvedLinkUrl,
+          },
+        }),
+        menuItem('Save Link As', 'download-url', {
+          enabled: !!resolvedLinkUrl,
+          extra: {
+            url: resolvedLinkUrl,
+          },
+        }),
+        { type: 'separator' },
+        inspectEntry,
+      ];
+    } else {
+      template = [
+        menuItem('Back', 'go-back', { enabled: canGoBack }),
+        menuItem('Forward', 'go-forward', { enabled: canGoForward }),
+        menuItem('Reload', 'reload'),
+        { type: 'separator' },
+        menuItem('Save As', 'save-page-as'),
+        menuItem('Print', 'print'),
+        { type: 'separator' },
+        menuItem('View Source', 'open-url-in-new-tab', {
+          enabled: !!viewSourceUrl && canOpenInNewTab(viewSourceUrl),
+          extra: {
+            url: viewSourceUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        inspectEntry,
+      ];
+    }
+
+    const menu = Menu.buildFromTemplate(template);
+
+    try {
+      menu.popup({
+        window: hostWindow,
+        ...(x !== null && y !== null ? { x, y } : {}),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('renderer-show-native-text-context-menu', (event, payload: unknown) => {
+    const hostWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const candidate =
+      typeof payload === 'object' && payload !== null
+        ? (payload as { x?: unknown; y?: unknown })
+        : {};
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+      ? Math.max(0, Math.floor(candidate.x))
+      : null;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+      ? Math.max(0, Math.floor(candidate.y))
+      : null;
+
+    const menu = Menu.buildFromTemplate([
+      { label: 'Undo', role: 'undo' },
+      { label: 'Redo', role: 'redo' },
+      { type: 'separator' },
+      { label: 'Cut', role: 'cut' },
+      { label: 'Copy', role: 'copy' },
+      { label: 'Paste', role: 'paste' },
+      { label: 'Paste as Plain Text', role: 'pasteAndMatchStyle' },
+      { type: 'separator' },
+      { label: 'Select All', role: 'selectAll' },
+    ]);
+
+    try {
+      menu.popup({
+        window: hostWindow,
+        ...(x !== null && y !== null ? { x, y } : {}),
+      });
+      return true;
+    } catch {
       return false;
     }
   });

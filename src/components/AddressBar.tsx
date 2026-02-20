@@ -229,6 +229,21 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         ref={inputRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
+        onContextMenu={(e) => {
+          const settings = getBrowserSettings();
+          if (!settings.nativeTextFieldContextMenu) return;
+          const ipc = electron?.ipcRenderer;
+          if (!ipc) return;
+
+          e.preventDefault();
+          e.currentTarget.focus();
+          void ipc
+            .invoke('renderer-show-native-text-context-menu', {
+              x: e.clientX,
+              y: e.clientY,
+            })
+            .catch(() => undefined);
+        }}
         onKeyDown={(e) => {
           if (e.key !== 'Enter') return;
           go();

@@ -19,6 +19,7 @@
 - Add dev settings
 - Add most common shortcuts
 - _blank and data-link links work now
+- Update context menu to use os menu
 
 ## v0.8.1 - 2026-02-17
 

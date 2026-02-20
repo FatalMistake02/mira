@@ -116,6 +116,16 @@ interface PageContextMenuState {
   params: NormalizedContextMenuParams;
 }
 
+interface NativeContextCommandPayload {
+  command?: unknown;
+  webContentsId?: unknown;
+  url?: unknown;
+  text?: unknown;
+  x?: unknown;
+  y?: unknown;
+  baseUrl?: unknown;
+}
+
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
 const WEBVIEW_TRACKED_SRC_ATTR = 'data-mira-tracked-src';
 
@@ -272,17 +282,22 @@ export default function TabView() {
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => getBrowserSettings().rawFileDarkModeEnabled,
   );
+  const [nativeTextFieldContextMenu, setNativeTextFieldContextMenu] = useState(
+    () => getBrowserSettings().nativeTextFieldContextMenu,
+  );
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     const settings = getBrowserSettings();
     return getThemeById(settings.themeId)?.mode ?? 'dark';
   });
   const [pageMenuState, setPageMenuState] = useState<PageContextMenuState | null>(null);
+  const lastNativeContextCommandRef = React.useRef<{ signature: string; at: number } | null>(null);
 
   useEffect(() => {
     const syncSettings = () => {
       const settings = getBrowserSettings();
       setTabSleepMode(settings.tabSleepMode);
       setRawFileDarkModeEnabled(settings.rawFileDarkModeEnabled);
+      setNativeTextFieldContextMenu(settings.nativeTextFieldContextMenu);
       setThemeMode(getThemeById(settings.themeId)?.mode ?? 'dark');
     };
 
@@ -322,14 +337,18 @@ export default function TabView() {
         x?: number;
         y?: number;
       },
+      options?: {
+        webContentsId?: number;
+      },
     ) => {
-      if (!pageMenuState) return;
+      const resolvedWebContentsId = options?.webContentsId ?? pageMenuState?.webContentsId ?? -1;
+      if (!Number.isFinite(resolvedWebContentsId) || resolvedWebContentsId <= 0) return;
       const ipc = electron?.ipcRenderer;
       if (!ipc) return;
 
       void ipc
         .invoke('webview-context-action', {
-          webContentsId: pageMenuState.webContentsId,
+          webContentsId: Math.floor(resolvedWebContentsId),
           action,
           url: payload?.url,
           text: payload?.text,
@@ -352,6 +371,152 @@ export default function TabView() {
     },
     [closePageMenu, newTab],
   );
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onNativeContextCommand = (_event: unknown, payload: unknown) => {
+      if (typeof payload !== 'object' || !payload) return;
+
+      const candidate = payload as NativeContextCommandPayload;
+      const command = typeof candidate.command === 'string' ? candidate.command.trim() : '';
+      if (!command) return;
+
+      const webContentsId =
+        typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+          ? Math.floor(candidate.webContentsId)
+          : -1;
+      const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+        ? Math.floor(candidate.x)
+        : 0;
+      const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+        ? Math.floor(candidate.y)
+        : 0;
+      const rawUrl = typeof candidate.url === 'string' ? candidate.url : '';
+      const rawBaseUrl = typeof candidate.baseUrl === 'string' ? candidate.baseUrl : '';
+      const resolvedUrl = resolveContextMenuUrl(rawUrl, rawBaseUrl || undefined);
+      const text = typeof candidate.text === 'string' ? candidate.text : '';
+
+      const dedupeSignature = [
+        command,
+        String(webContentsId),
+        resolvedUrl,
+        text,
+        String(x),
+        String(y),
+      ].join('|');
+      const now = Date.now();
+      const previous = lastNativeContextCommandRef.current;
+      if (previous && previous.signature === dedupeSignature && now - previous.at < 250) {
+        return;
+      }
+      lastNativeContextCommandRef.current = {
+        signature: dedupeSignature,
+        at: now,
+      };
+
+      if (command === 'open-url-in-new-tab') {
+        openInNewTabFromMenu(resolvedUrl, rawBaseUrl || undefined);
+        return;
+      }
+
+      if (command === 'open-url-in-new-window') {
+        if (!canOpenInNewTab(resolvedUrl)) return;
+        const renderer = electron?.ipcRenderer;
+        if (renderer) {
+          void renderer.invoke('window-new-with-url', resolvedUrl).catch(() => undefined);
+          return;
+        }
+        window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      if (command === 'go-back') {
+        goBack();
+        return;
+      }
+
+      if (command === 'go-forward') {
+        goForward();
+        return;
+      }
+
+      if (command === 'reload') {
+        reload();
+        return;
+      }
+
+      if (command === 'print') {
+        printPage();
+        return;
+      }
+
+      if (webContentsId <= 0) return;
+
+      if (command === 'save-page-as') {
+        runWebviewContextAction('save-page-as', undefined, { webContentsId });
+        return;
+      }
+
+      if (command === 'download-url') {
+        runWebviewContextAction('download-url', { url: resolvedUrl }, { webContentsId });
+        return;
+      }
+
+      if (command === 'copy-text') {
+        runWebviewContextAction('copy-text', { text }, { webContentsId });
+        return;
+      }
+
+      if (command === 'copy-image-at') {
+        runWebviewContextAction('copy-image-at', { x, y }, { webContentsId });
+        return;
+      }
+
+      if (command === 'inspect-element') {
+        runWebviewContextAction('inspect-element', { x, y }, { webContentsId });
+        return;
+      }
+
+      if (command === 'edit-undo') {
+        runWebviewContextAction('edit-undo', undefined, { webContentsId });
+        return;
+      }
+
+      if (command === 'edit-redo') {
+        runWebviewContextAction('edit-redo', undefined, { webContentsId });
+        return;
+      }
+
+      if (command === 'edit-cut') {
+        runWebviewContextAction('edit-cut', undefined, { webContentsId });
+        return;
+      }
+
+      if (command === 'edit-copy') {
+        runWebviewContextAction('edit-copy', undefined, { webContentsId });
+        return;
+      }
+
+      if (command === 'edit-paste') {
+        runWebviewContextAction('edit-paste', undefined, { webContentsId });
+        return;
+      }
+
+      if (command === 'edit-paste-as-plain-text') {
+        runWebviewContextAction('edit-paste-as-plain-text', undefined, { webContentsId });
+        return;
+      }
+
+      if (command === 'edit-select-all') {
+        runWebviewContextAction('edit-select-all', undefined, { webContentsId });
+      }
+    };
+
+    ipc.on('webview-native-context-command', onNativeContextCommand);
+    return () => ipc.off('webview-native-context-command', onNativeContextCommand);
+  }, [goBack, goForward, openInNewTabFromMenu, printPage, reload, runWebviewContextAction]);
 
   const pageMenuEntries = useMemo<ContextMenuEntry[]>(() => {
     if (!pageMenuState) return [];
@@ -618,10 +783,43 @@ export default function TabView() {
                   const contextMenuHandler = (e: Event) => {
                     const ev = e as WebviewContextMenuEvent;
                     const params = normalizeContextMenuParams(ev.params);
-                    if (params.isEditable) {
-                      e.preventDefault();
-                      setPageMenuState(null);
-                      return;
+
+                    if (nativeTextFieldContextMenu) {
+                      const ipc = electron?.ipcRenderer;
+                      const webContentsId = typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
+                      if (ipc && Number.isFinite(webContentsId) && webContentsId > 0) {
+                        e.preventDefault();
+                        setPageMenuState(null);
+
+                        let x = params.x;
+                        let y = params.y;
+                        if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+                          const webviewRect = wv.getBoundingClientRect();
+                          x = webviewRect.left + params.x;
+                          y = webviewRect.top + params.y;
+                        }
+
+                        const currentTab = tabs.find((entry) => entry.id === tab.id) ?? tab;
+                        const canGoBack = currentTab.historyIndex > 0;
+                        const canGoForward =
+                          currentTab.historyIndex < currentTab.history.length - 1;
+                        const sourceUrl = params.pageURL || currentTab.url || '';
+
+                        void ipc
+                          .invoke('webview-show-native-context-menu', {
+                            webContentsId: Math.floor(webContentsId),
+                            x,
+                            y,
+                            params,
+                            context: {
+                              canGoBack,
+                              canGoForward,
+                              sourceUrl,
+                            },
+                          })
+                          .catch(() => undefined);
+                        return;
+                      }
                     }
 
                     e.preventDefault();
