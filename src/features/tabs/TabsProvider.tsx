@@ -117,6 +117,8 @@ type TabsContextType = {
 const TabsContext = createContext<TabsContextType>(null!);
 export const useTabs = () => useContext(TabsContext);
 const MAX_RECENTLY_CLOSED_TABS = 25;
+const REOPEN_CLOSED_TAB_DEDUPE_WINDOW_MS = 400;
+const REOPEN_CLOSED_TAB_ACTIVATE_DELAY_MS = 120;
 const ZOOM_STEP = 0.1;
 const MIN_ZOOM_FACTOR = 0.25;
 const MAX_ZOOM_FACTOR = 5;
@@ -267,6 +269,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const newTabRef = useRef<(url?: string) => void>(() => undefined);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
+  const lastReopenClosedTabAtRef = useRef(0);
+  const reopenTabActivationTimerRef = useRef<number | null>(null);
   const zoomFactorByTabRef = useRef<Record<string, number>>({});
   const activeFindInPageMatches = findInPageMatchesByTab[activeId] ?? {
     activeMatchOrdinal: 0,
@@ -809,16 +813,46 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   );
 
   const reopenLastClosedTab = useCallback(() => {
-    const lastClosedTab = recentlyClosedTabsRef.current[recentlyClosedTabsRef.current.length - 1];
+    const now = Date.now();
+    if (now - lastReopenClosedTabAtRef.current < REOPEN_CLOSED_TAB_DEDUPE_WINDOW_MS) {
+      return;
+    }
+    lastReopenClosedTabAtRef.current = now;
+
+    let lastClosedTab: Tab | null = null;
+    while (recentlyClosedTabsRef.current.length > 0) {
+      const candidate = recentlyClosedTabsRef.current[recentlyClosedTabsRef.current.length - 1];
+      recentlyClosedTabsRef.current = recentlyClosedTabsRef.current.slice(0, -1);
+
+      const candidateUrl = (candidate.history[candidate.historyIndex] ?? candidate.url).trim();
+      if (!candidateUrl || candidateUrl.toLowerCase() === 'about:blank') {
+        continue;
+      }
+      lastClosedTab = candidate;
+      break;
+    }
+
     if (!lastClosedTab) return;
 
-    recentlyClosedTabsRef.current = recentlyClosedTabsRef.current.slice(0, -1);
+    const normalizedHistory = lastClosedTab.history
+      .map((entry) => entry.trim())
+      .filter((entry) => !!entry && entry.toLowerCase() !== 'about:blank');
+    const restoredUrl = (lastClosedTab.history[lastClosedTab.historyIndex] ?? lastClosedTab.url).trim();
+    const safeRestoredUrl = restoredUrl && restoredUrl.toLowerCase() !== 'about:blank'
+      ? restoredUrl
+      : getBrowserSettings().newTabPage;
+    const nextHistory = normalizedHistory.length ? normalizedHistory : [safeRestoredUrl];
+    const nextHistoryIndex = Math.max(
+      0,
+      Math.min(lastClosedTab.historyIndex, nextHistory.length - 1),
+    );
 
-    const now = Date.now();
     const reopenedTab: Tab = {
       ...lastClosedTab,
       id: crypto.randomUUID(),
-      history: [...lastClosedTab.history],
+      url: safeRestoredUrl,
+      history: nextHistory,
+      historyIndex: nextHistoryIndex,
       isSleeping: false,
       lastActiveAt: now,
     };
@@ -828,7 +862,19 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         .map((tab) => (tab.id === activeId ? { ...tab, lastActiveAt: now } : tab))
         .concat(reopenedTab),
     );
-    setActiveId(reopenedTab.id);
+    if (reopenTabActivationTimerRef.current !== null) {
+      window.clearTimeout(reopenTabActivationTimerRef.current);
+      reopenTabActivationTimerRef.current = null;
+    }
+
+    const reopenedTabId = reopenedTab.id;
+    reopenTabActivationTimerRef.current = window.setTimeout(() => {
+      reopenTabActivationTimerRef.current = null;
+      if (!tabsRef.current.some((tab) => tab.id === reopenedTabId)) {
+        return;
+      }
+      setActiveId(reopenedTabId);
+    }, REOPEN_CLOSED_TAB_ACTIVATE_DELAY_MS);
   }, [activeId]);
 
   const moveTab = useCallback((fromId: string, toId: string) => {
@@ -1513,6 +1559,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
   }, [isBootstrapReady]);
+
+  useEffect(() => () => {
+    if (reopenTabActivationTimerRef.current !== null) {
+      window.clearTimeout(reopenTabActivationTimerRef.current);
+      reopenTabActivationTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;

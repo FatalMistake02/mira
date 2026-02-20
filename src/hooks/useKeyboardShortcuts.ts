@@ -36,6 +36,38 @@ interface UseKeyboardShortcutsProps {
   addressInputRef: RefObject<HTMLInputElement | null>;
 }
 
+interface IpcShortcutState {
+  newTab: UseKeyboardShortcutsProps['newTab'];
+  closeTab: UseKeyboardShortcutsProps['closeTab'];
+  openHistory: UseKeyboardShortcutsProps['openHistory'];
+  openDownloads: UseKeyboardShortcutsProps['openDownloads'];
+  openNewWindow: UseKeyboardShortcutsProps['openNewWindow'];
+  closeWindow: UseKeyboardShortcutsProps['closeWindow'];
+  moveActiveTabBy: UseKeyboardShortcutsProps['moveActiveTabBy'];
+  navigateToNewTabPage: UseKeyboardShortcutsProps['navigateToNewTabPage'];
+  goBack: UseKeyboardShortcutsProps['goBack'];
+  goForward: UseKeyboardShortcutsProps['goForward'];
+  reload: UseKeyboardShortcutsProps['reload'];
+  reloadIgnoringCache: UseKeyboardShortcutsProps['reloadIgnoringCache'];
+  stopLoading: UseKeyboardShortcutsProps['stopLoading'];
+  findInPage: UseKeyboardShortcutsProps['findInPage'];
+  findInPageNext: UseKeyboardShortcutsProps['findInPageNext'];
+  reopenLastClosedTab: UseKeyboardShortcutsProps['reopenLastClosedTab'];
+  toggleDevTools: UseKeyboardShortcutsProps['toggleDevTools'];
+  printPage: UseKeyboardShortcutsProps['printPage'];
+  savePage: UseKeyboardShortcutsProps['savePage'];
+  openFile: UseKeyboardShortcutsProps['openFile'];
+  openViewSource: UseKeyboardShortcutsProps['openViewSource'];
+  zoomIn: UseKeyboardShortcutsProps['zoomIn'];
+  zoomOut: UseKeyboardShortcutsProps['zoomOut'];
+  resetZoom: UseKeyboardShortcutsProps['resetZoom'];
+  toggleFullScreen: UseKeyboardShortcutsProps['toggleFullScreen'];
+  scrollPage: UseKeyboardShortcutsProps['scrollPage'];
+  activeId: UseKeyboardShortcutsProps['activeId'];
+  activateRelativeTab: (delta: 1 | -1) => void;
+  activateTabByNumber: (number: number) => void;
+}
+
 export function useKeyboardShortcuts({
   tabs,
   newTab,
@@ -69,6 +101,8 @@ export function useKeyboardShortcuts({
   addressInputRef,
 }: UseKeyboardShortcutsProps) {
   const lastReopenShortcutAtRef = useRef(0);
+  const lastRapidShortcutByActionRef = useRef<Record<string, number>>({});
+  const ipcShortcutStateRef = useRef<IpcShortcutState | null>(null);
 
   const activateRelativeTab = useCallback(
     (delta: 1 | -1) => {
@@ -94,6 +128,38 @@ export function useKeyboardShortcuts({
     },
     [tabs, setActive],
   );
+
+  ipcShortcutStateRef.current = {
+    newTab,
+    closeTab,
+    openHistory,
+    openDownloads,
+    openNewWindow,
+    closeWindow,
+    moveActiveTabBy,
+    navigateToNewTabPage,
+    goBack,
+    goForward,
+    reload,
+    reloadIgnoringCache,
+    stopLoading,
+    findInPage,
+    findInPageNext,
+    reopenLastClosedTab,
+    toggleDevTools,
+    printPage,
+    savePage,
+    openFile,
+    openViewSource,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    toggleFullScreen,
+    scrollPage,
+    activeId,
+    activateRelativeTab,
+    activateTabByNumber,
+  };
 
   useEffect(() => {
     const hasElectronBridge = !!electron?.ipcRenderer;
@@ -442,53 +508,81 @@ export function useKeyboardShortcuts({
     const ipc = electron?.ipcRenderer;
     if (!ipc) return;
 
+    const shouldSkipRapidAction = (action: string, thresholdMs = 120): boolean => {
+      const now = Date.now();
+      const lastAt = lastRapidShortcutByActionRef.current[action] ?? 0;
+      if (now - lastAt < thresholdMs) {
+        return true;
+      }
+      lastRapidShortcutByActionRef.current[action] = now;
+      return false;
+    };
+
     const onShortcut = (_event: unknown, action: string, payload?: unknown) => {
+      const state = ipcShortcutStateRef.current;
+      if (!state) return;
+
+      if (action === 'new-tab') {
+        if (shouldSkipRapidAction('new-tab')) return;
+        state.newTab();
+        return;
+      }
+      if (action === 'close-tab') {
+        if (state.activeId) state.closeTab(state.activeId);
+        return;
+      }
+      if (action === 'open-history') {
+        if (shouldSkipRapidAction('open-history')) return;
+        state.openHistory();
+        return;
+      }
       if (action === 'reload-tab') {
-        reload();
+        state.reload();
         return;
       }
       if (action === 'reload-tab-ignore-cache') {
-        reloadIgnoringCache();
+        state.reloadIgnoringCache();
         return;
       }
       if (action === 'stop-loading') {
-        stopLoading();
+        state.stopLoading();
         return;
       }
       if (action === 'find-in-page') {
-        findInPage();
+        state.findInPage();
         return;
       }
       if (action === 'find-next') {
-        findInPageNext(true);
+        state.findInPageNext(true);
         return;
       }
       if (action === 'find-previous') {
-        findInPageNext(false);
+        state.findInPageNext(false);
         return;
       }
       if (action === 'open-window') {
-        openNewWindow();
+        state.openNewWindow();
         return;
       }
       if (action === 'close-window') {
-        closeWindow();
+        state.closeWindow();
         return;
       }
       if (action === 'open-downloads') {
-        openDownloads();
+        if (shouldSkipRapidAction('open-downloads')) return;
+        state.openDownloads();
         return;
       }
       if (action === 'go-back') {
-        goBack();
+        state.goBack();
         return;
       }
       if (action === 'go-forward') {
-        goForward();
+        state.goForward();
         return;
       }
       if (action === 'navigate-new-tab-page') {
-        navigateToNewTabPage();
+        state.navigateToNewTabPage();
         return;
       }
       if (action === 'focus-address-bar') {
@@ -497,104 +591,77 @@ export function useKeyboardShortcuts({
         return;
       }
       if (action === 'activate-next-tab') {
-        activateRelativeTab(1);
+        state.activateRelativeTab(1);
         return;
       }
       if (action === 'activate-previous-tab') {
-        activateRelativeTab(-1);
+        state.activateRelativeTab(-1);
         return;
       }
       if (action === 'activate-tab-index') {
         if (typeof payload !== 'number') return;
-        activateTabByNumber(payload);
+        state.activateTabByNumber(payload);
         return;
       }
       if (action === 'move-active-tab-left') {
-        moveActiveTabBy(-1);
+        state.moveActiveTabBy(-1);
         return;
       }
       if (action === 'move-active-tab-right') {
-        moveActiveTabBy(1);
+        state.moveActiveTabBy(1);
         return;
       }
       if (action === 'reopen-closed-tab') {
         const now = Date.now();
         if (now - lastReopenShortcutAtRef.current < 150) return;
         lastReopenShortcutAtRef.current = now;
-        reopenLastClosedTab();
+        state.reopenLastClosedTab();
         return;
       }
       if (action === 'toggle-devtools') {
-        toggleDevTools();
+        state.toggleDevTools();
         return;
       }
       if (action === 'print-page') {
-        printPage();
+        state.printPage();
         return;
       }
       if (action === 'save-page') {
-        savePage();
+        state.savePage();
         return;
       }
       if (action === 'open-file') {
-        openFile();
+        state.openFile();
         return;
       }
       if (action === 'view-source') {
-        openViewSource();
+        state.openViewSource();
         return;
       }
       if (action === 'zoom-in') {
-        zoomIn();
+        state.zoomIn();
         return;
       }
       if (action === 'zoom-out') {
-        zoomOut();
+        state.zoomOut();
         return;
       }
       if (action === 'zoom-reset') {
-        resetZoom();
+        state.resetZoom();
         return;
       }
       if (action === 'toggle-fullscreen') {
-        toggleFullScreen();
+        state.toggleFullScreen();
         return;
       }
       if (action === 'scroll-page') {
         if (payload === 'page-down' || payload === 'page-up' || payload === 'top' || payload === 'bottom') {
-          scrollPage(payload);
+          state.scrollPage(payload);
         }
       }
     };
 
     ipc.on('app-shortcut', onShortcut);
     return () => ipc.off('app-shortcut', onShortcut);
-  }, [
-    reload,
-    reloadIgnoringCache,
-    stopLoading,
-    findInPage,
-    findInPageNext,
-    openDownloads,
-    openNewWindow,
-    closeWindow,
-    goBack,
-    goForward,
-    navigateToNewTabPage,
-    reopenLastClosedTab,
-    toggleDevTools,
-    printPage,
-    savePage,
-    openFile,
-    openViewSource,
-    zoomIn,
-    zoomOut,
-    resetZoom,
-    toggleFullScreen,
-    scrollPage,
-    addressInputRef,
-    activateRelativeTab,
-    activateTabByNumber,
-    moveActiveTabBy,
-  ]);
+  }, [addressInputRef]);
 }

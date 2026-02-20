@@ -14,7 +14,7 @@
 - [x] Fix some link types not working
 - [x] Add about:blank 
 - [x] All shortcuts
-- [ ] Fix shortcuts not always working
+- [x] Fix shortcuts not always working
 - [x] Default search engine and search engine "shortcuts"
  
 ## v1.1.0
