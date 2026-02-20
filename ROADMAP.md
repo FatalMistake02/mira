@@ -3,10 +3,11 @@
 ## v1.0.0 — Stable Release
 - [ ] Improve performance
 - [ ] Fix default browser
-- [ ] Fix auto update 
+- [ ] Fix auto update
 - [ ] Fix target="_blank" links
- 
+
 ## v1.1.0
+- [ ] Ad blocker blocks Youtube videos
 - [ ] Bookmarks and favorites
       Bookmark page: Ctrl+D
       Bookmark all tabs: Ctrl+Shift+D
@@ -33,4 +34,3 @@
 - [ ] Built in screenshots
 - [ ] Picture in picture
 - [ ] Page translate
-
