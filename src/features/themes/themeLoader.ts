@@ -4,42 +4,14 @@ const modules = import.meta.glob('../../themes/*.json', { eager: true });
 
 const CUSTOM_THEME_STORAGE_KEY = 'mira.themes.custom.v1';
 export const DEFAULT_THEME_ID = 'default_dark';
-const NON_SPECIFIC_BASE_COLOR_KEYS = [
-  'buttonBg',
-  'buttonBgHover',
-  'buttonBgActive',
-  'buttonText',
-  'buttonTextHover',
-  'buttonTextActive',
-  'buttonBorder',
-  'buttonBorderHover',
-  'buttonBorderActive',
-  'fieldBg',
-  'fieldBgHover',
-  'fieldBgActive',
-  'fieldText',
-  'fieldTextPlaceholder',
-  'fieldBorder',
-  'fieldBorderHover',
-  'fieldBorderActive',
-  'surfaceBg',
-  'surfaceBgHover',
-  'surfaceBgActive',
-  'surfaceText',
-  'surfaceTextHover',
-  'surfaceTextActive',
-  'surfaceBorder',
-  'surfaceBorderHover',
-  'surfaceBorderActive',
-  'contextMenuBg',
-  'contextMenuBgHover',
-  'contextMenuBgActive',
-  'contextMenuText',
-  'contextMenuTextHover',
-  'contextMenuBorder',
-  'contextMenuDivider',
-  'contextMenuShadow',
-] as const;
+export const DEFAULT_LIGHT_THEME_ID = 'default_light';
+const CSS_VAR_PATTERN = /^var\(\s*--[a-zA-Z0-9_-]+(?:\s*,\s*.+)?\)$/;
+const DEFAULT_THEME_FONTS: Record<string, string> = {
+  fontPrimaryFamily: "'Segoe UI'",
+  fontSecondaryFamily: "'Segoe UI'",
+  fontPrimaryWeight: '400',
+  fontSecondaryWeight: '300',
+};
 
 type StoredTheme = { id: string; theme: Theme };
 
@@ -78,7 +50,7 @@ function parseHexColor(value: string): { r: number; g: number; b: number } | nul
 }
 
 function inferThemeMode(colors: Record<string, string>): 'light' | 'dark' {
-  const sample = colors.bg || colors.surfaceBg || colors.tabBg || '';
+  const sample = colors.bg || colors.tabBg || colors.urlBarBg || '';
   const rgb = parseHexColor(sample);
   if (!rgb) return 'dark';
 
@@ -104,6 +76,13 @@ function normalizeTheme(value: unknown): Theme | null {
     if (!key || typeof raw !== 'string') return;
     colors[key] = raw;
   });
+  const fonts: Record<string, string> = {};
+  if (isRecord(value.fonts)) {
+    Object.entries(value.fonts).forEach(([key, raw]) => {
+      if (!key || typeof raw !== 'string') return;
+      fonts[key] = raw;
+    });
+  }
 
   if (!Object.keys(colors).length) return null;
   const modeRaw = typeof value.mode === 'string' ? value.mode.trim().toLowerCase() : '';
@@ -115,29 +94,92 @@ function normalizeTheme(value: unknown): Theme | null {
     author,
     mode,
     colors,
+    fonts,
   };
 }
 
-function applyModeBaseColorFallback(
+function supportsCssValue(property: string, value: string): boolean {
+  const css = globalThis.CSS;
+  if (!css || typeof css.supports !== 'function') return true;
+  try {
+    return css.supports(property, value);
+  } catch {
+    return false;
+  }
+}
+
+function isValidThemeColorValue(key: string, value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (CSS_VAR_PATTERN.test(trimmed)) return true;
+  if (key.toLowerCase().includes('shadow')) {
+    return supportsCssValue('box-shadow', trimmed);
+  }
+  return supportsCssValue('color', trimmed);
+}
+
+function isValidThemeFontValue(key: string, value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (CSS_VAR_PATTERN.test(trimmed)) return true;
+  if (key.toLowerCase().includes('weight')) {
+    return supportsCssValue('font-weight', trimmed);
+  }
+  if (key.toLowerCase().includes('family')) {
+    return supportsCssValue('font-family', trimmed);
+  }
+  return supportsCssValue('font', trimmed);
+}
+
+function resolveThemeWithModeFallbackInternal(
   theme: Theme,
   baseColorsByMode: Record<ThemeMode, Record<string, string>>,
+  baseFontsByMode: Record<ThemeMode, Record<string, string>>,
 ): Theme {
-  const base = baseColorsByMode[theme.mode] ?? {};
-  const colors: Record<string, string> = { ...theme.colors };
+  const baseColors = baseColorsByMode[theme.mode] ?? {};
+  const allKeys = new Set([...Object.keys(baseColors), ...Object.keys(theme.colors)]);
+  const colors: Record<string, string> = {};
 
-  for (const key of NON_SPECIFIC_BASE_COLOR_KEYS) {
-    const currentValue = colors[key];
-    if (typeof currentValue === 'string' && currentValue.trim()) continue;
+  for (const key of allKeys) {
+    const raw = theme.colors[key];
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed && isValidThemeColorValue(key, trimmed)) {
+        colors[key] = trimmed;
+        continue;
+      }
+    }
 
-    const fallbackValue = base[key];
-    if (typeof fallbackValue === 'string' && fallbackValue.trim()) {
-      colors[key] = fallbackValue;
+    const fallback = baseColors[key];
+    if (typeof fallback === 'string' && fallback.trim()) {
+      colors[key] = fallback.trim();
+    }
+  }
+  const baseFonts = baseFontsByMode[theme.mode] ?? DEFAULT_THEME_FONTS;
+  const themeFonts = theme.fonts ?? {};
+  const fontKeys = new Set([...Object.keys(baseFonts), ...Object.keys(themeFonts)]);
+  const fonts: Record<string, string> = {};
+
+  for (const key of fontKeys) {
+    const raw = themeFonts[key];
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed && isValidThemeFontValue(key, trimmed)) {
+        fonts[key] = trimmed;
+        continue;
+      }
+    }
+
+    const fallback = baseFonts[key];
+    if (typeof fallback === 'string' && fallback.trim()) {
+      fonts[key] = fallback.trim();
     }
   }
 
   return {
     ...theme,
     colors,
+    fonts,
   };
 }
 
@@ -168,16 +210,36 @@ const defaultDarkBaseColors =
   bundledThemesRaw.find((entry) => entry.id === 'default_dark')?.theme.colors ?? {};
 const defaultLightBaseColors =
   bundledThemesRaw.find((entry) => entry.id === 'default_light')?.theme.colors ?? {};
+const defaultDarkBaseFonts =
+  bundledThemesRaw.find((entry) => entry.id === 'default_dark')?.theme.fonts ?? {};
+const defaultLightBaseFonts =
+  bundledThemesRaw.find((entry) => entry.id === 'default_light')?.theme.fonts ?? {};
 const baseColorsByMode: Record<ThemeMode, Record<string, string>> = {
   dark: Object.keys(defaultDarkBaseColors).length ? defaultDarkBaseColors : defaultLightBaseColors,
   light: Object.keys(defaultLightBaseColors).length
     ? defaultLightBaseColors
     : defaultDarkBaseColors,
 };
+const baseFontsByMode: Record<ThemeMode, Record<string, string>> = {
+  dark: {
+    ...DEFAULT_THEME_FONTS,
+    ...(Object.keys(defaultDarkBaseFonts).length ? defaultDarkBaseFonts : defaultLightBaseFonts),
+  },
+  light: {
+    ...DEFAULT_THEME_FONTS,
+    ...(Object.keys(defaultLightBaseFonts).length
+      ? defaultLightBaseFonts
+      : defaultDarkBaseFonts),
+  },
+};
+
+export function resolveThemeWithModeFallback(theme: Theme): Theme {
+  return resolveThemeWithModeFallbackInternal(theme, baseColorsByMode, baseFontsByMode);
+}
 
 const bundledThemes: ThemeEntry[] = bundledThemesRaw.map((entry) => ({
   ...entry,
-  theme: applyModeBaseColorFallback(entry.theme, baseColorsByMode),
+  theme: resolveThemeWithModeFallback(entry.theme),
 }));
 
 function readCustomThemes(): StoredTheme[] {
@@ -194,7 +256,7 @@ function readCustomThemes(): StoredTheme[] {
         const id = typeof entry.id === 'string' ? entry.id.trim() : '';
         const theme = normalizeTheme(entry.theme);
         if (!id || !theme) return null;
-        return { id, theme: applyModeBaseColorFallback(theme, baseColorsByMode) };
+        return { id, theme: resolveThemeWithModeFallback(theme) };
       })
       .filter((entry): entry is StoredTheme => entry !== null);
   } catch {
@@ -263,10 +325,10 @@ export function importThemeFromJson(jsonText: string): ThemeEntry {
   const theme = normalizeTheme(parsed);
   if (!theme) {
     throw new Error(
-      'Theme JSON must be version v1 and include name, author, and a colors object with string values.',
+      'Theme JSON must be version v1 and include name, author, and a colors object with string values. Fonts are optional.',
     );
   }
-  const themeWithFallback = applyModeBaseColorFallback(theme, baseColorsByMode);
+  const themeWithFallback = resolveThemeWithModeFallback(theme);
 
   const customThemes = readCustomThemes();
   const existingIds = new Set(getAllThemes().map((entry) => entry.id));

@@ -20,23 +20,203 @@ import { getThemeById } from './features/themes/themeLoader';
 import { applyLayout } from './features/layouts/applyLayout';
 import { getLayoutById } from './features/layouts/layoutLoader';
 
+type PerformanceMemoryInfo = {
+  usedJSHeapSize?: number;
+  totalJSHeapSize?: number;
+};
+
+type PerformanceWithMemory = Performance & {
+  memory?: PerformanceMemoryInfo;
+};
+
+type PerfOverlayStats = {
+  fps: number;
+  frameTimeMs: number;
+  totalMemoryMb: number | null;
+};
+
+function readHeapMetric(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value / (1024 * 1024);
+}
+
+type PerfMemorySnapshotResponse = {
+  totalMemoryMb: number | null;
+};
+
+function normalizeMbValue(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value;
+}
+
+function readHeapTotalFallbackMb(): number | null {
+  const memory = (performance as PerformanceWithMemory).memory;
+  return readHeapMetric(memory?.totalJSHeapSize);
+}
+
+async function readTotalMemoryUsage(): Promise<PerfMemorySnapshotResponse> {
+  if (!electron?.ipcRenderer) {
+    return {
+      totalMemoryMb: readHeapTotalFallbackMb(),
+    };
+  }
+
+  try {
+    const snapshot = await electron.ipcRenderer.invoke<{
+      totalMemoryMb?: unknown;
+    }>('perf-memory-snapshot');
+    return {
+      totalMemoryMb: normalizeMbValue(snapshot?.totalMemoryMb),
+    };
+  } catch {
+    return {
+      totalMemoryMb: readHeapTotalFallbackMb(),
+    };
+  }
+}
+
+function formatMb(value: number | null): string {
+  if (value === null) return 'n/a';
+  return `${value.toFixed(1)} MB`;
+}
+
+function PerfOverlay() {
+  const [stats, setStats] = useState<PerfOverlayStats>(() => ({
+    fps: 0,
+    frameTimeMs: 0,
+    totalMemoryMb: readHeapTotalFallbackMb(),
+  }));
+
+  useEffect(() => {
+    let rafId = 0;
+    let sampleStartedAt = performance.now();
+    let lastFrameAt = sampleStartedAt;
+    let frameCount = 0;
+    let totalFrameMs = 0;
+
+    const tick = (timestamp: number) => {
+      const frameMs = Math.max(timestamp - lastFrameAt, 0);
+      lastFrameAt = timestamp;
+      frameCount += 1;
+      totalFrameMs += frameMs;
+
+      const elapsed = timestamp - sampleStartedAt;
+      if (elapsed >= 500) {
+        const fps = frameCount > 0 ? (frameCount * 1000) / elapsed : 0;
+        const frameTimeMs = frameCount > 0 ? totalFrameMs / frameCount : 0;
+
+        setStats((current) => ({
+          ...current,
+          fps,
+          frameTimeMs,
+        }));
+
+        sampleStartedAt = timestamp;
+        frameCount = 0;
+        totalFrameMs = 0;
+      }
+
+      rafId = window.requestAnimationFrame(tick);
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const updateMemory = async () => {
+      const totalMemory = await readTotalMemoryUsage();
+      if (cancelled) return;
+
+      setStats((current) => ({
+        ...current,
+        ...totalMemory,
+      }));
+    };
+
+    void updateMemory();
+    const intervalId = window.setInterval(() => {
+      void updateMemory();
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        right: 12,
+        bottom: 12,
+        zIndex: 1200,
+        pointerEvents: 'none',
+        minWidth: 170,
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 82%, black)',
+        background: 'color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 92%, black 8%)',
+        color: 'var(--surfaceText, var(--text1))',
+        fontFamily:
+          "var(--fontSecondaryFamilyResolved, var(--fontSecondaryFallbackFamily, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif))",
+        fontWeight: 'var(--fontSecondaryWeight, 400)',
+        fontSize: 11,
+        lineHeight: 1.45,
+        boxShadow: '0 8px 18px color-mix(in srgb, var(--bg) 70%, transparent)',
+      }}
+    >
+      <div>FPS: {Math.round(stats.fps)}</div>
+      <div>Memory Total: {formatMb(stats.totalMemoryMb)}</div>
+      <div>Frame: {stats.frameTimeMs.toFixed(1)} ms</div>
+    </div>
+  );
+}
+
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const previousTabIdsRef = useRef<string[] | null>(null);
   const didRequestLaunchAutoUpdateRef = useRef(false);
   const [findBarOpen, setFindBarOpen] = useState(false);
   const [findBarFocusToken, setFindBarFocusToken] = useState(0);
+  const [showPerfOverlay, setShowPerfOverlay] = useState(() => {
+    const settings = getBrowserSettings();
+    return settings.dev && settings.showPerfOverlay;
+  });
   const {
     tabs,
     newTab,
     reopenLastClosedTab,
     openHistory,
     openDownloads,
+    closeWindow,
     closeTab,
+    moveActiveTabBy,
+    navigateToNewTabPage,
+    goBack,
+    goForward,
     reload,
+    reloadIgnoringCache,
+    stopLoading,
+    findInPageNext,
     setActive,
     toggleDevTools,
     printPage,
+    savePage,
+    openFile,
+    openViewSource,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    toggleFullScreen,
+    scrollPage,
     activeId,
   } = useTabs();
   const openFindBar = useCallback(() => {
@@ -60,10 +240,26 @@ function Browser() {
     openHistory,
     openDownloads,
     openNewWindow,
+    closeWindow,
     closeTab,
+    moveActiveTabBy,
+    navigateToNewTabPage,
+    goBack,
+    goForward,
     reload,
+    reloadIgnoringCache,
+    stopLoading,
     findInPage: openFindBar,
+    findInPageNext,
     printPage,
+    savePage,
+    openFile,
+    openViewSource,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    toggleFullScreen,
+    scrollPage,
     toggleDevTools,
     activeId,
     tabs,
@@ -76,6 +272,7 @@ function Browser() {
       const settings = getBrowserSettings();
       applyTheme(getThemeById(settings.themeId));
       applyLayout(getLayoutById(settings.layoutId));
+      setShowPerfOverlay(settings.dev && settings.showPerfOverlay);
       if (!electron?.ipcRenderer) return;
 
       const rootStyles = getComputedStyle(document.documentElement);
@@ -157,6 +354,7 @@ function Browser() {
       <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
       <TabView />
       <RestoreTabsPrompt />
+      {showPerfOverlay && <PerfOverlay />}
     </div>
   );
 }

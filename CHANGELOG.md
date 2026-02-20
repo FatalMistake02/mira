@@ -15,6 +15,11 @@
 - Add faster build scripts for testing (`build:fast`, `build:portable`, `build:nsis`, `build:renderer`)
 - Open in new tab works
 - Open in new window works
+- Add search engine settings
+- Add dev settings
+- Add most common shortcuts
+- _blank and data-link links work now
+- Update context menu to use os menu
 
 ## v0.8.1 - 2026-02-17
 

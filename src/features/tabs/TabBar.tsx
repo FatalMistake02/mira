@@ -3,11 +3,13 @@ import { Plus, X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
 import ContextMenu, { type ContextMenuEntry } from '../../components/ContextMenu';
+import { electron } from '../../electronBridge';
+import { BROWSER_SETTINGS_CHANGED_EVENT, getBrowserSettings } from '../settings/browserSettings';
 
 const TAB_TARGET_WIDTH = 'var(--layoutTabTargetWidth, 220px)';
 const TAB_MIN_WIDTH = 'var(--layoutTabMinWidth, 100px)';
 const TAB_STRIP_GAP = 'var(--layoutTabGap, 6px)';
-const TAB_ROW_HEIGHT = 'var(--layoutNavButtonHeight, 30px)';
+const TAB_ROW_HEIGHT = 'var(--layoutTabHeight, 30px)';
 const TAB_SWAP_TRIGGER_RATIO = 0.1;
 const TAB_SWAP_MIN_POINTER_DELTA_PX = 10;
 const TAB_SWAP_COOLDOWN_MS = 70;
@@ -65,6 +67,11 @@ export default function TabBar() {
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [nativeContextMenusEnabled, setNativeContextMenusEnabled] = useState(
+    () => getBrowserSettings().nativeTextFieldContextMenu,
+  );
+  const isMacOS = electron?.isMacOS ?? false;
+  const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const prevTabCountRef = useRef(tabs.length);
   const tabElementRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -75,6 +82,16 @@ export default function TabBar() {
   const lastSwapAtRef = useRef(0);
   const dragMovedRef = useRef(false);
   const suppressClickRef = useRef(false);
+  const lastNativeTabCommandRef = useRef<{ signature: string; at: number } | null>(null);
+
+  useEffect(() => {
+    const syncSettings = () => {
+      setNativeContextMenusEnabled(getBrowserSettings().nativeTextFieldContextMenu);
+    };
+    syncSettings();
+    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
+    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
+  }, []);
 
   const getTabGapPx = () => {
     const raw = getComputedStyle(document.documentElement)
@@ -144,6 +161,7 @@ export default function TabBar() {
       {
         type: 'item',
         label: 'Reload',
+        shortcut: `${primaryShortcutLabel}+R`,
         onSelect: () => reloadTab(tabMenuState.tabId),
       },
       {
@@ -155,6 +173,7 @@ export default function TabBar() {
       {
         type: 'item',
         label: 'Close',
+        shortcut: `${primaryShortcutLabel}+W`,
         onSelect: () => closeTab(tabMenuState.tabId),
       },
       {
@@ -179,7 +198,59 @@ export default function TabBar() {
     closeTab,
     closeOtherTabs,
     closeTabsToRight,
+    primaryShortcutLabel,
   ]);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onNativeContextCommand = (_event: unknown, payload: unknown) => {
+      if (typeof payload !== 'object' || !payload) return;
+      const candidate = payload as { command?: unknown; tabId?: unknown };
+      const command = typeof candidate.command === 'string' ? candidate.command.trim() : '';
+      const tabId = typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
+      if (!command || !tabId) return;
+
+      const dedupeSignature = `${command}|${tabId}`;
+      const now = Date.now();
+      const previous = lastNativeTabCommandRef.current;
+      if (previous && previous.signature === dedupeSignature && now - previous.at < 250) {
+        return;
+      }
+      lastNativeTabCommandRef.current = {
+        signature: dedupeSignature,
+        at: now,
+      };
+
+      if (command === 'new-tab-to-right') {
+        newTabToRight(tabId);
+        return;
+      }
+      if (command === 'reload') {
+        reloadTab(tabId);
+        return;
+      }
+      if (command === 'duplicate') {
+        duplicateTab(tabId);
+        return;
+      }
+      if (command === 'close') {
+        closeTab(tabId);
+        return;
+      }
+      if (command === 'close-others') {
+        closeOtherTabs(tabId);
+        return;
+      }
+      if (command === 'close-to-right') {
+        closeTabsToRight(tabId);
+      }
+    };
+
+    ipc.on('tab-native-context-command', onNativeContextCommand);
+    return () => ipc.off('tab-native-context-command', onNativeContextCommand);
+  }, [newTabToRight, reloadTab, duplicateTab, closeTab, closeOtherTabs, closeTabsToRight]);
 
   useEffect(() => {
     if (!draggingTabId) return;
@@ -358,6 +429,22 @@ export default function TabBar() {
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
+                  if (nativeContextMenusEnabled && electron?.ipcRenderer) {
+                    const tabIndex = tabs.findIndex((entry) => entry.id === tab.id);
+                    const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
+                    const hasOtherTabs = tabs.length > 1;
+                    setTabMenuState(null);
+                    void electron.ipcRenderer
+                      .invoke('tab-show-native-context-menu', {
+                        tabId: tab.id,
+                        x: event.clientX,
+                        y: event.clientY,
+                        hasTabsToRight,
+                        hasOtherTabs,
+                      })
+                      .catch(() => undefined);
+                    return;
+                  }
                   setTabMenuState({ tabId: tab.id, x: event.clientX, y: event.clientY });
                 }}
                 className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
@@ -490,7 +577,7 @@ export default function TabBar() {
       </div>
 
       <ContextMenu
-        open={!!tabMenuState}
+        open={!nativeContextMenusEnabled && !!tabMenuState}
         anchor={tabMenuState ? { x: tabMenuState.x, y: tabMenuState.y } : null}
         entries={tabMenuEntries}
         onClose={closeTabMenu}

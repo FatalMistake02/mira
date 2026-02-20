@@ -4,6 +4,7 @@ export type ContextMenuEntry =
   | {
       type: 'item';
       label: string;
+      shortcut?: string;
       onSelect: () => void;
       disabled?: boolean;
     }
@@ -131,6 +132,11 @@ export default function ContextMenu({
             role="menuitem"
             className="mira-context-menu-item"
             disabled={entry.disabled}
+            onMouseDown={(event) => {
+              // Keep focus in the underlying webview/field so edit actions apply
+              // to the original target instead of this menu button.
+              event.preventDefault();
+            }}
             onClick={() => {
               onClose();
               window.setTimeout(() => {
@@ -138,7 +144,10 @@ export default function ContextMenu({
               }, 0);
             }}
           >
-            {entry.label}
+            <span className="mira-context-menu-item-label">{entry.label}</span>
+            {entry.shortcut ? (
+              <span className="mira-context-menu-item-shortcut">{entry.shortcut}</span>
+            ) : null}
           </button>
           );
         })}

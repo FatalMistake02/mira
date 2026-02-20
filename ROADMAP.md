@@ -8,21 +8,29 @@
 - [x] Start on startup
 - [x] Onboarding
 - [x] Fix bugs/issues
-- [ ] Right-click menu (most actions don't work properly)
 - [ ] Improve performance
-- [ ] Fix links not able to open new tabs
-- [ ] Fix some link types not working
+- [x] Fix links not able to open new tabs
+- [x] Fix some link types not working
 - [x] Add about:blank 
-- [ ] All shortcuts
-- [ ] Fix shortcuts not always working
-- [ ] Default search engine and search engine "shortcuts"
+- [x] All shortcuts
+- [x] Fix shortcuts not always working
+- [x] Default search engine and search engine "shortcuts"
+- [x] Fix restoring
+- [x] Make sure everything is in the themes and layouts
+- [x] Fonts
  
 ## v1.1.0
 - [ ] Bookmarks and favorites
+      Bookmark page: Ctrl+D
+      Bookmark all tabs: Ctrl+Shift+D
+      Show/hide bookmarks bar: Ctrl+Shift+B
+      Bookmark manager: Ctrl+Shift+O
 - [ ] Site settings
-- [ ] HTTPS first
+- [ ] HTTPS first and http warning page
 - [ ] Site permissions controls
 - [x] Tracker blocking
+- [ ] Private mode
+      New private window: Ctrl+Shift+N
 
 ## v1.2.0
 - [ ] Tab groups and colors
@@ -31,6 +39,7 @@
 - [ ] Pinned tabs
 - [ ] Mute tabs
 - [ ] Tab move to window
+- [ ] Cast
 
 ## v1.3.0
 - [ ] Reader mode view

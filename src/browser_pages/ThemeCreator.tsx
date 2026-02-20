@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { applyTheme } from '../features/themes/applyTheme';
 import {
+  DEFAULT_LIGHT_THEME_ID,
+  DEFAULT_THEME_ID,
   getAllThemes,
   getThemeById,
   importThemeFromJson,
+  resolveThemeWithModeFallback,
   type ThemeEntry,
 } from '../features/themes/themeLoader';
 import { getBrowserSettings, saveBrowserSettings } from '../features/settings/browserSettings';
@@ -11,8 +14,315 @@ import { THEME_SCHEMA_VERSION, type Theme, type ThemeMode } from '../themes/type
 import { getThemeColorDisplayName } from '../themes/colorVariableToDisplayName';
 
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-const CSS_VAR_PATTERN = /^var\(\s*--([a-zA-Z0-9_-]+)\s*\)$/;
+const CSS_VAR_PATTERN = /^var\(\s*--([a-zA-Z0-9_-]+)(?:\s*,.+)?\)$/;
 type RGBAColor = { r: number; g: number; b: number; a: number };
+const THEME_FONT_DISPLAY_NAMES: Record<string, string> = {
+  fontPrimaryFamily: 'Primary Font Family',
+  fontSecondaryFamily: 'Secondary Font Family',
+  fontPrimaryWeight: 'Primary Font Weight',
+  fontSecondaryWeight: 'Secondary Font Weight',
+};
+const DEFAULT_FONT_SELECT_VALUE = '__theme_default__';
+type FontOption = { label: string; value: string };
+type LocalFontRecord = { family?: string };
+type FontQueryGlobal = typeof globalThis & {
+  queryLocalFonts?: () => Promise<LocalFontRecord[]>;
+};
+const BUILT_IN_FONT_FAMILIES = [
+  'Abel',
+  'Abril Fatface',
+  'Alegreya',
+  'Alegreya Sans',
+  'Alegreya Sans SC',
+  'Alegreya SC',
+  'Alfa Slab One',
+  'Amaranth',
+  'Amatic SC',
+  'Andale Mono',
+  'Anton',
+  'Aptos',
+  'Arimo',
+  'Archivo',
+  'Archivo Black',
+  'Archivo Narrow',
+  'Arvo',
+  'Asap',
+  'Asap Condensed',
+  'Atkinson Hyperlegible',
+  'Avenir',
+  'Avenir Next',
+  'Arial',
+  'Arial Black',
+  'Bai Jamjuree',
+  'Bahnschrift',
+  'Barlow',
+  'Barlow Condensed',
+  'Barlow Semi Condensed',
+  'Baskerville',
+  'Bebas Neue',
+  'Bell MT',
+  'Bitter',
+  'Book Antiqua',
+  'Bookman Old Style',
+  'Bree Serif',
+  'Brush Script MT',
+  'Cabin',
+  'Calibri',
+  'Calisto MT',
+  'Cambria',
+  'Cambria Math',
+  'Candal',
+  'Candara',
+  'Cardo',
+  'Carlito',
+  'Catamaran',
+  'Century Gothic',
+  'Charter',
+  'Chivo',
+  'Cinzel',
+  'Clear Sans',
+  'Comfortaa',
+  'Cormorant',
+  'Cormorant Garamond',
+  'Courgette',
+  'Comic Sans MS',
+  'Cooper Black',
+  'Consolas',
+  'Constantia',
+  'Corbel',
+  'Crimson Text',
+  'DM Mono',
+  'DM Sans',
+  'DM Serif Display',
+  'DM Serif Text',
+  'Dancing Script',
+  'Didot',
+  'Dosis',
+  'EB Garamond',
+  'Exo 2',
+  'Fantasque Sans Mono',
+  'Faustina',
+  'Figtree',
+  'Fira Code',
+  'Fira Mono',
+  'Fira Sans',
+  'Frank Ruhl Libre',
+  'Franklin Gothic Medium',
+  'Fraunces',
+  'Freight Text',
+  'GFS Didot',
+  'Gadugi',
+  'Garamond',
+  'Geneva',
+  'Gentium Plus',
+  'Georgia',
+  'Gilda Display',
+  'Glegoo',
+  'Gloria Hallelujah',
+  'Graphik',
+  'Heebo',
+  'Hind',
+  'Hind Siliguri',
+  'Hoefler Text',
+  'Homenaje',
+  'Helvetica',
+  'Helvetica Neue',
+  'IBM Plex Mono',
+  'IBM Plex Sans',
+  'IBM Plex Serif',
+  'Ibarra Real Nova',
+  'Inconsolata',
+  'Impact',
+  'Inter',
+  'Instrument Sans',
+  'Instrument Serif',
+  'JetBrains Mono',
+  'Josefin Sans',
+  'Jost',
+  'Karla',
+  'Kreon',
+  'Laila',
+  'Lato',
+  'League Gothic',
+  'Lexend',
+  'Libre Baskerville',
+  'Libre Caslon Text',
+  'Libre Franklin',
+  'Literata',
+  'Lora',
+  'Lucida Bright',
+  'Lucida Console',
+  'Lucida Fax',
+  'Lucida Grande',
+  'Lucida Sans',
+  'M PLUS 1p',
+  'M PLUS Rounded 1c',
+  'MS Gothic',
+  'MS Mincho',
+  'MS PGothic',
+  'MS PMincho',
+  'Manrope',
+  'Marcellus',
+  'Merriweather',
+  'Merriweather Sans',
+  'Mina',
+  'MingLiU',
+  'Monaco',
+  'Montserrat',
+  'Mukta',
+  'Mulish',
+  'Nanum Gothic',
+  'Nanum Myeongjo',
+  'Newsreader',
+  'Noto Color Emoji',
+  'Noto Emoji',
+  'Noto Kufi Arabic',
+  'Noto Naskh Arabic',
+  'Noto Sans',
+  'Noto Sans Arabic',
+  'Noto Sans CJK JP',
+  'Noto Sans CJK KR',
+  'Noto Sans CJK SC',
+  'Noto Sans CJK TC',
+  'Noto Sans Hebrew',
+  'Noto Sans JP',
+  'Noto Sans KR',
+  'Noto Sans Mono',
+  'Noto Sans SC',
+  'Noto Sans TC',
+  'Noto Serif',
+  'Noto Serif JP',
+  'Noto Serif KR',
+  'Noto Serif SC',
+  'Noto Serif TC',
+  'Nunito',
+  'Nunito Sans',
+  'OCR A Std',
+  'Old Standard TT',
+  'Open Sans',
+  'Open Sans Condensed',
+  'Optima',
+  'Orbitron',
+  'Oswald',
+  'PT Mono',
+  'PT Sans',
+  'PT Sans Caption',
+  'PT Sans Narrow',
+  'PT Serif',
+  'Palatino',
+  'Palatino Linotype',
+  'Papyrus',
+  'Parchment',
+  'Passion One',
+  'Play',
+  'Playfair Display',
+  'Plus Jakarta Sans',
+  'Poppins',
+  'Prata',
+  'Proxima Nova',
+  'Public Sans',
+  'Quattrocento',
+  'Quattrocento Sans',
+  'Questrial',
+  'Quicksand',
+  'Raleway',
+  'Red Hat Display',
+  'Red Hat Text',
+  'Roboto',
+  'Roboto Condensed',
+  'Roboto Flex',
+  'Roboto Mono',
+  'Roboto Serif',
+  'Rockwell',
+  'Rubik',
+  'Sarabun',
+  'Segoe Print',
+  'Segoe Script',
+  'Segoe UI',
+  'Segoe UI Emoji',
+  'Segoe UI Historic',
+  'Segoe UI Symbol',
+  'Shrikhand',
+  'Signika',
+  'SimHei',
+  'SimSun',
+  'Source Code Pro',
+  'Source Sans 3',
+  'Source Serif 4',
+  'Space Grotesk',
+  'Space Mono',
+  'Spectral',
+  'Tahoma',
+  'Teko',
+  'Times',
+  'Times New Roman',
+  'Titillium Web',
+  'Trebuchet MS',
+  'Ubuntu',
+  'Ubuntu Condensed',
+  'Ubuntu Mono',
+  'Varela Round',
+  'Verdana',
+  'Volkhov',
+  'Work Sans',
+  'Yu Gothic',
+  'Yu Gothic UI',
+  'Yu Mincho',
+  'Zapf Chancery',
+  'Zapfino',
+  'serif',
+  'sans-serif',
+  'monospace',
+  'cursive',
+  'fantasy',
+  'system-ui',
+  'ui-sans-serif',
+  'ui-serif',
+  'ui-monospace',
+  'ui-rounded',
+];
+
+function formatFontFamilyValue(fontFamily: string): string {
+  const trimmed = fontFamily.trim();
+  if (!trimmed) return '';
+  if (/^[A-Za-z0-9_-]+$/.test(trimmed)) return trimmed;
+  const escaped = trimmed.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+  return `'${escaped}'`;
+}
+
+function createFontFamilyOptions(fontFamilies: string[]): FontOption[] {
+  const seen = new Set<string>();
+  const options: FontOption[] = [];
+
+  fontFamilies.forEach((fontFamily) => {
+    const trimmed = fontFamily.trim();
+    if (!trimmed) return;
+
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    options.push({
+      label: trimmed,
+      value: formatFontFamilyValue(trimmed),
+    });
+  });
+
+  options.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  return options;
+}
+
+function getThemeFontDisplayName(key: string): string {
+  return THEME_FONT_DISPLAY_NAMES[key] ?? key;
+}
+
+function getFontPreviewFamily(fontFamily: string): string {
+  const trimmed = fontFamily.trim();
+  if (!trimmed) {
+    return "var(--fontPrimaryFallbackFamily, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif)";
+  }
+  return `${trimmed}, var(--fontPrimaryFallbackFamily, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif)`;
+}
 
 function normalizeHexColor(value: string): string | null {
   const trimmed = value.trim();
@@ -98,7 +408,15 @@ function resolveColorValue(
   if (visited.has(key)) return null;
   visited.add(key);
 
-  const candidate = (colors[key] ?? fallbackColors[key] ?? '').trim();
+  const ownValue = colors[key];
+  const fallbackValue = fallbackColors[key];
+  const candidate =
+    (typeof ownValue === 'string' && ownValue.trim()
+      ? ownValue
+      : typeof fallbackValue === 'string'
+        ? fallbackValue
+        : ''
+    ).trim();
   if (!candidate) return null;
 
   const varMatch = candidate.match(CSS_VAR_PATTERN);
@@ -161,28 +479,34 @@ function parseOpacityPercent(value: string, fallback: number): number {
 }
 
 function createEditableColors(baseTheme: Theme, fallbackTheme: Theme): Record<string, string> {
-  const allKeys = Array.from(
-    new Set([...Object.keys(fallbackTheme.colors), ...Object.keys(baseTheme.colors)]),
-  ).sort();
-
+  const allKeys = Object.keys(fallbackTheme.colors).sort();
   const result: Record<string, string> = {};
   allKeys.forEach((key) => {
-    const baseRaw = (baseTheme.colors[key] ?? '').trim();
-    if (baseRaw) {
-      result[key] = normalizeHexColor(baseRaw) ?? baseRaw;
+    const baseRaw = baseTheme.colors[key];
+    if (typeof baseRaw !== 'string') {
+      result[key] = '';
       return;
     }
 
-    const fallbackRaw = (fallbackTheme.colors[key] ?? '').trim();
-    if (fallbackRaw) {
-      result[key] = normalizeHexColor(fallbackRaw) ?? fallbackRaw;
+    const normalized = normalizeHexColor(baseRaw);
+    result[key] = normalized ?? baseRaw;
+  });
+  return result;
+}
+
+function createEditableFonts(baseTheme: Theme, fallbackTheme: Theme): Record<string, string> {
+  const fallbackFonts = fallbackTheme.fonts ?? {};
+  const allKeys = Object.keys(fallbackFonts).sort();
+  const result: Record<string, string> = {};
+  allKeys.forEach((key) => {
+    const baseRaw = typeof baseTheme.fonts?.[key] === 'string' ? baseTheme.fonts[key].trim() : '';
+    const fallbackRaw = typeof fallbackFonts[key] === 'string' ? fallbackFonts[key].trim() : '';
+    if (key === 'fontPrimaryFamily' || key === 'fontSecondaryFamily') {
+      result[key] = !baseRaw || baseRaw === fallbackRaw ? '' : baseRaw;
       return;
     }
 
-    const resolved =
-      resolveColorValue(key, baseTheme.colors, fallbackTheme.colors, new Set<string>()) ??
-      '#000000';
-    result[key] = normalizeHexColor(resolved) ?? resolved;
+    result[key] = baseRaw || fallbackRaw;
   });
   return result;
 }
@@ -201,50 +525,119 @@ function downloadTextFile(filename: string, content: string) {
 
 export default function ThemeCreator() {
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
-  const fallbackTheme =
-    themes.find((entry) => entry.id === 'default_dark')?.theme ?? themes[0]?.theme;
   const settingsThemeId = getBrowserSettings().themeId;
   const initialThemeEntry =
     themes.find((entry) => entry.id === settingsThemeId) ?? themes[0] ?? null;
+  const defaultDarkTheme =
+    themes.find((entry) => entry.id === DEFAULT_THEME_ID)?.theme ??
+    initialThemeEntry?.theme ??
+    themes[0]?.theme;
+  const defaultLightTheme =
+    themes.find((entry) => entry.id === DEFAULT_LIGHT_THEME_ID)?.theme ?? defaultDarkTheme;
 
   const [baseThemeId, setBaseThemeId] = useState<string>(initialThemeEntry?.id ?? '');
   const [themeName, setThemeName] = useState('My Theme');
   const [themeAuthor, setThemeAuthor] = useState('Me');
   const [themeMode, setThemeMode] = useState<ThemeMode>(
-    initialThemeEntry?.theme.mode ?? fallbackTheme?.mode ?? 'dark',
+    initialThemeEntry?.theme.mode ?? defaultDarkTheme?.mode ?? 'dark',
   );
   const [colors, setColors] = useState<Record<string, string>>(() =>
-    initialThemeEntry && fallbackTheme
-      ? createEditableColors(initialThemeEntry.theme, fallbackTheme)
+    initialThemeEntry && defaultDarkTheme
+      ? createEditableColors(
+          initialThemeEntry.theme,
+          initialThemeEntry.theme.mode === 'light'
+            ? (defaultLightTheme ?? defaultDarkTheme)
+            : defaultDarkTheme,
+        )
       : {},
+  );
+  const [fonts, setFonts] = useState<Record<string, string>>(() =>
+    initialThemeEntry && defaultDarkTheme
+      ? createEditableFonts(
+          initialThemeEntry.theme,
+          initialThemeEntry.theme.mode === 'light'
+            ? (defaultLightTheme ?? defaultDarkTheme)
+            : defaultDarkTheme,
+        )
+      : {},
+  );
+  const [fontFamilyOptions, setFontFamilyOptions] = useState<FontOption[]>(() =>
+    createFontFamilyOptions(BUILT_IN_FONT_FAMILIES),
   );
   const [livePreviewEnabled, setLivePreviewEnabled] = useState(true);
   const [exportMessage, setExportMessage] = useState('');
 
   const selectedThemeEntry: ThemeEntry | null =
     themes.find((entry) => entry.id === baseThemeId) ?? initialThemeEntry;
+  const fallbackThemeForMode = useMemo(() => {
+    if (themeMode === 'light') {
+      return defaultLightTheme ?? defaultDarkTheme ?? null;
+    }
+    return defaultDarkTheme ?? defaultLightTheme ?? null;
+  }, [themeMode, defaultDarkTheme, defaultLightTheme]);
 
   useEffect(() => {
-    if (!selectedThemeEntry || !fallbackTheme) return;
+    if (!selectedThemeEntry) return;
+
+    const fallbackTheme =
+      selectedThemeEntry.theme.mode === 'light'
+        ? (defaultLightTheme ?? defaultDarkTheme)
+        : (defaultDarkTheme ?? defaultLightTheme);
+    if (!fallbackTheme) return;
 
     setThemeMode(selectedThemeEntry.theme.mode);
     setColors(createEditableColors(selectedThemeEntry.theme, fallbackTheme));
-  }, [baseThemeId, fallbackTheme, selectedThemeEntry]);
-
-  const editableKeys = useMemo(() => Object.keys(colors).sort(), [colors]);
+    setFonts(createEditableFonts(selectedThemeEntry.theme, fallbackTheme));
+  }, [selectedThemeEntry, defaultDarkTheme, defaultLightTheme]);
 
   useEffect(() => {
-    if (!livePreviewEnabled) return;
+    let cancelled = false;
+    const queryLocalFonts = (globalThis as FontQueryGlobal).queryLocalFonts;
+    if (typeof queryLocalFonts !== 'function') return undefined;
 
-    const previewTheme: Theme = {
+    void (async () => {
+      try {
+        const localFonts = await queryLocalFonts();
+        if (cancelled || !Array.isArray(localFonts)) return;
+
+        const localFamilies = localFonts
+          .map((entry) => (entry && typeof entry.family === 'string' ? entry.family : ''))
+          .filter((family) => !!family.trim());
+        if (!localFamilies.length) return;
+
+        setFontFamilyOptions(createFontFamilyOptions([...BUILT_IN_FONT_FAMILIES, ...localFamilies]));
+      } catch {
+        // Ignore permission and unsupported errors, built-in options remain available.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const editableKeys = useMemo(
+    () => Object.keys(fallbackThemeForMode?.colors ?? {}).sort(),
+    [fallbackThemeForMode],
+  );
+  const editableFontKeys = useMemo(
+    () => Object.keys(fallbackThemeForMode?.fonts ?? {}).sort(),
+    [fallbackThemeForMode],
+  );
+
+  useEffect(() => {
+    if (!livePreviewEnabled || !fallbackThemeForMode) return;
+
+    const previewTheme = resolveThemeWithModeFallback({
       version: THEME_SCHEMA_VERSION,
       name: themeName.trim() || 'My Theme',
       author: themeAuthor.trim() || 'Me',
       mode: themeMode,
       colors,
-    };
+      fonts,
+    });
     applyTheme(previewTheme);
-  }, [themeName, themeAuthor, themeMode, colors, livePreviewEnabled]);
+  }, [themeName, themeAuthor, themeMode, colors, fonts, livePreviewEnabled, fallbackThemeForMode]);
 
   useEffect(() => {
     if (livePreviewEnabled) return;
@@ -262,6 +655,7 @@ export default function ThemeCreator() {
       author: trimmedAuthor,
       mode: themeMode,
       colors,
+      fonts,
     };
     const filename = `${trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'theme'}.json`;
     downloadTextFile(filename, JSON.stringify(payload, null, 2));
@@ -278,6 +672,7 @@ export default function ThemeCreator() {
         author: trimmedAuthor,
         mode: themeMode,
         colors,
+        fonts,
       };
       const json = JSON.stringify(payload, null, 2);
       const imported = importThemeFromJson(json);
@@ -292,18 +687,19 @@ export default function ThemeCreator() {
     }
   };
 
-  if (!themes.length || !fallbackTheme) {
+  if (!themes.length || !defaultDarkTheme) {
     return (
       <div className="settings-page creator-page">No themes are available to use as a base.</div>
     );
   }
+  const fallbackColors = fallbackThemeForMode?.colors ?? defaultDarkTheme.colors;
+  const fallbackFonts = fallbackThemeForMode?.fonts ?? defaultDarkTheme.fonts ?? {};
 
   return (
     <div className="settings-page creator-page">
       <header className="settings-header">
         <div>
           <h1 className="settings-title">Theme Creator</h1>
-          <p className="settings-subtitle">Pick a base theme, tweak colors, and export JSON.</p>
         </div>
       </header>
 
@@ -410,12 +806,93 @@ export default function ThemeCreator() {
 
       <section className="theme-panel settings-card">
         <div className="settings-card-header">
+          <h2 className="settings-card-title">Fonts</h2>
+        </div>
+        <div className="creator-values-list theme-creator-values-list">
+          {editableFontKeys.map((key) => {
+            const options =
+              key === 'fontPrimaryFamily' || key === 'fontSecondaryFamily'
+                ? fontFamilyOptions
+                : [];
+            const currentRaw = (fonts[key] ?? '').trim();
+            const hasCustomCurrent = !!currentRaw && !options.some((entry) => entry.value === currentRaw);
+            const selectedValue = currentRaw || DEFAULT_FONT_SELECT_VALUE;
+            const selectedPreviewFamily =
+              options.length && (key === 'fontPrimaryFamily' || key === 'fontSecondaryFamily')
+                ? getFontPreviewFamily(currentRaw || fallbackFonts[key] || '')
+                : undefined;
+
+            return (
+              <div key={key} className="settings-setting-row creator-value-row">
+                <div className="settings-setting-meta">
+                  <span className="settings-setting-label">{getThemeFontDisplayName(key)}</span>
+                </div>
+                <div className="settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                  {options.length ? (
+                    <select
+                      value={selectedValue}
+                      onChange={(e) => {
+                        const nextValue = e.currentTarget.value;
+                        setFonts((prev) => ({
+                          ...prev,
+                          [key]: nextValue === DEFAULT_FONT_SELECT_VALUE ? '' : nextValue,
+                        }));
+                        setExportMessage('');
+                      }}
+                      style={selectedPreviewFamily ? { fontFamily: selectedPreviewFamily } : undefined}
+                      className="theme-input settings-select-input settings-setting-control-grow creator-code-input"
+                    >
+                      <option value={DEFAULT_FONT_SELECT_VALUE}>
+                        Default
+                      </option>
+                      {options.map((option) => (
+                        <option
+                          key={`${key}-${option.value}`}
+                          value={option.value}
+                          style={{
+                            fontFamily: getFontPreviewFamily(option.value),
+                          }}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                      {hasCustomCurrent && (
+                        <option
+                          value={currentRaw}
+                          style={{
+                            fontFamily: getFontPreviewFamily(currentRaw),
+                          }}
+                        >
+                          Custom ({currentRaw})
+                        </option>
+                      )}
+                    </select>
+                  ) : (
+                    <input
+                      value={fonts[key] ?? ''}
+                      onChange={(e) => {
+                        const raw = e.currentTarget.value;
+                        setFonts((prev) => ({ ...prev, [key]: raw }));
+                        setExportMessage('');
+                      }}
+                      className="theme-input settings-text-input settings-setting-control-grow creator-code-input"
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="theme-panel settings-card">
+        <div className="settings-card-header">
           <h2 className="settings-card-title">Colors</h2>
         </div>
         <div className="creator-values-list theme-creator-values-list">
           {editableKeys.map((key) => (
             (() => {
-              const resolvedRgba = getResolvedRgbaForEditor(key, colors, fallbackTheme.colors);
+              const resolvedRgba = getResolvedRgbaForEditor(key, colors, fallbackColors);
               const opacityPercent = Math.round(resolvedRgba.a * 100);
               return (
                 <div key={key} className="settings-setting-row creator-value-row theme-creator-value-row">
@@ -424,23 +901,25 @@ export default function ThemeCreator() {
                   </div>
                   <div className="creator-color-controls settings-setting-control settings-setting-control-grow settings-setting-control-right">
                     <input
-                      value={colors[key]}
+                      value={colors[key] ?? ''}
                       onChange={(e) => {
-                        const trimmed = e.currentTarget.value.trim();
+                        const raw = e.currentTarget.value;
+                        const trimmed = raw.trim();
                         if (!trimmed) {
-                          setColors((prev) => ({ ...prev, [key]: 'transparent' }));
+                          setColors((prev) => ({ ...prev, [key]: '' }));
                           setExportMessage('');
                           return;
                         }
                         const normalized = normalizeHexColor(trimmed);
-                        setColors((prev) => ({ ...prev, [key]: normalized ?? trimmed }));
+                        setColors((prev) => ({ ...prev, [key]: normalized ?? raw }));
                         setExportMessage('');
                       }}
+                      placeholder="Leave blank to use mode default"
                       className="theme-input settings-text-input creator-code-input"
                     />
                     <input
                       type="color"
-                      value={getColorPickerValue(key, colors, fallbackTheme.colors)}
+                      value={getColorPickerValue(key, colors, fallbackColors)}
                       onChange={(e) => {
                         const nextHex = e.currentTarget.value;
                         const parsedHex = parseColorToRgba(nextHex) ?? { r: 0, g: 0, b: 0, a: 1 };

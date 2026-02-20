@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
+import { useDownloads } from '../features/downloads/DownloadProvider';
+import { clearHistoryEntries } from '../features/history/clientHistory';
 import {
   DEFAULT_BROWSER_SETTINGS,
+  SEARCH_ENGINE_OPTIONS,
   getBrowserSettings,
+  getSearchEngineShortcuts,
   saveBrowserSettings,
   type DevToolsOpenMode,
+  type SearchEngine,
+  type SearchEngineShortcutChars,
   type StartupRestoreBehavior,
   type TabSleepMode,
 } from '../features/settings/browserSettings';
@@ -95,7 +101,7 @@ type SetDefaultBrowserResponse = {
   };
 };
 
-type SettingsSectionId = 'general' | 'appearance' | 'app';
+type SettingsSectionId = 'general' | 'search' | 'appearance' | 'app' | 'dev';
 
 const SETTINGS_SECTION_TABS: Array<{
   id: SettingsSectionId;
@@ -104,6 +110,10 @@ const SETTINGS_SECTION_TABS: Array<{
   {
     id: 'general',
     label: 'General',
+  },
+  {
+    id: 'search',
+    label: 'Search',
   },
   {
     id: 'appearance',
@@ -115,15 +125,34 @@ const SETTINGS_SECTION_TABS: Array<{
   },
 ];
 
+const APP_DATA_STORAGE_KEYS = [
+  'mira.settings.browser.v1',
+  'mira.themes.custom.v1',
+  'mira.layouts.custom.v1',
+  'mira.session.tabs.v1',
+];
+
 export default function Settings() {
   const AUTO_SAVE_DELAY_MS = 300;
   const SAVED_BADGE_MS = 1600;
 
   const initialSettings = getBrowserSettings();
   const [newTabPage, setNewTabPage] = useState(() => initialSettings.newTabPage);
+  const [searchEngine, setSearchEngine] = useState<SearchEngine>(() => initialSettings.searchEngine);
+  const [searchEngineShortcutsEnabled, setSearchEngineShortcutsEnabled] = useState(
+    () => initialSettings.searchEngineShortcutsEnabled,
+  );
+  const [searchEngineShortcutPrefix, setSearchEngineShortcutPrefix] = useState(
+    () => initialSettings.searchEngineShortcutPrefix,
+  );
+  const [searchEngineShortcutChars, setSearchEngineShortcutChars] =
+    useState<SearchEngineShortcutChars>(() => initialSettings.searchEngineShortcutChars);
   const [themeId, setThemeId] = useState(() => initialSettings.themeId);
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => initialSettings.rawFileDarkModeEnabled,
+  );
+  const [nativeTextFieldContextMenu, setNativeTextFieldContextMenu] = useState(
+    () => initialSettings.nativeTextFieldContextMenu,
   );
   const [layoutId, setLayoutId] = useState(() => initialSettings.layoutId);
   const [tabSleepValue, setTabSleepValue] = useState(() => initialSettings.tabSleepValue);
@@ -134,9 +163,7 @@ export default function Settings() {
   const [trackerBlockEnabled, setTrackerBlockEnabled] = useState(
     () => initialSettings.trackerBlockEnabled,
   );
-  const [quitOnLastWindowClose, setQuitOnLastWindowClose] = useState(
-    () => initialSettings.quitOnLastWindowClose,
-  );
+  const [quitOnLastWindowClose] = useState(() => initialSettings.quitOnLastWindowClose);
   const [showNewTabBranding, setShowNewTabBranding] = useState(
     () => initialSettings.showNewTabBranding,
   );
@@ -153,6 +180,7 @@ export default function Settings() {
   const [startupRestoreBehavior, setStartupRestoreBehavior] = useState<StartupRestoreBehavior>(
     () => initialSettings.startupRestoreBehavior,
   );
+  const [showPerfOverlay, setShowPerfOverlay] = useState(() => initialSettings.showPerfOverlay);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -168,10 +196,12 @@ export default function Settings() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
+  const [isResettingAppData, setIsResettingAppData] = useState(false);
   const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
   const [canConfigureRunOnStartup, setCanConfigureRunOnStartup] = useState(false);
   const [runOnStartupStatus, setRunOnStartupStatus] = useState('');
   const [onboardingResetStatus, setOnboardingResetStatus] = useState('');
+  const [appDataResetStatus, setAppDataResetStatus] = useState('');
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
   const [canAttemptDefaultBrowserRegistration, setCanAttemptDefaultBrowserRegistration] =
@@ -182,6 +212,7 @@ export default function Settings() {
   const isFirstAutoSaveRef = useRef(true);
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { navigate } = useTabs();
+  const { clear: clearDownloads } = useDownloads();
 
   const handleThemeChange = (nextThemeId: string) => {
     setThemeId(nextThemeId);
@@ -260,8 +291,13 @@ export default function Settings() {
     const timer = setTimeout(() => {
       saveBrowserSettings({
         newTabPage,
+        searchEngine,
+        searchEngineShortcutsEnabled,
+        searchEngineShortcutPrefix,
+        searchEngineShortcutChars,
         themeId,
         rawFileDarkModeEnabled,
+        nativeTextFieldContextMenu,
         layoutId,
         tabSleepValue,
         tabSleepUnit,
@@ -276,6 +312,7 @@ export default function Settings() {
         autoUpdateOnLaunch,
         runOnStartup,
         startupRestoreBehavior,
+        showPerfOverlay,
       });
       setSaveStatus('saved');
 
@@ -290,8 +327,13 @@ export default function Settings() {
     return () => clearTimeout(timer);
   }, [
     newTabPage,
+    searchEngine,
+    searchEngineShortcutsEnabled,
+    searchEngineShortcutPrefix,
+    searchEngineShortcutChars,
     themeId,
     rawFileDarkModeEnabled,
+    nativeTextFieldContextMenu,
     layoutId,
     tabSleepValue,
     tabSleepUnit,
@@ -306,6 +348,7 @@ export default function Settings() {
     autoUpdateOnLaunch,
     runOnStartup,
     startupRestoreBehavior,
+    showPerfOverlay,
   ]);
 
   useEffect(() => {
@@ -387,6 +430,29 @@ export default function Settings() {
     }
   };
   const formatLayoutLabel = (entry: LayoutEntry) => `${entry.layout.name} - ${entry.layout.author}`;
+  const searchEngineShortcuts = getSearchEngineShortcuts(
+    searchEngineShortcutPrefix,
+    searchEngineShortcutChars,
+  );
+  const shortcutExample = searchEngineShortcuts[0]?.shortcut ?? '!g';
+  const secondShortcutExample = searchEngineShortcuts[1]?.shortcut ?? '!d';
+
+  const handleSearchShortcutPrefixChange = (value: string) => {
+    const normalized = value.replace(/\s+/g, '');
+    if (!normalized) return;
+    setSearchEngineShortcutPrefix(normalized[normalized.length - 1]);
+    setSaveStatus('saving');
+  };
+
+  const handleSearchShortcutCharChange = (engine: SearchEngine, value: string) => {
+    const normalized = value.replace(/\s+/g, '').toLowerCase();
+    if (!normalized) return;
+    setSearchEngineShortcutChars((current) => ({
+      ...current,
+      [engine]: normalized[normalized.length - 1],
+    }));
+    setSaveStatus('saving');
+  };
 
   const checkForUpdates = async () => {
     if (!electron?.ipcRenderer) {
@@ -491,6 +557,40 @@ export default function Settings() {
       setOnboardingResetStatus('Failed to reset onboarding.');
     } finally {
       setIsResettingOnboarding(false);
+    }
+  };
+
+  const resetAppData = async () => {
+    const confirmed = window.confirm(
+      'This will clear history, session, downloads, and settings for this profile. Continue?',
+    );
+    if (!confirmed) return;
+
+    setIsResettingAppData(true);
+    setAppDataResetStatus('');
+    try {
+      clearDownloads();
+      await clearHistoryEntries().catch(() => undefined);
+
+      if (electron?.ipcRenderer) {
+        await Promise.allSettled([
+          electron.ipcRenderer.invoke('session-save-window', null),
+          electron.ipcRenderer.invoke('session-discard-restore'),
+        ]);
+      }
+
+      for (const storageKey of APP_DATA_STORAGE_KEYS) {
+        localStorage.removeItem(storageKey);
+      }
+
+      setAppDataResetStatus('App data cleared. Reloading...');
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 250);
+    } catch {
+      setAppDataResetStatus('Failed to reset app data.');
+    } finally {
+      setIsResettingAppData(false);
     }
   };
 
@@ -600,6 +700,11 @@ export default function Settings() {
   }, []);
 
   const canConfigureRunOnStartupSetting = electron?.isMacOS || electron?.platform === 'win32';
+  const isDevSettingsEnabled = initialSettings.dev;
+  const settingsSectionTabs: Array<{ id: SettingsSectionId; label: string }> =
+    isDevSettingsEnabled
+      ? [...SETTINGS_SECTION_TABS, { id: 'dev', label: 'Dev' }]
+      : SETTINGS_SECTION_TABS;
 
   return (
     <div className="settings-page">
@@ -619,7 +724,7 @@ export default function Settings() {
 
       <div className="settings-body">
         <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-          {SETTINGS_SECTION_TABS.map((section) => (
+          {settingsSectionTabs.map((section) => (
             <button
               key={section.id}
               id={`settings-tab-${section.id}`}
@@ -828,6 +933,121 @@ export default function Settings() {
             </>
           )}
 
+          {activeSection === 'search' && (
+            <>
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Search Engine</h2>
+                </div>
+                <div className="settings-setting-row">
+                  <label htmlFor="search-engine" className="settings-setting-meta">
+                    <span className="settings-setting-label">Default search engine</span>
+                    <span className="settings-setting-description">
+                      Used when you type non-URL text in the address bar or New Tab search.
+                    </span>
+                  </label>
+                  <select
+                    id="search-engine"
+                    value={searchEngine}
+                    onChange={(e) => {
+                      const nextEngine = e.currentTarget.value;
+                      if (SEARCH_ENGINE_OPTIONS.some((option) => option.value === nextEngine)) {
+                        setSearchEngine(nextEngine as SearchEngine);
+                        setSaveStatus('saving');
+                      }
+                    }}
+                    className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                  >
+                    {SEARCH_ENGINE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label
+                  htmlFor="search-engine-shortcuts-enabled"
+                  className="settings-setting-row"
+                >
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Enable engine shortcuts</span>
+                    <span className="settings-setting-description">
+                      Allow prefixes like <code>{shortcutExample}</code> and{' '}
+                      <code>{secondShortcutExample}</code> to override the selected engine for a
+                      single search.
+                    </span>
+                  </span>
+                  <input
+                    id="search-engine-shortcuts-enabled"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={searchEngineShortcutsEnabled}
+                    onChange={(e) => {
+                      setSearchEngineShortcutsEnabled(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+                {searchEngineShortcutsEnabled && (
+                  <>
+                    <div className="settings-setting-row">
+                      <label htmlFor="search-shortcut-prefix" className="settings-setting-meta">
+                        <span className="settings-setting-label">Shortcut prefix character</span>
+                        <span className="settings-setting-description">
+                          Character used before each engine shortcut.
+                        </span>
+                      </label>
+                      <input
+                        id="search-shortcut-prefix"
+                        type="text"
+                        inputMode="text"
+                        autoComplete="off"
+                        value={searchEngineShortcutPrefix}
+                        onChange={(e) => handleSearchShortcutPrefixChange(e.currentTarget.value)}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="theme-input settings-number-input settings-setting-control"
+                      />
+                    </div>
+                    <div className="settings-setting-row">
+                      <div className="settings-setting-meta">
+                        <span className="settings-setting-label">Engine shortcuts</span>
+                        <span className="settings-setting-description">
+                          Type the shortcut first, then your query (example:{' '}
+                          <code>{shortcutExample} cats</code>).
+                        </span>
+                        <div className="settings-shortcuts-list">
+                          {searchEngineShortcuts.map((entry) => (
+                            <div key={entry.engine} className="settings-shortcuts-item">
+                              <span className="settings-shortcuts-engine">{entry.label}</span>
+                              <span className="settings-shortcuts-current">
+                                Current: <code>{entry.shortcut}</code>
+                              </span>
+                              <input
+                                id={`search-shortcut-char-${entry.engine}`}
+                                type="text"
+                                inputMode="text"
+                                autoComplete="off"
+                                value={searchEngineShortcutChars[entry.engine]}
+                                onChange={(e) =>
+                                  handleSearchShortcutCharChange(
+                                    entry.engine,
+                                    e.currentTarget.value,
+                                  )
+                                }
+                                onFocus={(e) => e.currentTarget.select()}
+                                className="theme-input settings-shortcuts-input"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </section>
+            </>
+          )}
+
           {activeSection === 'appearance' && (
             <>
               <section className="theme-panel settings-card">
@@ -843,7 +1063,7 @@ export default function Settings() {
                   </label>
                   <div
                     ref={themeDropdownRef}
-                    className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
+                    className="settings-dropdown-wrap settings-setting-control settings-select-limit"
                   >
                     <button
                       id="theme-dropdown-button"
@@ -977,7 +1197,7 @@ export default function Settings() {
                   </label>
                   <div
                     ref={layoutDropdownRef}
-                    className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
+                    className="settings-dropdown-wrap settings-setting-control settings-select-limit"
                   >
                     <button
                       id="layout-dropdown-button"
@@ -1116,6 +1336,30 @@ export default function Settings() {
                     <option value="window">Separate window</option>
                   </select>
                 </div>
+              </section>
+
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Context Menu</h2>
+                </div>
+                <label htmlFor="native-text-field-context-menu" className="settings-setting-row">
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Use native context menus</span>
+                    <span className="settings-setting-description">
+                      Show your OS context menu. Turn off to use Mira&apos;s custom menus. (not recomended)
+                    </span>
+                  </span>
+                  <input
+                    id="native-text-field-context-menu"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={nativeTextFieldContextMenu}
+                    onChange={(e) => {
+                      setNativeTextFieldContextMenu(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
               </section>
 
               <section className="theme-panel settings-card">
@@ -1302,6 +1546,62 @@ export default function Settings() {
                 </div>
                 {!!updateStatus && (
                   <div className="theme-text2 settings-status">{updateStatus}</div>
+                )}
+              </section>
+            </>
+          )}
+
+          {isDevSettingsEnabled && activeSection === 'dev' && (
+            <>
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Diagnostics</h2>
+                </div>
+                <label htmlFor="show-perf-overlay" className="settings-setting-row">
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Performance overlay (WIP)</span>
+                    <span className="settings-setting-description">
+                      Show a performance overlay.
+                      May be inaccurate.
+                    </span>
+                  </span>
+                  <input
+                    id="show-perf-overlay"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={showPerfOverlay}
+                    onChange={(e) => {
+                      setShowPerfOverlay(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
+              </section>
+
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">App Data</h2>
+                </div>
+                <div className="settings-setting-row">
+                  <div className="settings-setting-meta">
+                    <span className="settings-setting-label">Reset app data</span>
+                    <span className="settings-setting-description">
+                      Clear history, session, downloads list, and settings in one action.
+                    </span>
+                  </div>
+                  <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                    <button
+                      type="button"
+                      onClick={resetAppData}
+                      className="theme-btn theme-btn-nav settings-btn-pad"
+                      disabled={isResettingAppData}
+                    >
+                      {isResettingAppData ? 'Resetting...' : 'Reset App Data'}
+                    </button>
+                  </div>
+                </div>
+                {!!appDataResetStatus && (
+                  <div className="theme-text2 settings-status">{appDataResetStatus}</div>
                 )}
               </section>
 

@@ -123,7 +123,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
         className="theme-btn topbar-window-btn"
         style={{
           width: 44,
-          height: 38,
+          height: 'var(--layoutTopBarHeight, 38px)',
           borderRadius: 0,
           borderTop: 'none',
           borderBottom: 'none',
@@ -138,7 +138,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
         className="theme-btn topbar-window-btn"
         style={{
           width: 44,
-          height: 38,
+          height: 'var(--layoutTopBarHeight, 38px)',
           borderRadius: 0,
           borderTop: 'none',
           borderBottom: 'none',
@@ -157,7 +157,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
         className="theme-btn topbar-window-btn topbar-window-btn-close"
         style={{
           width: 48,
-          height: 38,
+          height: 'var(--layoutTopBarHeight, 38px)',
           borderRadius: 0,
           borderTop: 'none',
           borderBottom: 'none',

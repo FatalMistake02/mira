@@ -1,6 +1,7 @@
 import type { Layout } from '../../layouts/types';
 
 let previouslyAppliedLayoutKeys = new Set<string>();
+export const LAYOUT_APPLIED_EVENT = 'mira-layout-applied';
 
 export function applyLayout(layout: Layout | null | undefined) {
   if (!layout || typeof layout !== 'object') return;
@@ -22,4 +23,5 @@ export function applyLayout(layout: Layout | null | undefined) {
   });
 
   previouslyAppliedLayoutKeys = nextKeys;
+  window.dispatchEvent(new Event(LAYOUT_APPLIED_EVENT));
 }

@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import miraLogo from '../assets/mira_logo.png';
 import { useTabs } from '../features/tabs/TabsProvider';
-import { DEFAULT_BROWSER_SETTINGS, getBrowserSettings } from '../features/settings/browserSettings';
+import {
+  DEFAULT_BROWSER_SETTINGS,
+  getBrowserSettings,
+  getSearchUrlFromInput,
+} from '../features/settings/browserSettings';
 
 const NEW_TAB_INTRO_SHOWN_KEY = 'mira.newtab.intro.shown.v1';
 const INTRO_BLOCK_HEIGHT = 300;
@@ -36,8 +40,16 @@ export default function NewTab() {
     const trimmed = query.trim();
     if (!trimmed) return;
 
-    const searchQuery = new URLSearchParams({ q: trimmed }).toString();
-    navigate(`https://www.google.com/search?${searchQuery}`);
+    const settings = getBrowserSettings();
+    navigate(
+      getSearchUrlFromInput(
+        trimmed,
+        settings.searchEngine,
+        settings.searchEngineShortcutsEnabled,
+        settings.searchEngineShortcutPrefix,
+        settings.searchEngineShortcutChars,
+      ),
+    );
     setQuery('');
   };
 

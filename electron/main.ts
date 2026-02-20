@@ -10,7 +10,7 @@ import {
   webContents as electronWebContents,
 } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import type { DownloadItem, WebContents } from 'electron';
+import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'electron';
 import { appendFileSync, promises as fs, unlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -1448,6 +1448,53 @@ async function downloadAssetToDownloads(downloadUrl: string, assetName: string):
   return targetPath;
 }
 
+function normalizeKilobytes(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+function getComparableProcessMemoryKb(memory: Record<string, unknown>): number | null {
+  const workingSetKb = normalizeKilobytes(memory.workingSetSize ?? memory.residentSet);
+  const sharedKb = normalizeKilobytes(memory.sharedBytes);
+  if (workingSetKb !== null && sharedKb !== null) {
+    return Math.max(workingSetKb - sharedKb, 0);
+  }
+
+  // Fallback for platforms/versions that expose only private-style metrics.
+  const privateKb = normalizeKilobytes(memory.privateBytes ?? memory.private);
+  if (privateKb !== null) return privateKb;
+
+  return workingSetKb;
+}
+
+function setupPerformanceHandlers() {
+  ipcMain.handle('perf-memory-snapshot', async () => {
+    try {
+      const metrics = app.getAppMetrics();
+      let totalComparableKb = 0;
+
+      for (const metric of metrics) {
+        if (typeof metric.memory !== 'object' || metric.memory === null) continue;
+        const memory = metric.memory as Record<string, unknown>;
+        const comparableKb = getComparableProcessMemoryKb(memory);
+        if (comparableKb !== null) {
+          totalComparableKb += comparableKb;
+        }
+      }
+
+      return {
+        totalMemoryMb: totalComparableKb > 0 ? totalComparableKb / 1024 : null,
+      };
+    } catch {
+      return {
+        totalMemoryMb: null,
+      };
+    }
+  });
+}
+
 function setupHistoryHandlers() {
   ipcMain.handle('history-add', async (_, payload: { url?: string; title?: string }) => {
     await addHistoryEntry(payload ?? {});
@@ -1602,32 +1649,98 @@ function setupWebviewTabOpenHandler() {
       const key = input.key.toLowerCase();
       const hasPrimaryModifier = input.control || input.meta;
       const isPrimaryChord = hasPrimaryModifier && !input.shift;
+      const historyKey = isMacOS ? 'y' : 'h';
+      const isNewTabChord = isPrimaryChord && key === 't';
       const isNewWindowChord = isPrimaryChord && key === 'n';
       const isFindChord = isPrimaryChord && key === 'f';
+      const isFindNextChord = isPrimaryChord && key === 'g';
+      const isFindPreviousChord = hasPrimaryModifier && input.shift && key === 'g';
       const isNextTabChord = isPrimaryChord && key === 'tab';
       const isPreviousTabChord = hasPrimaryModifier && input.shift && key === 'tab';
       const tabNumberShortcut = isPrimaryChord && /^[1-9]$/.test(key)
         ? Number.parseInt(key, 10)
         : null;
-      const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
-      const isDevToolsChord = isMacOS
+      const isHistoryChord = isPrimaryChord && key === historyKey;
+      const isDownloadsChord = isPrimaryChord && key === 'j';
+      const isPrintChord = isPrimaryChord && key === 'p';
+      const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
+      const isCloseTabChord = isPrimaryChord && key === 'w';
+      const isCloseWindowChord = hasPrimaryModifier && input.shift && key === 'w';
+      const isMoveTabLeftChord = hasPrimaryModifier && input.shift && key === 'pageup';
+      const isMoveTabRightChord = hasPrimaryModifier && input.shift && key === 'pagedown';
+      const isBackChord = !hasPrimaryModifier && input.alt && !input.shift && key === 'arrowleft';
+      const isForwardChord = !hasPrimaryModifier && input.alt && !input.shift && key === 'arrowright';
+      const isNewTabPageChord = !hasPrimaryModifier && input.alt && !input.shift && key === 'home';
+      const isFocusAddressBarChord =
+        (isPrimaryChord && key === 'l')
+        || (!hasPrimaryModifier && input.alt && !input.shift && key === 'd')
+        || (!hasPrimaryModifier && !input.alt && !input.shift && key === 'f6');
+      const isReloadChord = isPrimaryChord && key === 'r';
+      const isReloadFunctionChord = !hasPrimaryModifier && !input.alt && !input.shift && key === 'f5';
+      const isHardReloadChord = hasPrimaryModifier && input.shift && key === 'r';
+      const isHardReloadFunctionChord = hasPrimaryModifier && key === 'f5';
+      const isStopLoadingKey = !hasPrimaryModifier && !input.alt && !input.shift && key === 'escape';
+      const isSavePageChord = isPrimaryChord && key === 's';
+      const isOpenFileChord = isPrimaryChord && key === 'o';
+      const isViewSourceChord = isPrimaryChord && key === 'u';
+      const isZoomInChord = hasPrimaryModifier && !input.alt && (key === '+' || key === '=');
+      const isZoomOutChord = isPrimaryChord && key === '-';
+      const isZoomResetChord = isPrimaryChord && key === '0';
+      const isToggleFullScreenKey = !hasPrimaryModifier && !input.alt && !input.shift && key === 'f11';
+      const isAppDevToolsChord = hasPrimaryModifier && input.alt && input.shift && key === 'j';
+      const isBrowserConsoleChord = isMacOS
+        ? input.meta && input.alt && key === 'j'
+        : hasPrimaryModifier && input.shift && key === 'j';
+      const isDevToolsChord = key === 'f12' || isBrowserConsoleChord || (isMacOS
         ? input.meta && input.alt && key === 'i'
-        : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i');
+        : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i'));
 
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!hostWindow || hostWindow.isDestroyed()) return;
 
       if (
-        !isNewWindowChord
+        !isNewTabChord
+        && !isNewWindowChord
         && !isFindChord
+        && !isFindNextChord
+        && !isFindPreviousChord
         && !isNextTabChord
         && !isPreviousTabChord
         && tabNumberShortcut === null
+        && !isHistoryChord
+        && !isDownloadsChord
+        && !isPrintChord
+        && !isReopenClosedTabChord
+        && !isCloseTabChord
+        && !isCloseWindowChord
+        && !isMoveTabLeftChord
+        && !isMoveTabRightChord
+        && !isBackChord
+        && !isForwardChord
+        && !isNewTabPageChord
+        && !isFocusAddressBarChord
+        && !isReloadChord
+        && !isReloadFunctionChord
+        && !isHardReloadChord
+        && !isHardReloadFunctionChord
+        && !isStopLoadingKey
+        && !isSavePageChord
+        && !isOpenFileChord
+        && !isViewSourceChord
+        && !isZoomInChord
+        && !isZoomOutChord
+        && !isZoomResetChord
+        && !isToggleFullScreenKey
         && !isDevToolsChord
         && !isAppDevToolsChord
       ) return;
 
       event.preventDefault();
+
+      if (isNewTabChord) {
+        hostWindow.webContents.send('app-shortcut', 'new-tab');
+        return;
+      }
 
       if (isAppDevToolsChord) {
         logDebug('shortcut', 'app-devtools-shortcut-from-webview', {
@@ -1635,6 +1748,7 @@ function setupWebviewTabOpenHandler() {
           key,
           control: input.control,
           meta: input.meta,
+          alt: input.alt,
           shift: input.shift,
         });
         toggleWindowDevTools(hostWindow);
@@ -1642,9 +1756,7 @@ function setupWebviewTabOpenHandler() {
       }
 
       if (isDevToolsChord) {
-        if (toggleFocusedBrowserDevTools()) {
-          return;
-        }
+        if (toggleFocusedBrowserDevTools()) return;
         markHostDevToolsSuppressedForShortcut(hostWindow);
         hostWindow.webContents.send('app-shortcut', 'toggle-devtools');
         return;
@@ -1652,6 +1764,16 @@ function setupWebviewTabOpenHandler() {
 
       if (isFindChord) {
         hostWindow.webContents.send('app-shortcut', 'find-in-page');
+        return;
+      }
+
+      if (isFindNextChord) {
+        hostWindow.webContents.send('app-shortcut', 'find-next');
+        return;
+      }
+
+      if (isFindPreviousChord) {
+        hostWindow.webContents.send('app-shortcut', 'find-previous');
         return;
       }
 
@@ -1667,6 +1789,116 @@ function setupWebviewTabOpenHandler() {
 
       if (tabNumberShortcut !== null) {
         hostWindow.webContents.send('app-shortcut', 'activate-tab-index', tabNumberShortcut);
+        return;
+      }
+
+      if (isHistoryChord) {
+        hostWindow.webContents.send('app-shortcut', 'open-history');
+        return;
+      }
+
+      if (isDownloadsChord) {
+        hostWindow.webContents.send('app-shortcut', 'open-downloads');
+        return;
+      }
+
+      if (isPrintChord) {
+        hostWindow.webContents.send('app-shortcut', 'print-page');
+        return;
+      }
+
+      if (isReopenClosedTabChord) {
+        hostWindow.webContents.send('app-shortcut', 'reopen-closed-tab');
+        return;
+      }
+
+      if (isCloseTabChord) {
+        hostWindow.webContents.send('app-shortcut', 'close-tab');
+        return;
+      }
+
+      if (isCloseWindowChord) {
+        hostWindow.webContents.send('app-shortcut', 'close-window');
+        return;
+      }
+
+      if (isMoveTabLeftChord) {
+        hostWindow.webContents.send('app-shortcut', 'move-active-tab-left');
+        return;
+      }
+
+      if (isMoveTabRightChord) {
+        hostWindow.webContents.send('app-shortcut', 'move-active-tab-right');
+        return;
+      }
+
+      if (isBackChord) {
+        hostWindow.webContents.send('app-shortcut', 'go-back');
+        return;
+      }
+
+      if (isForwardChord) {
+        hostWindow.webContents.send('app-shortcut', 'go-forward');
+        return;
+      }
+
+      if (isNewTabPageChord) {
+        hostWindow.webContents.send('app-shortcut', 'navigate-new-tab-page');
+        return;
+      }
+
+      if (isFocusAddressBarChord) {
+        hostWindow.webContents.send('app-shortcut', 'focus-address-bar');
+        return;
+      }
+
+      if (isHardReloadChord || isHardReloadFunctionChord) {
+        hostWindow.webContents.send('app-shortcut', 'reload-tab-ignore-cache');
+        return;
+      }
+
+      if (isReloadChord || isReloadFunctionChord) {
+        hostWindow.webContents.send('app-shortcut', 'reload-tab');
+        return;
+      }
+
+      if (isStopLoadingKey) {
+        hostWindow.webContents.send('app-shortcut', 'stop-loading');
+        return;
+      }
+
+      if (isSavePageChord) {
+        hostWindow.webContents.send('app-shortcut', 'save-page');
+        return;
+      }
+
+      if (isOpenFileChord) {
+        hostWindow.webContents.send('app-shortcut', 'open-file');
+        return;
+      }
+
+      if (isViewSourceChord) {
+        hostWindow.webContents.send('app-shortcut', 'view-source');
+        return;
+      }
+
+      if (isZoomInChord) {
+        hostWindow.webContents.send('app-shortcut', 'zoom-in');
+        return;
+      }
+
+      if (isZoomOutChord) {
+        hostWindow.webContents.send('app-shortcut', 'zoom-out');
+        return;
+      }
+
+      if (isZoomResetChord) {
+        hostWindow.webContents.send('app-shortcut', 'zoom-reset');
+        return;
+      }
+
+      if (isToggleFullScreenKey) {
+        hostWindow.webContents.send('app-shortcut', 'toggle-fullscreen');
         return;
       }
 
@@ -2131,6 +2363,80 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('tab-show-native-context-menu', (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return false;
+
+    const candidate = payload as {
+      tabId?: unknown;
+      x?: unknown;
+      y?: unknown;
+      hasTabsToRight?: unknown;
+      hasOtherTabs?: unknown;
+    };
+    const tabId = typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
+    if (!tabId) return false;
+
+    const hasTabsToRight = candidate.hasTabsToRight === true;
+    const hasOtherTabs = candidate.hasOtherTabs === true;
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+      ? Math.max(0, Math.floor(candidate.x))
+      : null;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+      ? Math.max(0, Math.floor(candidate.y))
+      : null;
+
+    const hostWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const sendCommand = (command: string) => {
+      hostWindow.webContents.send('tab-native-context-command', { command, tabId });
+    };
+
+    const template: MenuItemConstructorOptions[] = [
+      {
+        label: 'New Tab to Right',
+        click: () => sendCommand('new-tab-to-right'),
+      },
+      { type: 'separator' },
+      {
+        label: 'Reload',
+        accelerator: 'CommandOrControl+R',
+        click: () => sendCommand('reload'),
+      },
+      {
+        label: 'Duplicate',
+        click: () => sendCommand('duplicate'),
+      },
+      { type: 'separator' },
+      {
+        label: 'Close',
+        accelerator: 'CommandOrControl+W',
+        click: () => sendCommand('close'),
+      },
+      {
+        label: 'Close Others',
+        enabled: hasOtherTabs,
+        click: () => sendCommand('close-others'),
+      },
+      {
+        label: 'Close to Right',
+        enabled: hasTabsToRight,
+        click: () => sendCommand('close-to-right'),
+      },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    try {
+      menu.popup({
+        window: hostWindow,
+        ...(x !== null && y !== null ? { x, y } : {}),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle('webview-open-devtools', (event, payload: unknown) => {
     if (typeof payload !== 'object' || !payload) return false;
 
@@ -2189,6 +2495,303 @@ function setupWindowControlsHandlers() {
     }
   });
 
+  ipcMain.handle('webview-show-native-context-menu', (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return false;
+
+    const candidate = payload as {
+      webContentsId?: unknown;
+      x?: unknown;
+      y?: unknown;
+      params?: unknown;
+      context?: unknown;
+    };
+    const webContentsId =
+      typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+        ? Math.floor(candidate.webContentsId)
+        : -1;
+    if (webContentsId <= 0) return false;
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return false;
+
+    const host = target.hostWebContents;
+    if (!host || host.id !== event.sender.id) return false;
+    const hostWindow = BrowserWindow.fromWebContents(host);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const rawParams =
+      typeof candidate.params === 'object' && candidate.params !== null
+        ? (candidate.params as Record<string, unknown>)
+        : {};
+    const rawContext =
+      typeof candidate.context === 'object' && candidate.context !== null
+        ? (candidate.context as Record<string, unknown>)
+        : {};
+
+    const pageURL = typeof rawParams.pageURL === 'string' ? rawParams.pageURL.trim() : '';
+    const linkURL = typeof rawParams.linkURL === 'string' ? rawParams.linkURL.trim() : '';
+    const srcURL = typeof rawParams.srcURL === 'string' ? rawParams.srcURL.trim() : '';
+    const mediaType = typeof rawParams.mediaType === 'string' ? rawParams.mediaType.trim().toLowerCase() : '';
+    const isEditable = rawParams.isEditable === true;
+    const canGoBack = rawContext.canGoBack === true;
+    const canGoForward = rawContext.canGoForward === true;
+    const sourceUrl = typeof rawContext.sourceUrl === 'string' ? rawContext.sourceUrl.trim() : '';
+
+    const rawEditFlags =
+      typeof rawParams.editFlags === 'object' && rawParams.editFlags !== null
+        ? (rawParams.editFlags as Record<string, unknown>)
+        : {};
+    const canUndo = rawEditFlags.canUndo !== false;
+    const canRedo = rawEditFlags.canRedo !== false;
+    const canCut = rawEditFlags.canCut !== false;
+    const canCopy = rawEditFlags.canCopy !== false;
+    const canPaste = rawEditFlags.canPaste !== false;
+    const canPasteAndMatchStyle = rawEditFlags.canPasteAndMatchStyle !== false;
+    const canSelectAll = rawEditFlags.canSelectAll !== false;
+
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+      ? Math.max(0, Math.floor(candidate.x))
+      : null;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+      ? Math.max(0, Math.floor(candidate.y))
+      : null;
+
+    const resolveContextMenuUrl = (rawUrl: string, baseUrl?: string): string => {
+      const trimmed = rawUrl.trim();
+      if (!trimmed) return '';
+
+      try {
+        const normalizedBase = typeof baseUrl === 'string' ? baseUrl.trim() : '';
+        return normalizedBase ? new URL(trimmed, normalizedBase).toString() : new URL(trimmed).toString();
+      } catch {
+        return trimmed;
+      }
+    };
+
+    const canOpenInNewTab = (url: string): boolean => {
+      const trimmed = url.trim();
+      if (!trimmed) return false;
+
+      try {
+        const protocol = new URL(trimmed).protocol.toLowerCase();
+        return (
+          protocol === 'http:' ||
+          protocol === 'https:' ||
+          protocol === 'file:' ||
+          protocol === 'about:' ||
+          protocol === 'mira:' ||
+          protocol === 'view-source:'
+        );
+      } catch {
+        return false;
+      }
+    };
+
+    const resolvedSrcUrl = resolveContextMenuUrl(srcURL, pageURL);
+    const resolvedLinkUrl = resolveContextMenuUrl(linkURL, pageURL);
+    const resolvedSourceUrl = resolveContextMenuUrl(sourceUrl, pageURL);
+    const viewSourceUrl = resolvedSourceUrl ? `view-source:${resolvedSourceUrl}` : '';
+
+    const sendCommand = (command: string, extra?: Record<string, unknown>) => {
+      hostWindow.webContents.send('webview-native-context-command', {
+        command,
+        webContentsId,
+        ...extra,
+      });
+    };
+
+    const menuItem = (
+      label: string,
+      command: string,
+      options?: {
+        enabled?: boolean;
+        accelerator?: string;
+        extra?: Record<string, unknown>;
+      },
+    ) => ({
+      label,
+      enabled: options?.enabled ?? true,
+      accelerator: options?.accelerator,
+      click: () => {
+        sendCommand(command, options?.extra);
+      },
+    });
+
+    const inspectEntry = menuItem('Inspect', 'inspect-element', {
+      accelerator: isMacOS ? 'Command+Alt+I' : 'F12',
+      extra: {
+        x: x ?? 0,
+        y: y ?? 0,
+      },
+    });
+
+    let template: MenuItemConstructorOptions[] = [];
+    if (isEditable) {
+      template = [
+        menuItem('Undo', 'edit-undo', {
+          enabled: canUndo,
+          accelerator: 'CommandOrControl+Z',
+        }),
+        menuItem('Redo', 'edit-redo', {
+          enabled: canRedo,
+          accelerator: isMacOS ? 'Shift+Command+Z' : 'CommandOrControl+Y',
+        }),
+        { type: 'separator' },
+        menuItem('Cut', 'edit-cut', { enabled: canCut, accelerator: 'CommandOrControl+X' }),
+        menuItem('Copy', 'edit-copy', { enabled: canCopy, accelerator: 'CommandOrControl+C' }),
+        menuItem('Paste', 'edit-paste', { enabled: canPaste, accelerator: 'CommandOrControl+V' }),
+        menuItem('Paste as Plain Text', 'edit-paste-as-plain-text', {
+          enabled: canPasteAndMatchStyle,
+          accelerator: isMacOS ? 'Shift+Command+V' : 'CommandOrControl+Shift+V',
+        }),
+        { type: 'separator' },
+        menuItem('Select All', 'edit-select-all', {
+          enabled: canSelectAll,
+          accelerator: 'CommandOrControl+A',
+        }),
+        { type: 'separator' },
+        inspectEntry,
+      ];
+    } else if (mediaType === 'image' || !!resolvedSrcUrl) {
+      const canOpenImageInNewTab = canOpenInNewTab(resolvedSrcUrl);
+      template = [
+        menuItem('Open Image in New Tab', 'open-url-in-new-tab', {
+          enabled: canOpenImageInNewTab,
+          extra: {
+            url: resolvedSrcUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        menuItem('Save Image As', 'download-url', {
+          enabled: !!resolvedSrcUrl,
+          extra: {
+            url: resolvedSrcUrl,
+          },
+        }),
+        menuItem('Copy Image', 'copy-image-at', {
+          extra: {
+            x: x ?? 0,
+            y: y ?? 0,
+          },
+        }),
+        menuItem('Copy Image Address', 'copy-text', {
+          enabled: !!resolvedSrcUrl,
+          extra: {
+            text: resolvedSrcUrl,
+          },
+        }),
+        { type: 'separator' },
+        inspectEntry,
+      ];
+    } else if (resolvedLinkUrl) {
+      const canOpenLinkInNewTab = canOpenInNewTab(resolvedLinkUrl);
+      template = [
+        menuItem('Open in New Tab', 'open-url-in-new-tab', {
+          enabled: canOpenLinkInNewTab,
+          extra: {
+            url: resolvedLinkUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        menuItem('Open in New Window', 'open-url-in-new-window', {
+          enabled: canOpenLinkInNewTab,
+          extra: {
+            url: resolvedLinkUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        { type: 'separator' },
+        menuItem('Copy Link Address', 'copy-text', {
+          enabled: !!resolvedLinkUrl,
+          extra: {
+            text: resolvedLinkUrl,
+          },
+        }),
+        menuItem('Save Link As', 'download-url', {
+          enabled: !!resolvedLinkUrl,
+          extra: {
+            url: resolvedLinkUrl,
+          },
+        }),
+        { type: 'separator' },
+        inspectEntry,
+      ];
+    } else {
+      template = [
+        menuItem('Back', 'go-back', { enabled: canGoBack, accelerator: 'Alt+Left' }),
+        menuItem('Forward', 'go-forward', { enabled: canGoForward, accelerator: 'Alt+Right' }),
+        menuItem('Reload', 'reload', { accelerator: 'CommandOrControl+R' }),
+        { type: 'separator' },
+        menuItem('Save As', 'save-page-as', { accelerator: 'CommandOrControl+S' }),
+        menuItem('Print', 'print', { accelerator: 'CommandOrControl+P' }),
+        { type: 'separator' },
+        menuItem('View Source', 'open-url-in-new-tab', {
+          enabled: !!viewSourceUrl && canOpenInNewTab(viewSourceUrl),
+          accelerator: 'CommandOrControl+U',
+          extra: {
+            url: viewSourceUrl,
+            baseUrl: pageURL,
+          },
+        }),
+        inspectEntry,
+      ];
+    }
+
+    const menu = Menu.buildFromTemplate(template);
+
+    try {
+      menu.popup({
+        window: hostWindow,
+        ...(x !== null && y !== null ? { x, y } : {}),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('renderer-show-native-text-context-menu', (event, payload: unknown) => {
+    const hostWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const candidate =
+      typeof payload === 'object' && payload !== null
+        ? (payload as { x?: unknown; y?: unknown })
+        : {};
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+      ? Math.max(0, Math.floor(candidate.x))
+      : null;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+      ? Math.max(0, Math.floor(candidate.y))
+      : null;
+
+    const menu = Menu.buildFromTemplate([
+      { label: 'Undo', role: 'undo', accelerator: 'CommandOrControl+Z' },
+      { label: 'Redo', role: 'redo', accelerator: isMacOS ? 'Shift+Command+Z' : 'CommandOrControl+Y' },
+      { type: 'separator' },
+      { label: 'Cut', role: 'cut', accelerator: 'CommandOrControl+X' },
+      { label: 'Copy', role: 'copy', accelerator: 'CommandOrControl+C' },
+      { label: 'Paste', role: 'paste', accelerator: 'CommandOrControl+V' },
+      {
+        label: 'Paste as Plain Text',
+        role: 'pasteAndMatchStyle',
+        accelerator: isMacOS ? 'Shift+Command+V' : 'CommandOrControl+Shift+V',
+      },
+      { type: 'separator' },
+      { label: 'Select All', role: 'selectAll', accelerator: 'CommandOrControl+A' },
+    ]);
+
+    try {
+      menu.popup({
+        window: hostWindow,
+        ...(x !== null && y !== null ? { x, y } : {}),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle('webview-context-action', async (event, payload: unknown) => {
     if (typeof payload !== 'object' || !payload) return false;
 
@@ -2221,6 +2824,13 @@ function setupWindowControlsHandlers() {
     const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y) ? Math.floor(candidate.y) : 0;
     const url = typeof candidate.url === 'string' ? candidate.url.trim() : '';
     const text = typeof candidate.text === 'string' ? candidate.text : '';
+    const focusTargetForEditAction = () => {
+      try {
+        target.focus();
+      } catch {
+        // Ignore focus failures; action methods below will return false on failure.
+      }
+    };
 
     try {
       switch (action) {
@@ -2275,24 +2885,31 @@ function setupWindowControlsHandlers() {
           target.inspectElement(x, y);
           return true;
         case 'edit-undo':
+          focusTargetForEditAction();
           target.undo();
           return true;
         case 'edit-redo':
+          focusTargetForEditAction();
           target.redo();
           return true;
         case 'edit-cut':
+          focusTargetForEditAction();
           target.cut();
           return true;
         case 'edit-copy':
+          focusTargetForEditAction();
           target.copy();
           return true;
         case 'edit-paste':
+          focusTargetForEditAction();
           target.paste();
           return true;
         case 'edit-paste-as-plain-text':
+          focusTargetForEditAction();
           target.pasteAndMatchStyle();
           return true;
         case 'edit-select-all':
+          focusTargetForEditAction();
           target.selectAll();
           return true;
         default:
@@ -2333,6 +2950,13 @@ function setupWindowControlsHandlers() {
     return win.isFullScreen();
   });
 
+  ipcMain.handle('window-fullscreen-toggle', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return false;
+    win.setFullScreen(!win.isFullScreen());
+    return true;
+  });
+
   ipcMain.handle('window-is-titlebar-overlay-enabled', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return false;
@@ -2344,6 +2968,16 @@ function setupWindowControlsHandlers() {
     if (!win || win.isDestroyed()) return false;
     win.close();
     return true;
+  });
+
+  ipcMain.handle('dialog-open-file-url', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, {
+      title: 'Open File',
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths[0]) return '';
+    return pathToFileURL(result.filePaths[0]).toString();
   });
 
   ipcMain.handle(
@@ -2592,7 +3226,7 @@ function setupApplicationMenu() {
         },
         {
           label: 'Toggle App DevTools',
-          accelerator: 'CmdOrCtrl+Shift+J',
+          accelerator: 'CmdOrCtrl+Alt+Shift+J',
           click: () => {
             const focusedWindow = BrowserWindow.getFocusedWindow();
             if (!focusedWindow || focusedWindow.isDestroyed()) return;
@@ -2876,6 +3510,8 @@ function createWindow(
     const hasPrimaryModifier = input.control || input.meta;
     const isPrimaryChord = hasPrimaryModifier && !input.shift;
     const isReloadChord = isPrimaryChord && key === 'r';
+    const isHardReloadChord = hasPrimaryModifier && input.shift && key === 'r';
+    const isHardReloadFunctionKey = hasPrimaryModifier && key === 'f5';
     const isFindChord = isPrimaryChord && key === 'f';
     const isNewWindowChord = isPrimaryChord && key === 'n';
     const isNextTabChord = isPrimaryChord && key === 'tab';
@@ -2886,11 +3522,20 @@ function createWindow(
     const isDownloadsChord = isPrimaryChord && key === 'j';
     const isPrintChord = isPrimaryChord && key === 'p';
     const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
-    const isAppDevToolsChord = hasPrimaryModifier && input.shift && key === 'j';
+    const isAppDevToolsChord = hasPrimaryModifier && input.alt && input.shift && key === 'j';
+    const isBrowserConsoleChord = isMacOS
+      ? input.meta && input.alt && key === 'j'
+      : hasPrimaryModifier && input.shift && key === 'j';
     const isReloadKey = key === 'f5';
-    const isDevToolsChord = key === 'f12' || (isMacOS
+    const isDevToolsChord = key === 'f12' || isBrowserConsoleChord || (isMacOS
       ? input.meta && input.alt && key === 'i'
       : (input.meta && input.shift && key === 'i') || (input.control && input.shift && key === 'i'));
+
+    if (isHardReloadChord || isHardReloadFunctionKey) {
+      event.preventDefault();
+      win.webContents.send('app-shortcut', 'reload-tab-ignore-cache');
+      return;
+    }
 
     if (isReloadChord || isReloadKey) {
       event.preventDefault();
@@ -3065,6 +3710,7 @@ app.whenReady().then(async () => {
   await loadPersistedAppState().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
+  setupPerformanceHandlers();
   setupSessionHandlers();
   setupUpdateHandlers();
   setupWebviewTabOpenHandler();
