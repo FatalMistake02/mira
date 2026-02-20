@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.9.0 - 2026-02-20
+
 - Add auto update
 - Run on startup option
 - Opens maximized
