@@ -45,22 +45,22 @@
         ]
       }
     ],
-    "fileAssociations": [
-      {
-        "ext": [
-          "htm",
-          "html",
-          "shtml",
-          "xhtml"
-        ],
-        "name": "HTML Document",
-        "role": "Viewer",
-        "mimeType": "text/html"
-      }
-    ],
     "win": {
       "artifactName": "${productName}-${version}-win.${ext}",
       "icon": "assets/app_icons/app_icons.ico",
+      "fileAssociations": [
+        {
+          "ext": [
+            "htm",
+            "html",
+            "shtml",
+            "xhtml"
+          ],
+          "name": "HTML Document",
+          "role": "Viewer",
+          "mimeType": "text/html"
+        }
+      ],
       "target": [
         "portable",
         "nsis"
@@ -77,6 +77,19 @@
     "mac": {
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
       "icon": "assets/app_icons/app_icons.icns",
+      "fileAssociations": [
+        {
+          "ext": [
+            "htm",
+            "html",
+            "shtml",
+            "xhtml"
+          ],
+          "name": "HTML Document",
+          "role": "Viewer",
+          "mimeType": "text/html"
+        }
+      ],
       "target": [
         "dmg",
         "zip"
@@ -90,7 +103,14 @@
         "deb",
         "rpm"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "mimeTypes": ["text/html", "application/xhtml+xml"],
+      "fileAssociations": [
+        { "ext": "htm", "name": "HTML Document", "mimeType": "text/html" },
+        { "ext": "html", "name": "HTML Document", "mimeType": "text/html" },
+        { "ext": "shtml", "name": "HTML Document", "mimeType": "text/html" },
+        { "ext": "xhtml", "name": "HTML Document", "mimeType": "application/xhtml+xml" }
+      ]
     }
   },
   "dependencies": {
