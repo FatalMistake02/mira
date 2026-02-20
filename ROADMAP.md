@@ -37,6 +37,7 @@
 - [ ] Pinned tabs
 - [ ] Mute tabs
 - [ ] Tab move to window
+- [ ] Cast
 
 ## v1.3.0
 - [ ] Reader mode view
