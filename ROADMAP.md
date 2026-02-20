@@ -3,9 +3,9 @@
 ## v1.0.0 — Stable Release
 - [ ] Improve performance
 - [ ] Fix default browser
-- [ ] Fix auto update 
+- [ ] Fix auto update
 - [ ] Fix target="_blank" links
- 
+
 ## v1.1.0
 - [ ] Bookmarks and favorites
       Bookmark page: Ctrl+D
@@ -20,6 +20,7 @@
       New private window: Ctrl+Shift+N
 
 ## v1.2.0
+- [ ] Ad blocker blocks Youtube videos
 - [ ] Tab groups and colors
 - [ ] Vertical tabs sidebar
 - [ ] Split view tabs
@@ -33,4 +34,3 @@
 - [ ] Built in screenshots
 - [ ] Picture in picture
 - [ ] Page translate
-
