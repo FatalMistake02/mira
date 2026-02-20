@@ -2206,6 +2206,80 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('tab-show-native-context-menu', (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return false;
+
+    const candidate = payload as {
+      tabId?: unknown;
+      x?: unknown;
+      y?: unknown;
+      hasTabsToRight?: unknown;
+      hasOtherTabs?: unknown;
+    };
+    const tabId = typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
+    if (!tabId) return false;
+
+    const hasTabsToRight = candidate.hasTabsToRight === true;
+    const hasOtherTabs = candidate.hasOtherTabs === true;
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+      ? Math.max(0, Math.floor(candidate.x))
+      : null;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+      ? Math.max(0, Math.floor(candidate.y))
+      : null;
+
+    const hostWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const sendCommand = (command: string) => {
+      hostWindow.webContents.send('tab-native-context-command', { command, tabId });
+    };
+
+    const template: MenuItemConstructorOptions[] = [
+      {
+        label: 'New Tab to Right',
+        click: () => sendCommand('new-tab-to-right'),
+      },
+      { type: 'separator' },
+      {
+        label: 'Reload',
+        accelerator: 'CommandOrControl+R',
+        click: () => sendCommand('reload'),
+      },
+      {
+        label: 'Duplicate',
+        click: () => sendCommand('duplicate'),
+      },
+      { type: 'separator' },
+      {
+        label: 'Close',
+        accelerator: 'CommandOrControl+W',
+        click: () => sendCommand('close'),
+      },
+      {
+        label: 'Close Others',
+        enabled: hasOtherTabs,
+        click: () => sendCommand('close-others'),
+      },
+      {
+        label: 'Close to Right',
+        enabled: hasTabsToRight,
+        click: () => sendCommand('close-to-right'),
+      },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    try {
+      menu.popup({
+        window: hostWindow,
+        ...(x !== null && y !== null ? { x, y } : {}),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle('webview-open-devtools', (event, payload: unknown) => {
     if (typeof payload !== 'object' || !payload) return false;
 
