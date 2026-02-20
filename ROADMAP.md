@@ -15,7 +15,7 @@
 - [x] All shortcuts
 - [x] Fix shortcuts not always working
 - [x] Default search engine and search engine "shortcuts"
-- [ ] Fix restore
+- [x] Fix restoring
  
 ## v1.1.0
 - [ ] Bookmarks and favorites

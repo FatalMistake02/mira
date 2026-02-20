@@ -56,6 +56,9 @@ type SessionRestoreState = {
 };
 
 type SessionRestoreMode = 'tabs' | 'windows';
+type ApplyRestoredSnapshotOptions = {
+  stageOnNewTab?: boolean;
+};
 
 type TabsContextType = {
   tabs: Tab[];
@@ -276,19 +279,31 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     activeMatchOrdinal: 0,
     matches: 0,
   };
-  const applyRestoredSnapshot = useCallback((snapshot: SessionSnapshot) => {
-    if (!snapshot.tabs.length) return;
-    const now = Date.now();
-    const restoredTabs = snapshot.tabs.map((tab) =>
-      tab.id === snapshot.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
-    );
-    setTabs(restoredTabs);
-    setActiveId(snapshot.activeId);
-    setPendingSession(null);
-    setRestoreTabCountState(0);
-    setRestorePromptOpen(false);
-    setRestoreWindowCount(1);
-  }, []);
+  const applyRestoredSnapshot = useCallback(
+    (snapshot: SessionSnapshot, options?: ApplyRestoredSnapshotOptions) => {
+      if (!snapshot.tabs.length) return;
+
+      const now = Date.now();
+      const restoredTabs = snapshot.tabs.map((tab) =>
+        tab.id === snapshot.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
+      );
+
+      if (options?.stageOnNewTab) {
+        const stagingTab = createInitialTab(getBrowserSettings().newTabPage);
+        setTabs([stagingTab, ...restoredTabs]);
+        setActiveId(stagingTab.id);
+      } else {
+        setTabs(restoredTabs);
+        setActiveId(snapshot.activeId);
+      }
+
+      setPendingSession(null);
+      setRestoreTabCountState(0);
+      setRestorePromptOpen(false);
+      setRestoreWindowCount(1);
+    },
+    [],
+  );
 
   const clearFindInPageMatchesForTab = useCallback(
     (tabId: string) => {
@@ -299,7 +314,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         return next;
       });
     },
-    [applyRestoredSnapshot],
+    [],
   );
 
   const updateFindInPageMatches = useCallback(
@@ -338,9 +353,14 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
   const persistSession = (nextTabs: Tab[], nextActiveId: string) => {
     const restorableTabs = filterRestorableTabs(nextTabs);
-    const safeActiveId = restorableTabs.some((tab) => tab.id === nextActiveId)
-      ? nextActiveId
-      : restorableTabs[0]?.id;
+    const hasExplicitActiveId = restorableTabs.some((tab) => tab.id === nextActiveId);
+    const fallbackActiveId =
+      restorableTabs.length > 0
+        ? restorableTabs.reduce((candidate, tab) =>
+            tab.lastActiveAt > candidate.lastActiveAt ? tab : candidate,
+          restorableTabs[0]).id
+        : undefined;
+    const safeActiveId = hasExplicitActiveId ? nextActiveId : fallbackActiveId;
 
     if (!restorableTabs.length || !safeActiveId) {
       if (electron?.ipcRenderer) {
@@ -402,7 +422,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         } else if (restoreBehavior === 'fresh') {
           localStorage.removeItem(SESSION_STORAGE_KEY);
         } else {
-          applyRestoredSnapshot(snapshot);
+          applyRestoredSnapshot(snapshot, { stageOnNewTab: true });
         }
       }
       hydratedRef.current = true;
@@ -440,7 +460,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (cancelled) return;
 
         if (windowRestore && windowRestore.tabs.length > 0) {
-          applyRestoredSnapshot(windowRestore);
+          applyRestoredSnapshot(windowRestore, { stageOnNewTab: true });
           return;
         }
 
@@ -462,7 +482,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
               .invoke<SessionSnapshot | null>('session-accept-restore', mode)
               .catch(() => null);
             if (cancelled || !snapshot) return;
-            applyRestoredSnapshot(snapshot);
+            applyRestoredSnapshot(snapshot, { stageOnNewTab: true });
           }
         }
       } finally {
@@ -477,9 +497,14 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyRestoredSnapshot]);
 
   const restorePreviousSession = (mode: SessionRestoreMode) => {
+    const applyManualRestoreSnapshot = (snapshot: SessionSnapshot) => {
+      applyRestoredSnapshot(snapshot, { stageOnNewTab: true });
+      persistSession(snapshot.tabs, snapshot.activeId);
+    };
+
     const ipc = electron?.ipcRenderer;
     if (ipc) {
       ipc
@@ -490,17 +515,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
             return;
           }
 
-          const now = Date.now();
-          const restoredTabs = snapshot.tabs.map((tab) =>
-            tab.id === snapshot.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
-          );
-          setTabs(restoredTabs);
-          setActiveId(snapshot.activeId);
-          setRestorePromptOpen(false);
-          setPendingSession(null);
-          setRestoreTabCountState(0);
-          setRestoreWindowCount(1);
-          persistSession(restoredTabs, snapshot.activeId);
+          applyManualRestoreSnapshot(snapshot);
         })
         .catch(() => {
           setRestorePromptOpen(false);
@@ -513,15 +528,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       return;
     }
 
-    const now = Date.now();
-    const restoredTabs = pendingSession.tabs.map((tab) =>
-      tab.id === pendingSession.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
-    );
-    setTabs(restoredTabs);
-    setActiveId(pendingSession.activeId);
-    setRestorePromptOpen(false);
-    setPendingSession(null);
-    persistSession(restoredTabs, pendingSession.activeId);
+    applyManualRestoreSnapshot(pendingSession);
   };
 
   const restoreTabsFromPreviousSession = () => {
