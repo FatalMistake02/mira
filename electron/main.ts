@@ -602,8 +602,10 @@ function shouldBlockRequest(url: string, resourceType: string): boolean {
 
     const host = parsed.hostname.toLowerCase();
     const pathname = parsed.pathname.toLowerCase();
-    rememberYoutubeAdCpnFromUrl(parsed);
-    if (shouldBlockYouTubeAdPlaybackByCpn(parsed)) return true;
+    if (adBlockEnabled) {
+      rememberYoutubeAdCpnFromUrl(parsed);
+      if (shouldBlockYouTubeAdPlaybackByCpn(parsed)) return true;
+    }
     const adBlocked = adBlockEnabled && isBlockedByRules(host, pathname, blockedAdRuleIndex);
     const trackerBlocked = trackerBlockEnabled && isBlockedByRules(host, pathname, blockedTrackerRuleIndex);
     return adBlocked || trackerBlocked;
