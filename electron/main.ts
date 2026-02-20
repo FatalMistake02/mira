@@ -124,6 +124,8 @@ const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
 const AD_BLOCK_FETCH_TIMEOUT_MS = 15000;
 const AD_BLOCK_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TRACKER_BLOCK_LOCAL_FILE = path.join('src', 'assets', 'trackers.txt');
+const YOUTUBE_AD_CPN_TTL_MS = 30 * 60 * 1000;
+const MAX_TRACKED_YOUTUBE_AD_CPNS = 512;
 
 const DEFAULT_BLOCKED_AD_HOSTS = [
   'doubleclick.net',
@@ -143,6 +145,8 @@ const DEFAULT_BLOCKED_AD_HOSTS = [
   "ads.google.com",
   "ads.youtube.com",
   "ads.mopub.com",
+  "youtube.com/pagead",
+  "youtube.com/api/stats/ads",
 ];
 const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'googletagmanager.com',
@@ -168,12 +172,124 @@ const DEFAULT_BLOCKED_TRACKER_HOSTS = [
   'branch.io',
   'app.adjust.com',
 ];
-let blockedTrackerHosts = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
+let blockedTrackerRules = new Set<string>(DEFAULT_BLOCKED_TRACKER_HOSTS);
 const AD_BLOCK_LIST_URLS = [
   'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
   'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/light.txt',
 ];
-let blockedAdHosts = new Set<string>(DEFAULT_BLOCKED_AD_HOSTS);
+let blockedAdRules = new Set<string>(DEFAULT_BLOCKED_AD_HOSTS);
+
+interface BlockRuleIndex {
+  hosts: Set<string>;
+  hostPaths: Map<string, string[]>;
+}
+
+function buildBlockRuleIndex(rules: Set<string>): BlockRuleIndex {
+  const hosts = new Set<string>();
+  const hostPaths = new Map<string, string[]>();
+
+  for (const rule of rules) {
+    const slashIndex = rule.indexOf('/');
+    if (slashIndex === -1) {
+      hosts.add(rule);
+      continue;
+    }
+
+    const host = rule.slice(0, slashIndex);
+    const rulePath = rule.slice(slashIndex);
+    if (!host || !rulePath || rulePath === '/') {
+      if (host) hosts.add(host);
+      continue;
+    }
+
+    const existing = hostPaths.get(host);
+    if (existing) {
+      existing.push(rulePath);
+    } else {
+      hostPaths.set(host, [rulePath]);
+    }
+  }
+
+  return { hosts, hostPaths };
+}
+
+let blockedTrackerRuleIndex = buildBlockRuleIndex(blockedTrackerRules);
+let blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
+const trackedYoutubeAdCpns = new Map<string, number>();
+
+function isYoutubeHost(hostname: string): boolean {
+  return hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
+}
+
+function isGoogleVideoHost(hostname: string): boolean {
+  return hostname === 'googlevideo.com' || hostname.endsWith('.googlevideo.com');
+}
+
+function normalizeCpnToken(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (normalized.length > 128) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(normalized)) return null;
+  return normalized;
+}
+
+function pruneTrackedYoutubeAdCpns(now: number): void {
+  for (const [cpn, expiresAt] of trackedYoutubeAdCpns) {
+    if (expiresAt <= now) trackedYoutubeAdCpns.delete(cpn);
+  }
+}
+
+function rememberYoutubeAdCpn(cpn: string, now: number): void {
+  pruneTrackedYoutubeAdCpns(now);
+  trackedYoutubeAdCpns.set(cpn, now + YOUTUBE_AD_CPN_TTL_MS);
+
+  if (trackedYoutubeAdCpns.size <= MAX_TRACKED_YOUTUBE_AD_CPNS) return;
+  const oldest = Array.from(trackedYoutubeAdCpns.entries()).sort((a, b) => a[1] - b[1]);
+  const overflow = trackedYoutubeAdCpns.size - MAX_TRACKED_YOUTUBE_AD_CPNS;
+  for (let i = 0; i < overflow; i += 1) {
+    const entry = oldest[i];
+    if (!entry) break;
+    trackedYoutubeAdCpns.delete(entry[0]);
+  }
+}
+
+function rememberYoutubeAdCpnFromUrl(parsed: URL): void {
+  const host = parsed.hostname.toLowerCase();
+  if (!isYoutubeHost(host)) return;
+
+  const pathname = parsed.pathname.toLowerCase();
+  const isAdSignalPath =
+    pathname.startsWith('/api/stats/ads') ||
+    pathname.startsWith('/pcs/activeview') ||
+    pathname.startsWith('/pagead/interaction') ||
+    pathname.startsWith('/pagead/adview');
+  if (!isAdSignalPath) return;
+
+  const adCpn = normalizeCpnToken(parsed.searchParams.get('ad_cpn'));
+  if (!adCpn) return;
+  rememberYoutubeAdCpn(adCpn, Date.now());
+}
+
+function shouldBlockYouTubeAdPlaybackByCpn(parsed: URL): boolean {
+  if (!adBlockEnabled) return false;
+
+  const host = parsed.hostname.toLowerCase();
+  const pathname = parsed.pathname.toLowerCase();
+  if (!isGoogleVideoHost(host) || pathname !== '/videoplayback') return false;
+
+  const cpn = normalizeCpnToken(parsed.searchParams.get('cpn'));
+  if (!cpn) return false;
+
+  const now = Date.now();
+  pruneTrackedYoutubeAdCpns(now);
+  const expiresAt = trackedYoutubeAdCpns.get(cpn);
+  if (!expiresAt || expiresAt <= now) {
+    if (expiresAt) trackedYoutubeAdCpns.delete(cpn);
+    return false;
+  }
+  return true;
+}
 
 interface WindowTitleBarOverlayState {
   color: string;
@@ -313,7 +429,38 @@ function normalizeBlockedHostToken(token: string): string | null {
   return normalized;
 }
 
-function extractHostFromBlocklistLine(line: string): string | null {
+function normalizeBlockedRuleToken(token: string): string | null {
+  const trimmedToken = token.trim();
+  if (!trimmedToken) return null;
+
+  if (/^https?:\/\//i.test(trimmedToken)) {
+    try {
+      const parsed = new URL(trimmedToken);
+      const host = normalizeBlockedHostToken(parsed.hostname);
+      if (!host) return null;
+      const rulePath = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.toLowerCase() : '';
+      return rulePath ? `${host}${rulePath}` : host;
+    } catch {
+      return null;
+    }
+  }
+
+  const normalizedToken = trimmedToken.toLowerCase();
+
+  const slashIndex = normalizedToken.indexOf('/');
+  const rawHost = slashIndex === -1 ? normalizedToken : normalizedToken.slice(0, slashIndex);
+  const normalizedHost = normalizeBlockedHostToken(rawHost);
+  if (!normalizedHost) return null;
+
+  if (slashIndex === -1) return normalizedHost;
+
+  const rawPath = normalizedToken.slice(slashIndex);
+  const normalizedPath = `/${rawPath.replace(/^\/+/, '')}`;
+  if (normalizedPath === '/') return normalizedHost;
+  return `${normalizedHost}${normalizedPath}`;
+}
+
+function extractRuleFromBlocklistLine(line: string): string | null {
   const withoutComment = line.split('#', 1)[0]?.trim() ?? '';
   if (!withoutComment) return null;
   if (withoutComment.startsWith('!')) return null;
@@ -332,15 +479,15 @@ function extractHostFromBlocklistLine(line: string): string | null {
       : parts[0];
   if (!hostToken) return null;
 
-  return normalizeBlockedHostToken(hostToken);
+  return normalizeBlockedRuleToken(hostToken);
 }
 
-function parseHostsFromBlocklist(raw: string): Set<string> {
+function parseRulesFromBlocklist(raw: string): Set<string> {
   const parsed = new Set<string>();
 
   for (const line of raw.split(/\r?\n/)) {
-    const host = extractHostFromBlocklistLine(line);
-    if (host) parsed.add(host);
+    const rule = extractRuleFromBlocklistLine(line);
+    if (rule) parsed.add(rule);
   }
 
   return parsed;
@@ -363,10 +510,11 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<str
 async function loadCachedAdBlockHosts(): Promise<void> {
   try {
     const raw = await fs.readFile(getAdBlockCachePath(), 'utf-8');
-    const cachedHosts = parseHostsFromBlocklist(raw);
+    const cachedHosts = parseRulesFromBlocklist(raw);
     if (!cachedHosts.size) return;
 
-    blockedAdHosts = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...cachedHosts]);
+    blockedAdRules = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...cachedHosts]);
+    blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
   } catch {
     // No cache yet.
   }
@@ -375,10 +523,11 @@ async function loadCachedAdBlockHosts(): Promise<void> {
 async function loadBundledTrackerBlockHosts(): Promise<void> {
   try {
     const raw = await fs.readFile(getBundledTrackerListPath(), 'utf-8');
-    const parsedHosts = parseHostsFromBlocklist(raw);
+    const parsedHosts = parseRulesFromBlocklist(raw);
     if (!parsedHosts.size) return;
 
-    blockedTrackerHosts = new Set([...DEFAULT_BLOCKED_TRACKER_HOSTS, ...parsedHosts]);
+    blockedTrackerRules = new Set([...DEFAULT_BLOCKED_TRACKER_HOSTS, ...parsedHosts]);
+    blockedTrackerRuleIndex = buildBlockRuleIndex(blockedTrackerRules);
   } catch {
     // Missing local tracker list should not disable default tracker blocking.
   }
@@ -390,7 +539,7 @@ async function refreshAdBlockHostsFromLists(): Promise<void> {
   for (const listUrl of AD_BLOCK_LIST_URLS) {
     try {
       const listText = await fetchTextWithTimeout(listUrl, AD_BLOCK_FETCH_TIMEOUT_MS);
-      const parsedHosts = parseHostsFromBlocklist(listText);
+      const parsedHosts = parseRulesFromBlocklist(listText);
       for (const host of parsedHosts) {
         downloadedHosts.add(host);
       }
@@ -401,7 +550,8 @@ async function refreshAdBlockHostsFromLists(): Promise<void> {
 
   if (!downloadedHosts.size) return;
 
-  blockedAdHosts = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...downloadedHosts]);
+  blockedAdRules = new Set([...DEFAULT_BLOCKED_AD_HOSTS, ...downloadedHosts]);
+  blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
   try {
     await fs.writeFile(getAdBlockCachePath(), Array.from(downloadedHosts).join('\n'), 'utf-8');
   } catch {
@@ -417,10 +567,24 @@ function scheduleAdBlockListRefresh(): void {
   interval.unref();
 }
 
-function isHostBlocked(hostname: string): boolean {
+function isBlockedByRules(hostname: string, pathname: string, index: BlockRuleIndex): boolean {
+  const normalizedPathname = pathname.toLowerCase() || '/';
   let candidate = hostname;
   while (candidate) {
-    if (blockedAdHosts.has(candidate)) return true;
+    if (index.hosts.has(candidate)) return true;
+
+    const pathRules = index.hostPaths.get(candidate);
+    if (pathRules) {
+      for (const pathRule of pathRules) {
+        if (
+          normalizedPathname === pathRule ||
+          normalizedPathname.startsWith(pathRule + '/') ||
+          normalizedPathname.startsWith(pathRule + '?') ||
+          normalizedPathname.startsWith(pathRule + '#')
+        ) return true;
+      }
+    }
+
     const nextDot = candidate.indexOf('.');
     if (nextDot === -1) return false;
     candidate = candidate.slice(nextDot + 1);
@@ -437,23 +601,17 @@ function shouldBlockRequest(url: string, resourceType: string): boolean {
     if (protocol !== 'http:' && protocol !== 'https:') return false;
 
     const host = parsed.hostname.toLowerCase();
-    const adBlocked = adBlockEnabled && isHostBlocked(host);
-    const trackerBlocked = trackerBlockEnabled && isTrackerHostBlocked(host);
+    const pathname = parsed.pathname.toLowerCase();
+    if (adBlockEnabled) {
+      rememberYoutubeAdCpnFromUrl(parsed);
+      if (shouldBlockYouTubeAdPlaybackByCpn(parsed)) return true;
+    }
+    const adBlocked = adBlockEnabled && isBlockedByRules(host, pathname, blockedAdRuleIndex);
+    const trackerBlocked = trackerBlockEnabled && isBlockedByRules(host, pathname, blockedTrackerRuleIndex);
     return adBlocked || trackerBlocked;
   } catch {
     return false;
   }
-}
-
-function isTrackerHostBlocked(hostname: string): boolean {
-  let candidate = hostname;
-  while (candidate) {
-    if (blockedTrackerHosts.has(candidate)) return true;
-    const nextDot = candidate.indexOf('.');
-    if (nextDot === -1) return false;
-    candidate = candidate.slice(nextDot + 1);
-  }
-  return false;
 }
 
 function getHistoryFilePath() {
@@ -2102,6 +2260,7 @@ function setupAdBlocker() {
 
   ipcMain.handle('settings-set-ad-block-enabled', async (_, enabled: unknown) => {
     adBlockEnabled = enabled !== false;
+    if (!adBlockEnabled) trackedYoutubeAdCpns.clear();
     return adBlockEnabled;
   });
 
