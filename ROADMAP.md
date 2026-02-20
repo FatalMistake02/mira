@@ -16,8 +16,8 @@
 - [x] Fix shortcuts not always working
 - [x] Default search engine and search engine "shortcuts"
 - [x] Fix restoring
-- [ ] Make sure everything is in the themes and layouts
-- [ ] Fonts
+- [x] Make sure everything is in the themes and layouts
+- [x] Fonts
  
 ## v1.1.0
 - [ ] Bookmarks and favorites

@@ -1063,7 +1063,7 @@ export default function Settings() {
                   </label>
                   <div
                     ref={themeDropdownRef}
-                    className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
+                    className="settings-dropdown-wrap settings-setting-control settings-select-limit"
                   >
                     <button
                       id="theme-dropdown-button"
@@ -1197,7 +1197,7 @@ export default function Settings() {
                   </label>
                   <div
                     ref={layoutDropdownRef}
-                    className="settings-dropdown-wrap settings-setting-control settings-setting-control-grow"
+                    className="settings-dropdown-wrap settings-setting-control settings-select-limit"
                   >
                     <button
                       id="layout-dropdown-button"

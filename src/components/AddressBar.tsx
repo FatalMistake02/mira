@@ -158,6 +158,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   const activeTab = tabs.find((t) => t.id === activeId);
   const canGoBack = activeTab && activeTab.historyIndex > 0;
   const canGoForward = activeTab && activeTab.historyIndex < activeTab.history.length - 1;
+
   const newTabPage = getBrowserSettings().newTabPage;
   const primaryModifierLabel = electron?.isMacOS ? 'Cmd' : 'Ctrl';
   const openNewWindow = () => {

@@ -166,7 +166,8 @@ function PerfOverlay() {
         background: 'color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 92%, black 8%)',
         color: 'var(--surfaceText, var(--text1))',
         fontFamily:
-          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+          "var(--fontSecondaryFamilyResolved, var(--fontSecondaryFallbackFamily, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif))",
+        fontWeight: 'var(--fontSecondaryWeight, 400)',
         fontSize: 11,
         lineHeight: 1.45,
         boxShadow: '0 8px 18px color-mix(in srgb, var(--bg) 70%, transparent)',

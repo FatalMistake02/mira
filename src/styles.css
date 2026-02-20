@@ -18,15 +18,26 @@ body {
   --text1: #e8e8e8;
   --text2: #b9b9b9;
   --text3: #8f8f8f;
-  --downloadButtonBg: #26362f;
-  --downloadButtonBgHover: #30463d;
-  --downloadButtonBgActive: #3a594d;
-  --downloadButtonText: #e9f6ef;
-  --downloadButtonTextHover: #f4fff8;
+  --fontPrimaryFallbackFamily: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --fontSecondaryFallbackFamily: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --fontPrimaryFamily: 'Segoe UI';
+  --fontSecondaryFamily: 'Segoe UI';
+  --fontPrimaryFamilyResolved:
+    var(--fontPrimaryFamily, var(--fontPrimaryFallbackFamily)), var(--fontPrimaryFallbackFamily);
+  --fontSecondaryFamilyResolved:
+    var(--fontSecondaryFamily, var(--fontSecondaryFallbackFamily)),
+    var(--fontSecondaryFallbackFamily);
+  --fontPrimaryWeight: 400;
+  --fontSecondaryWeight: 300;
+  --downloadButtonBg: #2a2a2a;
+  --downloadButtonBgHover: #353535;
+  --downloadButtonBgActive: #404040;
+  --downloadButtonText: #ededed;
+  --downloadButtonTextHover: #f6f6f6;
   --downloadButtonTextActive: #ffffff;
-  --downloadButtonBorder: #3b5a4d;
-  --downloadButtonBorderHover: #4f7664;
-  --downloadButtonBorderActive: #64957d;
+  --downloadButtonBorder: #4a4a4a;
+  --downloadButtonBorderHover: #5b5b5b;
+  --downloadButtonBorderActive: #6f6f6f;
   --navButtonBg: transparent;
   --navButtonBgHover: rgba(255, 255, 255, 0.1);
   --navButtonBgActive: rgba(255, 255, 255, 0.18);
@@ -44,15 +55,16 @@ body {
   --urlBarBorder: #3a3a3a;
   --urlBarBorderHover: #4b4b4b;
   --urlBarBorderActive: #5f5f5f;
-  --buttonBg: var(--navButtonBg);
-  --buttonBgHover: var(--navButtonBgHover);
-  --buttonBgActive: var(--navButtonBgActive);
-  --buttonText: var(--navButtonText);
-  --buttonTextHover: var(--navButtonTextHover);
-  --buttonTextActive: var(--navButtonTextActive);
-  --buttonBorder: var(--navButtonBorder);
-  --buttonBorderHover: var(--navButtonBorderHover);
-  --buttonBorderActive: var(--navButtonBorderActive);
+  --settingsCardBg: #1d1d1d;
+  --settingsCardBorder: #353535;
+  --settingsCardText: #e8e8e8;
+  --settingsCardDescription: #b9b9b9;
+  --settingsTabsBg: #202020;
+  --settingsTabsBorder: #3f3f3f;
+  --settingsRowBg: #232323;
+  --settingsRowBgHover: #2c2c2c;
+  --settingsRowBorder: #3f3f3f;
+  --settingsRowBorderHover: #525252;
   --fieldBg: var(--urlBarBg);
   --fieldBgHover: var(--urlBarBgHover);
   --fieldBgActive: var(--urlBarBgActive);
@@ -73,7 +85,21 @@ body {
   --layoutControlRadius: 6px;
   --layoutInputRadius: 6px;
   --layoutPanelRadius: 8px;
+  --layoutSettingsTabsRadius: 12px;
+  --layoutSettingsCardPadding: 14px;
+  --layoutSettingsCardRadius: 8px;
+  --layoutSettingsRowRadius: 8px;
+  --layoutSettingsRowPaddingY: 8px;
+  --layoutSettingsRowPaddingX: 10px;
+  --layoutSettingsControlHeight: 36px;
+  --layoutSettingsControlPaddingY: 8px;
+  --layoutSettingsControlPaddingX: 10px;
+  --layoutSettingsButtonPaddingY: 8px;
+  --layoutSettingsButtonPaddingX: 12px;
+  --layoutSettingsDropdownRadius: 8px;
+  --layoutSettingsDropdownMaxHeight: 260px;
   --layoutTabRadius: 8px;
+  --layoutTabHeight: 30px;
   --layoutTabGap: 6px;
   --layoutTabMinWidth: 100px;
   --layoutTabTargetWidth: 220px;
@@ -82,6 +108,9 @@ body {
   --layoutAddressBarPaddingY: 6px;
   --layoutNavButtonHeight: 30px;
   --layoutDownloadButtonSize: 34px;
+  --layoutAddressMenuPanelRadius: 12px;
+  --layoutAddressMenuItemHeight: 34px;
+  --layoutAddressMenuItemRadius: 8px;
   --layoutDownloadIndicatorVisibility: always;
   --accentPrimary: #8f8f85;
   --accentPrimarySoft: #77776f;
@@ -106,31 +135,31 @@ body {
   --dropdownShadow:
     0 14px 32px color-mix(in srgb, var(--bg) 56%, transparent),
     0 2px 8px color-mix(in srgb, var(--bg) 40%, transparent);
-  --dropdownCaretColor: color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white);
+  --dropdownCaretColor: color-mix(in srgb, var(--navButtonText) 84%, white);
   --dropdownChoiceSelectedBg: color-mix(
     in srgb,
-    var(--navButtonBgActive, var(--buttonBgActive)) 86%,
+    var(--navButtonBgActive) 86%,
     var(--accentPrimarySoft) 14%
   );
   --dropdownChoiceSelectedBorder: color-mix(
     in srgb,
-    var(--navButtonBorderActive, var(--buttonBorderActive)) 74%,
+    var(--navButtonBorderActive) 74%,
     var(--accentPrimary) 26%
   );
   --dropdownChoiceCheckColor: var(--accentText);
   --toggleCheckedBg: color-mix(
     in srgb,
-    var(--navButtonBgActive, var(--buttonBgActive)) 52%,
+    var(--navButtonBgActive) 52%,
     var(--accentPrimarySoft) 48%
   );
   --toggleCheckedBorder: color-mix(
     in srgb,
-    var(--navButtonBorderActive, var(--buttonBorderActive)) 46%,
+    var(--navButtonBorderActive) 46%,
     var(--accentPrimary) 54%
   );
   --toggleCheckedKnob: color-mix(
     in srgb,
-    var(--navButtonTextActive, var(--buttonTextActive)) 76%,
+    var(--navButtonTextActive) 76%,
     #dfdfd7 24%
   );
 }
@@ -138,7 +167,16 @@ body {
 body {
   background: var(--bg);
   color: var(--text1);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--fontPrimaryFamilyResolved);
+  font-weight: var(--fontPrimaryWeight);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--fontPrimaryFamilyResolved);
+  font-weight: var(--fontPrimaryWeight);
 }
 
 #root {
@@ -156,10 +194,14 @@ body {
 
 .theme-text2 {
   color: var(--text2);
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .theme-text3 {
   color: var(--text3);
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .theme-panel {
@@ -224,21 +266,21 @@ body {
 }
 
 .theme-btn-nav {
-  background: var(--navButtonBg, var(--buttonBg));
-  border: 1px solid var(--navButtonBorder, var(--buttonBorder));
-  color: var(--navButtonText, var(--buttonText));
+  background: var(--navButtonBg);
+  border: 1px solid var(--navButtonBorder);
+  color: var(--navButtonText);
 }
 
 .theme-btn-nav:hover:not(:disabled) {
-  background: var(--navButtonBgHover, var(--buttonBgHover));
-  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
-  color: var(--navButtonTextHover, var(--buttonTextHover));
+  background: var(--navButtonBgHover);
+  border-color: var(--navButtonBorderHover);
+  color: var(--navButtonTextHover);
 }
 
 .theme-btn-nav:active:not(:disabled) {
-  background: var(--navButtonBgActive, var(--buttonBgActive));
-  border-color: var(--navButtonBorderActive, var(--buttonBorderActive));
-  color: var(--navButtonTextActive, var(--buttonTextActive));
+  background: var(--navButtonBgActive);
+  border-color: var(--navButtonBorderActive);
+  color: var(--navButtonTextActive);
 }
 
 .nav-icon-btn {
@@ -271,38 +313,38 @@ body {
 }
 
 .theme-btn-download {
-  background: var(--downloadButtonBg, var(--buttonBg));
-  border: 1px solid var(--downloadButtonBorder, var(--buttonBorder));
-  color: var(--downloadButtonText, var(--buttonText));
+  background: var(--downloadButtonBg);
+  border: 1px solid var(--downloadButtonBorder);
+  color: var(--downloadButtonText);
 }
 
 .theme-btn-download:hover:not(:disabled) {
-  background: var(--downloadButtonBgHover, var(--buttonBgHover));
-  border-color: var(--downloadButtonBorderHover, var(--buttonBorderHover));
-  color: var(--downloadButtonTextHover, var(--buttonTextHover));
+  background: var(--downloadButtonBgHover);
+  border-color: var(--downloadButtonBorderHover);
+  color: var(--downloadButtonTextHover);
 }
 
 .theme-btn-download:active:not(:disabled) {
-  background: var(--downloadButtonBgActive, var(--buttonBgActive));
-  border-color: var(--downloadButtonBorderActive, var(--buttonBorderActive));
-  color: var(--downloadButtonTextActive, var(--buttonTextActive));
+  background: var(--downloadButtonBgActive);
+  border-color: var(--downloadButtonBorderActive);
+  color: var(--downloadButtonTextActive);
 }
 
 .theme-btn-go {
-  background: color-mix(in srgb, var(--accentPrimary) 8%, var(--navButtonBg, var(--buttonBg)));
-  border: 1px solid color-mix(in srgb, var(--accentPrimary) 32%, var(--navButtonBorder, var(--buttonBorder)));
+  background: color-mix(in srgb, var(--accentPrimary) 8%, var(--navButtonBg));
+  border: 1px solid color-mix(in srgb, var(--accentPrimary) 32%, var(--navButtonBorder));
   color: var(--accentText);
 }
 
 .theme-btn-go:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accentPrimary) 16%, var(--navButtonBgHover, var(--buttonBgHover)));
-  border-color: color-mix(in srgb, var(--accentPrimary) 48%, var(--navButtonBorderHover, var(--buttonBorderHover)));
+  background: color-mix(in srgb, var(--accentPrimary) 16%, var(--navButtonBgHover));
+  border-color: color-mix(in srgb, var(--accentPrimary) 48%, var(--navButtonBorderHover));
   color: var(--accentText);
 }
 
 .theme-btn-go:active:not(:disabled) {
-  background: color-mix(in srgb, var(--accentPrimary) 24%, var(--navButtonBgActive, var(--buttonBgActive)));
-  border-color: color-mix(in srgb, var(--accentPrimary) 64%, var(--navButtonBorderActive, var(--buttonBorderActive)));
+  background: color-mix(in srgb, var(--accentPrimary) 24%, var(--navButtonBgActive));
+  border-color: color-mix(in srgb, var(--accentPrimary) 64%, var(--navButtonBorderActive));
   color: var(--accentText);
 }
 
@@ -338,6 +380,8 @@ body {
   font-size: 13px;
   line-height: 1.45;
   max-width: 520px;
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .settings-header-actions {
@@ -357,10 +401,9 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 6px;
-  border-radius: 12px;
-  border: var(--layoutBorderWidth, 1px) solid
-    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 75%, transparent);
-  background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 82%, transparent);
+  border-radius: var(--layoutSettingsTabsRadius, 12px);
+  border: var(--layoutBorderWidth, 1px) solid var(--settingsTabsBorder, var(--settingsCardBorder));
+  background: var(--settingsTabsBg, var(--settingsCardBg));
   align-self: flex-start;
 }
 
@@ -376,9 +419,9 @@ body {
 }
 
 .settings-tab-btn-active {
-  background: var(--navButtonBgHover, var(--buttonBgHover));
-  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
-  color: var(--navButtonTextHover, var(--buttonTextHover));
+  background: var(--navButtonBgHover);
+  border-color: var(--navButtonBorderHover);
+  color: var(--navButtonTextHover);
 }
 
 .settings-tab-label {
@@ -401,7 +444,11 @@ body {
 }
 
 .settings-card {
-  padding: 14px;
+  border-radius: var(--layoutSettingsCardRadius, var(--layoutPanelRadius, 8px));
+  border: var(--layoutBorderWidth, 1px) solid var(--settingsCardBorder, var(--surfaceBorder));
+  background: var(--settingsCardBg, var(--surfaceBg));
+  color: var(--settingsCardText, var(--surfaceText, var(--text1)));
+  padding: var(--layoutSettingsCardPadding, 14px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -417,13 +464,16 @@ body {
   margin: 0;
   font-size: 16px;
   line-height: 1.2;
+  color: var(--settingsCardText, var(--text1));
 }
 
 .settings-card-description {
   margin: 0;
-  color: var(--text2);
+  color: var(--settingsCardDescription, var(--text2));
   font-size: 13px;
   line-height: 1.45;
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .settings-setting-row {
@@ -431,16 +481,19 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  border: var(--layoutBorderWidth, 1px) solid
-    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 75%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 88%, transparent);
-  padding: 8px 10px;
+  border: var(--layoutBorderWidth, 1px) solid var(--settingsRowBorder, var(--surfaceBorder));
+  border-radius: var(--layoutSettingsRowRadius, 8px);
+  background: var(--settingsRowBg, var(--surfaceBg));
+  padding: var(--layoutSettingsRowPaddingY, 8px) var(--layoutSettingsRowPaddingX, 10px);
 }
 
 .settings-setting-row:hover {
-  border-color: var(--surfaceBorderHover, var(--tabBorderHover));
-  background: color-mix(in srgb, var(--surfaceBgHover, var(--tabBgHover)) 88%, transparent);
+  border-color: var(--settingsRowBorderHover, var(--surfaceBorderHover));
+  background: var(--settingsRowBgHover, var(--surfaceBgHover));
+}
+
+.settings-setting-row-top {
+  align-items: flex-start;
 }
 
 .settings-setting-meta {
@@ -461,6 +514,8 @@ body {
   font-size: 12px;
   color: var(--text2);
   line-height: 1.35;
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .settings-setting-control {
@@ -497,7 +552,8 @@ body {
 .settings-text-input,
 .settings-select-input,
 .settings-number-input {
-  padding: 8px 10px;
+  min-height: var(--layoutSettingsControlHeight, 36px);
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
 }
 
 .settings-text-input {
@@ -532,16 +588,15 @@ body {
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
-  border: var(--layoutBorderWidth, 1px) solid
-    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 75%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 88%, transparent);
-  padding: 8px 10px;
+  border: var(--layoutBorderWidth, 1px) solid var(--settingsRowBorder, var(--surfaceBorder));
+  border-radius: var(--layoutSettingsRowRadius, 8px);
+  background: var(--settingsRowBg, var(--surfaceBg));
+  padding: var(--layoutSettingsRowPaddingY, 8px) var(--layoutSettingsRowPaddingX, 10px);
 }
 
 .settings-toggle-row:hover {
-  border-color: var(--surfaceBorderHover, var(--tabBorderHover));
-  background: color-mix(in srgb, var(--surfaceBgHover, var(--tabBgHover)) 88%, transparent);
+  border-color: var(--settingsRowBorderHover, var(--surfaceBorderHover));
+  background: var(--settingsRowBgHover, var(--surfaceBgHover));
 }
 
 .settings-toggle-row > span {
@@ -561,12 +616,13 @@ body {
   justify-content: space-between;
   gap: 10px;
   text-align: left;
-  padding: 8px 10px;
+  min-height: var(--layoutSettingsControlHeight, 36px);
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
 }
 
 .settings-dropdown-trigger-open {
-  background: var(--navButtonBgHover, var(--buttonBgHover));
-  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
+  background: var(--navButtonBgHover);
+  border-color: var(--navButtonBorderHover);
 }
 
 .settings-dropdown-value {
@@ -579,10 +635,7 @@ body {
 
 .settings-dropdown-caret-icon {
   flex: 0 0 auto;
-  color: var(
-    --dropdownCaretColor,
-    color-mix(in srgb, var(--navButtonText, var(--buttonText)) 84%, white)
-  );
+  color: var(--dropdownCaretColor, color-mix(in srgb, var(--navButtonText) 84%, white));
   opacity: 0.92;
 }
 
@@ -592,9 +645,9 @@ body {
   right: 0;
   top: calc(100% + 6px);
   z-index: 20;
-  border-radius: 8px;
+  border-radius: var(--layoutSettingsDropdownRadius, 8px);
   overflow-y: auto;
-  max-height: 260px;
+  max-height: var(--layoutSettingsDropdownMaxHeight, 260px);
   box-shadow: var(--dropdownShadow);
 }
 
@@ -602,8 +655,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px;
-  border-bottom: 1px solid var(--surfaceBorder, var(--tabBorder));
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
+  border-bottom: 1px solid var(--settingsRowBorder, var(--surfaceBorder));
 }
 
 .settings-dropdown-item:last-child {
@@ -617,7 +670,8 @@ body {
   justify-content: space-between;
   gap: 8px;
   text-align: left;
-  padding: 6px 8px;
+  min-height: var(--layoutSettingsControlHeight, 36px);
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
 }
 
 .settings-dropdown-choice-label {
@@ -632,7 +686,7 @@ body {
     --dropdownChoiceSelectedBg,
     color-mix(
       in srgb,
-      var(--navButtonBgActive, var(--buttonBgActive)) 86%,
+      var(--navButtonBgActive) 86%,
       var(--accentPrimarySoft) 14%
     )
   );
@@ -640,11 +694,11 @@ body {
     --dropdownChoiceSelectedBorder,
     color-mix(
       in srgb,
-      var(--navButtonBorderActive, var(--buttonBorderActive)) 74%,
+      var(--navButtonBorderActive) 74%,
       var(--accentPrimary) 26%
     )
   );
-  color: var(--navButtonTextActive, var(--buttonTextActive));
+  color: var(--navButtonTextActive);
 }
 
 .settings-dropdown-choice-check {
@@ -653,8 +707,8 @@ body {
 }
 
 .settings-dropdown-choice:hover:not(:disabled) {
-  background: var(--navButtonBgHover, var(--buttonBgHover));
-  border-color: var(--navButtonBorderHover, var(--buttonBorderHover));
+  background: var(--navButtonBgHover);
+  border-color: var(--navButtonBorderHover);
 }
 
 .settings-actions-row {
@@ -664,7 +718,7 @@ body {
 }
 
 .settings-btn-pad {
-  padding: 8px 12px;
+  padding: var(--layoutSettingsButtonPaddingY, 8px) var(--layoutSettingsButtonPaddingX, 12px);
 }
 
 .settings-inline-message,
@@ -684,11 +738,10 @@ body {
   grid-template-columns: minmax(120px, 1fr) auto auto;
   align-items: center;
   gap: 10px;
-  border: var(--layoutBorderWidth, 1px) solid
-    color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 70%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 86%, transparent);
-  padding: 6px 8px;
+  border: var(--layoutBorderWidth, 1px) solid var(--settingsRowBorder, var(--surfaceBorder));
+  border-radius: var(--layoutSettingsRowRadius, 8px);
+  background: var(--settingsRowBg, var(--surfaceBg));
+  padding: var(--layoutSettingsRowPaddingY, 8px) var(--layoutSettingsRowPaddingX, 10px);
 }
 
 .settings-shortcuts-engine {
@@ -701,11 +754,14 @@ body {
   font-size: 12px;
   color: var(--text2);
   white-space: nowrap;
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .settings-shortcuts-input {
   width: 72px;
-  padding: 6px 8px;
+  min-height: var(--layoutSettingsControlHeight, 36px);
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
 }
 
 .creator-page {
@@ -726,7 +782,8 @@ body {
 
 .creator-meta-field .theme-input {
   width: 100%;
-  padding: 8px 10px;
+  min-height: var(--layoutSettingsControlHeight, 36px);
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
 }
 
 .creator-values-list {
@@ -761,21 +818,20 @@ body {
 }
 
 .creator-code-text {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .creator-code-input {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .creator-value-input {
   width: min(100%, 320px);
   margin-left: auto;
-  padding: 8px 10px;
+  min-height: var(--layoutSettingsControlHeight, 36px);
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
 }
 
 .theme-creator-meta-grid {
@@ -824,13 +880,13 @@ body {
 
 .theme-creator-value-row .creator-code-input {
   width: 220px;
-  height: 36px;
-  padding: 8px 10px;
+  height: var(--layoutSettingsControlHeight, 36px);
+  padding: var(--layoutSettingsControlPaddingY, 8px) var(--layoutSettingsControlPaddingX, 10px);
 }
 
 .theme-creator-value-row .creator-color-swatch {
-  width: 36px;
-  height: 36px;
+  width: var(--layoutSettingsControlHeight, 36px);
+  height: var(--layoutSettingsControlHeight, 36px);
   border-radius: var(--layoutInputRadius, 6px);
   border: var(--layoutBorderWidth, 1px) solid var(--urlBarBorder, var(--fieldBorder));
   background: transparent;
@@ -865,8 +921,8 @@ body {
   height: 24px;
   margin: 0;
   border-radius: 999px;
-  border: 1px solid var(--surfaceBorder, var(--tabBorder));
-  background: var(--surfaceBg, var(--tabBg));
+  border: 1px solid var(--settingsRowBorder, var(--surfaceBorder));
+  background: var(--settingsRowBg, var(--surfaceBg));
   position: relative;
   transition:
     background-color 120ms ease,
@@ -882,15 +938,15 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--surfaceText, var(--text1));
+  background: var(--settingsCardText, var(--surfaceText, var(--text1)));
   transition:
     transform 120ms ease,
     background-color 120ms ease;
 }
 
 .settings-toggle:hover {
-  background: var(--surfaceBgHover, var(--tabBgHover));
-  border-color: var(--surfaceBorderHover, var(--tabBorderHover));
+  background: var(--settingsRowBgHover, var(--surfaceBgHover));
+  border-color: var(--settingsRowBorderHover, var(--surfaceBorderHover));
 }
 
 .settings-toggle:checked {
@@ -904,7 +960,7 @@ body {
 }
 
 .settings-toggle:focus-visible {
-  outline: 2px solid var(--focusOutline, var(--navButtonBorderActive, var(--buttonBorderActive)));
+  outline: 2px solid var(--focusOutline, var(--navButtonBorderActive));
   outline-offset: 2px;
 }
 
@@ -1068,8 +1124,8 @@ body {
 }
 
 .address-menu-trigger-open {
-  background: var(--navButtonBgActive, var(--buttonBgActive));
-  color: var(--navButtonTextActive, var(--buttonTextActive));
+  background: var(--navButtonBgActive);
+  color: var(--navButtonTextActive);
 }
 
 .address-menu-trigger-open .address-menu-trigger-icon {
@@ -1082,7 +1138,7 @@ body {
   right: 0;
   width: min(280px, calc(100vw - 20px));
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--layoutAddressMenuPanelRadius, 12px);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1103,9 +1159,9 @@ body {
 
 .address-menu-item {
   width: 100%;
-  min-height: 34px;
+  min-height: var(--layoutAddressMenuItemHeight, 34px);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--layoutAddressMenuItemRadius, 8px);
   background: transparent;
   color: var(--surfaceText, var(--tabText));
   text-align: left;
@@ -1122,12 +1178,12 @@ body {
 .address-menu-item:hover:not(:disabled) {
   background: color-mix(
     in srgb,
-    var(--navButtonBgHover, var(--buttonBgHover)) 88%,
+    var(--navButtonBgHover) 88%,
     var(--accentPrimarySoft, #77776f) 12%
   );
   border-color: color-mix(
     in srgb,
-    var(--navButtonBorderHover, var(--buttonBorderHover)) 78%,
+    var(--navButtonBorderHover) 78%,
     var(--accentPrimarySoft, #77776f) 22%
   );
   color: var(--surfaceTextHover, var(--tabTextHover));
@@ -1136,12 +1192,12 @@ body {
 .address-menu-item:active:not(:disabled) {
   background: color-mix(
     in srgb,
-    var(--navButtonBgActive, var(--buttonBgActive)) 84%,
+    var(--navButtonBgActive) 84%,
     var(--accentPrimary, #8f8f85) 16%
   );
   border-color: color-mix(
     in srgb,
-    var(--navButtonBorderActive, var(--buttonBorderActive)) 74%,
+    var(--navButtonBorderActive) 74%,
     var(--accentPrimary, #8f8f85) 26%
   );
 }
@@ -1161,9 +1217,8 @@ body {
   opacity: 0.76;
   letter-spacing: 0.01em;
   color: var(--text3);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
+  font-family: var(--fontSecondaryFamilyResolved);
+  font-weight: var(--fontSecondaryWeight);
 }
 
 .address-menu-item-shortcut-empty {
@@ -1174,12 +1229,12 @@ body {
   background: color-mix(
     in srgb,
     var(--windowCloseButtonBgHover, #e81123) 16%,
-    var(--navButtonBgHover, var(--buttonBgHover)) 84%
+    var(--navButtonBgHover) 84%
   );
   border-color: color-mix(
     in srgb,
     var(--windowCloseButtonBgHover, #e81123) 32%,
-    var(--navButtonBorderHover, var(--buttonBorderHover)) 68%
+    var(--navButtonBorderHover) 68%
   );
 }
 
@@ -1187,7 +1242,7 @@ body {
   background: color-mix(
     in srgb,
     var(--windowCloseButtonBgActive, #c50f1f) 20%,
-    var(--navButtonBgActive, var(--buttonBgActive)) 80%
+    var(--navButtonBgActive) 80%
   );
 }
 

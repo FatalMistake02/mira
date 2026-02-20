@@ -2,6 +2,7 @@ import { Download } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDownloads } from '../features/downloads/DownloadProvider';
 import DownloadPopup from './DownloadPopup';
+import { LAYOUT_APPLIED_EVENT } from '../features/layouts/applyLayout';
 
 export default function DownloadButton() {
   const { downloads } = useDownloads();
@@ -58,12 +59,8 @@ export default function DownloadButton() {
     };
 
     readMode();
-    const observer = new MutationObserver(readMode);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['style'],
-    });
-    return () => observer.disconnect();
+    window.addEventListener(LAYOUT_APPLIED_EVENT, readMode);
+    return () => window.removeEventListener(LAYOUT_APPLIED_EVENT, readMode);
   }, []);
 
   useEffect(() => {

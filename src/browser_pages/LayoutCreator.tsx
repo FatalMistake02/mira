@@ -119,9 +119,6 @@ export default function LayoutCreator() {
       <header className="settings-header">
         <div>
           <h1 className="settings-title">Layout Creator</h1>
-          <p className="settings-subtitle">
-            Pick a base layout, tweak sizing/visibility values, and export JSON.
-          </p>
         </div>
       </header>
 

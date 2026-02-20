@@ -9,7 +9,7 @@ import { BROWSER_SETTINGS_CHANGED_EVENT, getBrowserSettings } from '../settings/
 const TAB_TARGET_WIDTH = 'var(--layoutTabTargetWidth, 220px)';
 const TAB_MIN_WIDTH = 'var(--layoutTabMinWidth, 100px)';
 const TAB_STRIP_GAP = 'var(--layoutTabGap, 6px)';
-const TAB_ROW_HEIGHT = 'var(--layoutNavButtonHeight, 30px)';
+const TAB_ROW_HEIGHT = 'var(--layoutTabHeight, 30px)';
 const TAB_SWAP_TRIGGER_RATIO = 0.1;
 const TAB_SWAP_MIN_POINTER_DELTA_PX = 10;
 const TAB_SWAP_COOLDOWN_MS = 70;
