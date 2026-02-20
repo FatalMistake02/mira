@@ -381,10 +381,10 @@ export default function Onboarding() {
                   onChange={(event) => {
                     const nextMode = event.currentTarget.value;
                     if (
-                      nextMode === 'ask'
-                      || nextMode === 'windows'
-                      || nextMode === 'tabs'
-                      || nextMode === 'fresh'
+                      nextMode === 'ask' ||
+                      nextMode === 'windows' ||
+                      nextMode === 'tabs' ||
+                      nextMode === 'fresh'
                     ) {
                       setStartupRestoreBehavior(nextMode as StartupRestoreBehavior);
                     }

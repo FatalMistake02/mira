@@ -126,29 +126,29 @@ export default function ContextMenu({
           }
 
           return (
-          <button
-            key={`item-${entry.label}-${index}`}
-            type="button"
-            role="menuitem"
-            className="mira-context-menu-item"
-            disabled={entry.disabled}
-            onMouseDown={(event) => {
-              // Keep focus in the underlying webview/field so edit actions apply
-              // to the original target instead of this menu button.
-              event.preventDefault();
-            }}
-            onClick={() => {
-              onClose();
-              window.setTimeout(() => {
-                entry.onSelect();
-              }, 0);
-            }}
-          >
-            <span className="mira-context-menu-item-label">{entry.label}</span>
-            {entry.shortcut ? (
-              <span className="mira-context-menu-item-shortcut">{entry.shortcut}</span>
-            ) : null}
-          </button>
+            <button
+              key={`item-${entry.label}-${index}`}
+              type="button"
+              role="menuitem"
+              className="mira-context-menu-item"
+              disabled={entry.disabled}
+              onMouseDown={(event) => {
+                // Keep focus in the underlying webview/field so edit actions apply
+                // to the original target instead of this menu button.
+                event.preventDefault();
+              }}
+              onClick={() => {
+                onClose();
+                window.setTimeout(() => {
+                  entry.onSelect();
+                }, 0);
+              }}
+            >
+              <span className="mira-context-menu-item-label">{entry.label}</span>
+              {entry.shortcut ? (
+                <span className="mira-context-menu-item-shortcut">{entry.shortcut}</span>
+              ) : null}
+            </button>
           );
         })}
       </div>

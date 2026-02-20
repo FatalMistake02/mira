@@ -305,17 +305,14 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     [],
   );
 
-  const clearFindInPageMatchesForTab = useCallback(
-    (tabId: string) => {
-      setFindInPageMatchesByTab((current) => {
-        if (!(tabId in current)) return current;
-        const next = { ...current };
-        delete next[tabId];
-        return next;
-      });
-    },
-    [],
-  );
+  const clearFindInPageMatchesForTab = useCallback((tabId: string) => {
+    setFindInPageMatchesByTab((current) => {
+      if (!(tabId in current)) return current;
+      const next = { ...current };
+      delete next[tabId];
+      return next;
+    });
+  }, []);
 
   const updateFindInPageMatches = useCallback(
     (tabId: string, requestId: number, activeMatchOrdinal: number, matches: number) => {
@@ -356,9 +353,10 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     const hasExplicitActiveId = restorableTabs.some((tab) => tab.id === nextActiveId);
     const fallbackActiveId =
       restorableTabs.length > 0
-        ? restorableTabs.reduce((candidate, tab) =>
-            tab.lastActiveAt > candidate.lastActiveAt ? tab : candidate,
-          restorableTabs[0]).id
+        ? restorableTabs.reduce(
+            (candidate, tab) => (tab.lastActiveAt > candidate.lastActiveAt ? tab : candidate),
+            restorableTabs[0],
+          ).id
         : undefined;
     const safeActiveId = hasExplicitActiveId ? nextActiveId : fallbackActiveId;
 
@@ -451,7 +449,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
             .catch(() => ''),
         ]);
         if (cancelled) return;
-        const queuedUrls = initialWindowUrlRaw ? [initialWindowUrlRaw, ...queuedUrlsRaw] : queuedUrlsRaw;
+        const queuedUrls = initialWindowUrlRaw
+          ? [initialWindowUrlRaw, ...queuedUrlsRaw]
+          : queuedUrlsRaw;
         startupIncomingUrlsRef.current = queuedUrls;
 
         const windowRestore = await ipc.invoke<SessionSnapshot | null>(
@@ -844,10 +844,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     const normalizedHistory = lastClosedTab.history
       .map((entry) => entry.trim())
       .filter((entry) => !!entry && entry.toLowerCase() !== 'about:blank');
-    const restoredUrl = (lastClosedTab.history[lastClosedTab.historyIndex] ?? lastClosedTab.url).trim();
-    const safeRestoredUrl = restoredUrl && restoredUrl.toLowerCase() !== 'about:blank'
-      ? restoredUrl
-      : getBrowserSettings().newTabPage;
+    const restoredUrl = (
+      lastClosedTab.history[lastClosedTab.historyIndex] ?? lastClosedTab.url
+    ).trim();
+    const safeRestoredUrl =
+      restoredUrl && restoredUrl.toLowerCase() !== 'about:blank'
+        ? restoredUrl
+        : getBrowserSettings().newTabPage;
     const nextHistory = normalizedHistory.length ? normalizedHistory : [safeRestoredUrl];
     const nextHistoryIndex = Math.max(
       0,
@@ -1567,12 +1570,15 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
   }, [isBootstrapReady]);
 
-  useEffect(() => () => {
-    if (reopenTabActivationTimerRef.current !== null) {
-      window.clearTimeout(reopenTabActivationTimerRef.current);
-      reopenTabActivationTimerRef.current = null;
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (reopenTabActivationTimerRef.current !== null) {
+        window.clearTimeout(reopenTabActivationTimerRef.current);
+        reopenTabActivationTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;

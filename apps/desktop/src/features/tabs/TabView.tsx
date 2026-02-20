@@ -145,7 +145,9 @@ function resolveContextMenuUrl(rawUrl: string, baseUrl?: string): string {
 
   try {
     const normalizedBase = typeof baseUrl === 'string' ? baseUrl.trim() : '';
-    return normalizedBase ? new URL(trimmed, normalizedBase).toString() : new URL(trimmed).toString();
+    return normalizedBase
+      ? new URL(trimmed, normalizedBase).toString()
+      : new URL(trimmed).toString();
   } catch {
     return trimmed;
   }
@@ -170,7 +172,9 @@ function canOpenInNewTab(url: string): boolean {
   }
 }
 
-function normalizeContextMenuParams(params?: WebviewContextMenuParams): NormalizedContextMenuParams {
+function normalizeContextMenuParams(
+  params?: WebviewContextMenuParams,
+): NormalizedContextMenuParams {
   const editFlags = params?.editFlags;
   return {
     x: Number.isFinite(params?.x) ? Math.floor(params?.x ?? 0) : 0,
@@ -391,12 +395,14 @@ export default function TabView() {
         typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
           ? Math.floor(candidate.webContentsId)
           : -1;
-      const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
-        ? Math.floor(candidate.x)
-        : 0;
-      const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
-        ? Math.floor(candidate.y)
-        : 0;
+      const x =
+        typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+          ? Math.floor(candidate.x)
+          : 0;
+      const y =
+        typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+          ? Math.floor(candidate.y)
+          : 0;
       const rawUrl = typeof candidate.url === 'string' ? candidate.url : '';
       const rawBaseUrl = typeof candidate.baseUrl === 'string' ? candidate.baseUrl : '';
       const resolvedUrl = resolveContextMenuUrl(rawUrl, rawBaseUrl || undefined);
@@ -594,13 +600,23 @@ export default function TabView() {
         item('Open Image in New Tab', () => openInNewTabFromMenu(resolvedSrcUrl, params.pageURL), {
           disabled: !canOpenImageInNewTab,
         }),
-        item('Save Image As', () => runWebviewContextAction('download-url', { url: resolvedSrcUrl }), {
-          disabled: !resolvedSrcUrl,
-        }),
-        item('Copy Image', () => runWebviewContextAction('copy-image-at', { x: params.x, y: params.y })),
-        item('Copy Image Address', () => runWebviewContextAction('copy-text', { text: resolvedSrcUrl }), {
-          disabled: !resolvedSrcUrl,
-        }),
+        item(
+          'Save Image As',
+          () => runWebviewContextAction('download-url', { url: resolvedSrcUrl }),
+          {
+            disabled: !resolvedSrcUrl,
+          },
+        ),
+        item('Copy Image', () =>
+          runWebviewContextAction('copy-image-at', { x: params.x, y: params.y }),
+        ),
+        item(
+          'Copy Image Address',
+          () => runWebviewContextAction('copy-text', { text: resolvedSrcUrl }),
+          {
+            disabled: !resolvedSrcUrl,
+          },
+        ),
         separator(),
         inspectEntry,
       ];
@@ -613,24 +629,36 @@ export default function TabView() {
         item('Open in New Tab', () => openInNewTabFromMenu(resolvedLinkUrl, params.pageURL), {
           disabled: !canOpenLinkInNewTab,
         }),
-        item('Open in New Window', () => {
-          if (!canOpenLinkInNewTab) return;
-          const ipc = electron?.ipcRenderer;
-          if (ipc) {
-            void ipc.invoke('window-new-with-url', resolvedLinkUrl).catch(() => undefined);
-            return;
-          }
-          window.open(resolvedLinkUrl, '_blank', 'noopener,noreferrer');
-        }, {
-          disabled: !canOpenLinkInNewTab,
-        }),
+        item(
+          'Open in New Window',
+          () => {
+            if (!canOpenLinkInNewTab) return;
+            const ipc = electron?.ipcRenderer;
+            if (ipc) {
+              void ipc.invoke('window-new-with-url', resolvedLinkUrl).catch(() => undefined);
+              return;
+            }
+            window.open(resolvedLinkUrl, '_blank', 'noopener,noreferrer');
+          },
+          {
+            disabled: !canOpenLinkInNewTab,
+          },
+        ),
         separator(),
-        item('Copy Link Address', () => runWebviewContextAction('copy-text', { text: resolvedLinkUrl }), {
-          disabled: !resolvedLinkUrl,
-        }),
-        item('Save Link As', () => runWebviewContextAction('download-url', { url: resolvedLinkUrl }), {
-          disabled: !resolvedLinkUrl,
-        }),
+        item(
+          'Copy Link Address',
+          () => runWebviewContextAction('copy-text', { text: resolvedLinkUrl }),
+          {
+            disabled: !resolvedLinkUrl,
+          },
+        ),
+        item(
+          'Save Link As',
+          () => runWebviewContextAction('download-url', { url: resolvedLinkUrl }),
+          {
+            disabled: !resolvedLinkUrl,
+          },
+        ),
         separator(),
         inspectEntry,
       ];
@@ -806,7 +834,8 @@ export default function TabView() {
 
                     if (nativeTextFieldContextMenu) {
                       const ipc = electron?.ipcRenderer;
-                      const webContentsId = typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
+                      const webContentsId =
+                        typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
                       if (ipc && Number.isFinite(webContentsId) && webContentsId > 0) {
                         e.preventDefault();
                         setPageMenuState(null);
@@ -844,7 +873,8 @@ export default function TabView() {
 
                     e.preventDefault();
 
-                    const webContentsId = typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
+                    const webContentsId =
+                      typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
                     if (!Number.isFinite(webContentsId) || webContentsId <= 0) return;
 
                     let x = params.x;
@@ -868,16 +898,17 @@ export default function TabView() {
                   const newWindowHandler = (e: Event) => {
                     const ev = e as WebviewNewWindowEvent;
                     const url = typeof ev.url === 'string' ? ev.url.trim() : '';
-                    const disposition = typeof ev.disposition === 'string' ? ev.disposition.toLowerCase() : '';
-                    
+                    const disposition =
+                      typeof ev.disposition === 'string' ? ev.disposition.toLowerCase() : '';
+
                     if (!url) {
                       e.preventDefault();
                       return;
                     }
-                    
+
                     // Prevent the default behavior of opening in a new window
                     e.preventDefault();
-                    
+
                     // Open in a new tab based on disposition
                     if (disposition === 'new-window') {
                       // Open in new window
@@ -907,7 +938,9 @@ export default function TabView() {
                   wv.foundInPageHandler = foundInPageHandler as (
                     e: WebviewFoundInPageEvent,
                   ) => void;
-                  wv.contextMenuHandler = contextMenuHandler as (e: WebviewContextMenuEvent) => void;
+                  wv.contextMenuHandler = contextMenuHandler as (
+                    e: WebviewContextMenuEvent,
+                  ) => void;
                   wv.newWindowHandler = newWindowHandler as (e: WebviewNewWindowEvent) => void;
 
                   wv.addEventListener('did-navigate', didNavigateHandler);

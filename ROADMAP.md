@@ -1,6 +1,6 @@
 # Roadmap
 
-## v1.0.0 — Stable Release
+## v0.9.0
 - [x] Installer & portable builds for Windows, macOS, and Linux
 - [x] Clean UI
 - [x] Auto update
@@ -8,7 +8,6 @@
 - [x] Start on startup
 - [x] Onboarding
 - [x] Fix bugs/issues
-- [ ] Improve performance
 - [x] Fix links not able to open new tabs
 - [x] Fix some link types not working
 - [x] Add about:blank 
@@ -18,6 +17,10 @@
 - [x] Fix restoring
 - [x] Make sure everything is in the themes and layouts
 - [x] Fonts
+
+## v1.0.0 — Stable Release
+- [ ] Improve performance
+- [ ] Fix default browser
  
 ## v1.1.0
 - [ ] Bookmarks and favorites

@@ -52,7 +52,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Apply tag version to package metadata
-        run: npm version ${{ steps.tag_version.outputs.version }} --no-git-tag-version
+        run: npm version ${{ steps.tag_version.outputs.version }} --workspace apps/desktop --no-git-tag-version
 
       - name: Update changelog release header
         shell: bash
@@ -95,7 +95,7 @@ jobs:
         with:
           name: package-metadata
           path: |
-            package.json
+            apps/desktop/package.json
             package-lock.json
 
       - name: Sync package version to repository
@@ -109,17 +109,17 @@ jobs:
           worktree_dir="$(mktemp -d)"
           git worktree add "$worktree_dir" "origin/$default_branch"
 
-          cp package.json "$worktree_dir/package.json"
+          cp apps/desktop/package.json "$worktree_dir/apps/desktop/package.json"
           cp package-lock.json "$worktree_dir/package-lock.json"
           cp CHANGELOG.md "$worktree_dir/CHANGELOG.md"
 
           cd "$worktree_dir"
-          git add package.json package-lock.json CHANGELOG.md
+          git add apps/desktop/package.json package-lock.json CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No package/changelog changes to commit."
             exit 0
           fi
-          git commit -m "chore: set version to ${{ steps.tag_version.outputs.version }} from tag ${{ steps.tag_version.outputs.release_tag }}"
+          git commit -m "chore: set desktop version to ${{ steps.tag_version.outputs.version }} from tag ${{ steps.tag_version.outputs.release_tag }}"
           git push origin HEAD:"$default_branch"
 
   build-windows:
@@ -146,7 +146,7 @@ jobs:
         run: npm ci
 
       - name: Build app
-        run: npm run build -- --publish never
+        run: npm run build --workspace apps/desktop -- --publish never
         env:
           VITE_DEV: "false"
 
@@ -155,7 +155,7 @@ jobs:
         with:
           draft: true
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
-          files: release/*.exe
+          files: apps/desktop/release/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -185,7 +185,7 @@ jobs:
         run: npm ci
 
       - name: Build app
-        run: npm run build -- --mac --x64 --arm64 --publish never
+        run: npm run build --workspace apps/desktop -- --mac --x64 --arm64 --publish never
         env:
           VITE_DEV: "false"
 
@@ -195,8 +195,8 @@ jobs:
           draft: true
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
           files: |
-            release/*.dmg
-            release/*.zip
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -226,7 +226,7 @@ jobs:
         run: npm ci
 
       - name: Build app
-        run: npm run build -- --linux --x64 --publish never
+        run: npm run build --workspace apps/desktop -- --linux --x64 --publish never
         env:
           VITE_DEV: "false"
 
@@ -236,8 +236,8 @@ jobs:
           draft: true
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
           files: |
-            release/*.AppImage
-            release/*.deb
-            release/*.rpm
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

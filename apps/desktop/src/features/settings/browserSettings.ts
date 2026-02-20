@@ -186,10 +186,7 @@ function normalizeAdBlockEnabled(value: unknown): boolean {
   return value;
 }
 
-function normalizeTrackerBlockEnabled(
-  value: unknown,
-  fallbackAdBlockEnabled: boolean,
-): boolean {
+function normalizeTrackerBlockEnabled(value: unknown, fallbackAdBlockEnabled: boolean): boolean {
   if (typeof value !== 'boolean') {
     return fallbackAdBlockEnabled;
   }

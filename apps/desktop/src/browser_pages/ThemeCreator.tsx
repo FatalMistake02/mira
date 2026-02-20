@@ -359,7 +359,9 @@ function rgbToHex(r: number, g: number, b: number): string {
 
 function rgbToHexWithAlpha(r: number, g: number, b: number, a: number): string {
   const alpha = Math.max(0, Math.min(1, a));
-  const alphaHex = Math.round(alpha * 255).toString(16).padStart(2, '0');
+  const alphaHex = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, '0');
   return `${rgbToHex(r, g, b)}${alphaHex}`;
 }
 
@@ -410,13 +412,13 @@ function resolveColorValue(
 
   const ownValue = colors[key];
   const fallbackValue = fallbackColors[key];
-  const candidate =
-    (typeof ownValue === 'string' && ownValue.trim()
+  const candidate = (
+    typeof ownValue === 'string' && ownValue.trim()
       ? ownValue
       : typeof fallbackValue === 'string'
         ? fallbackValue
         : ''
-    ).trim();
+  ).trim();
   if (!candidate) return null;
 
   const varMatch = candidate.match(CSS_VAR_PATTERN);
@@ -448,9 +450,7 @@ function getColorPickerValue(
 ): string {
   const resolved = resolveColorValue(key, colors, fallbackColors, new Set<string>()) ?? '';
   return (
-    resolveHexColorValue(key, colors, fallbackColors)
-    ?? parseRgbLikeToHex(resolved)
-    ?? '#000000'
+    resolveHexColorValue(key, colors, fallbackColors) ?? parseRgbLikeToHex(resolved) ?? '#000000'
   );
 }
 
@@ -605,7 +605,9 @@ export default function ThemeCreator() {
           .filter((family) => !!family.trim());
         if (!localFamilies.length) return;
 
-        setFontFamilyOptions(createFontFamilyOptions([...BUILT_IN_FONT_FAMILIES, ...localFamilies]));
+        setFontFamilyOptions(
+          createFontFamilyOptions([...BUILT_IN_FONT_FAMILIES, ...localFamilies]),
+        );
       } catch {
         // Ignore permission and unsupported errors, built-in options remain available.
       }
@@ -811,11 +813,10 @@ export default function ThemeCreator() {
         <div className="creator-values-list theme-creator-values-list">
           {editableFontKeys.map((key) => {
             const options =
-              key === 'fontPrimaryFamily' || key === 'fontSecondaryFamily'
-                ? fontFamilyOptions
-                : [];
+              key === 'fontPrimaryFamily' || key === 'fontSecondaryFamily' ? fontFamilyOptions : [];
             const currentRaw = (fonts[key] ?? '').trim();
-            const hasCustomCurrent = !!currentRaw && !options.some((entry) => entry.value === currentRaw);
+            const hasCustomCurrent =
+              !!currentRaw && !options.some((entry) => entry.value === currentRaw);
             const selectedValue = currentRaw || DEFAULT_FONT_SELECT_VALUE;
             const selectedPreviewFamily =
               options.length && (key === 'fontPrimaryFamily' || key === 'fontSecondaryFamily')
@@ -839,12 +840,12 @@ export default function ThemeCreator() {
                         }));
                         setExportMessage('');
                       }}
-                      style={selectedPreviewFamily ? { fontFamily: selectedPreviewFamily } : undefined}
+                      style={
+                        selectedPreviewFamily ? { fontFamily: selectedPreviewFamily } : undefined
+                      }
                       className="theme-input settings-select-input settings-setting-control-grow creator-code-input"
                     >
-                      <option value={DEFAULT_FONT_SELECT_VALUE}>
-                        Default
-                      </option>
+                      <option value={DEFAULT_FONT_SELECT_VALUE}>Default</option>
                       {options.map((option) => (
                         <option
                           key={`${key}-${option.value}`}
@@ -890,12 +891,15 @@ export default function ThemeCreator() {
           <h2 className="settings-card-title">Colors</h2>
         </div>
         <div className="creator-values-list theme-creator-values-list">
-          {editableKeys.map((key) => (
+          {editableKeys.map((key) =>
             (() => {
               const resolvedRgba = getResolvedRgbaForEditor(key, colors, fallbackColors);
               const opacityPercent = Math.round(resolvedRgba.a * 100);
               return (
-                <div key={key} className="settings-setting-row creator-value-row theme-creator-value-row">
+                <div
+                  key={key}
+                  className="settings-setting-row creator-value-row theme-creator-value-row"
+                >
                   <div className="settings-setting-meta">
                     <span className="settings-setting-label">{getThemeColorDisplayName(key)}</span>
                   </div>
@@ -968,8 +972,8 @@ export default function ThemeCreator() {
                   </div>
                 </div>
               );
-            })()
-          ))}
+            })(),
+          )}
         </div>
       </section>
     </div>

@@ -1,0 +1,125 @@
+{
+  "name": "mira",
+  "description": "A browser",
+  "author": "Mira Community",
+  "license": "MIT",
+  "private": true,
+  "version": "0.8.1",
+  "type": "module",
+  "main": "electron/main.ts",
+  "homepage": "https://mira.fatalmistake02.com",
+  "repository": "https://github.com/FatalMistake02/mira",
+  "scripts": {
+    "dev:react": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
+    "build": "vite build && electron-builder",
+    "build:renderer": "vite build",
+    "build:fast": "vite build && electron-builder --publish never --dir --win",
+    "build:portable": "vite build && electron-builder --publish never --win portable --config.compression=store",
+    "build:nsis": "vite build && electron-builder --publish never --win nsis",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""
+  },
+  "build": {
+    "appId": "com.fatalmistake02.mira",
+    "productName": "Mira",
+    "icon": "assets/mira_icon.png",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "src/assets/trackers.txt",
+      "package.json"
+    ],
+    "protocols": [
+      {
+        "name": "Mira URL Handler",
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "htm",
+          "html",
+          "shtml",
+          "xhtml"
+        ],
+        "name": "HTML Document",
+        "role": "Viewer",
+        "mimeType": "text/html"
+      }
+    ],
+    "win": {
+      "artifactName": "${productName}-${version}-win.${ext}",
+      "icon": "assets/app_icons/app_icons.ico",
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-win-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "include": "build/installer.nsh"
+    },
+    "mac": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+      "icon": "assets/app_icons/app_icons.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "artifactName": "${productName}-${version}-linux.${ext}",
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility"
+    }
+  },
+  "dependencies": {
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "lucide-react": "^0.564.0",
+    "prettier": "^3.8.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/electron": "^1.4.38",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "electron": "40.4.0",
+    "electron-builder": "^26.7.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vite": "^7.3.1",
+    "wait-on": "^9.0.3"
+  }
+}

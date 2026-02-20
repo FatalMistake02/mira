@@ -138,7 +138,9 @@ export default function Settings() {
 
   const initialSettings = getBrowserSettings();
   const [newTabPage, setNewTabPage] = useState(() => initialSettings.newTabPage);
-  const [searchEngine, setSearchEngine] = useState<SearchEngine>(() => initialSettings.searchEngine);
+  const [searchEngine, setSearchEngine] = useState<SearchEngine>(
+    () => initialSettings.searchEngine,
+  );
   const [searchEngineShortcutsEnabled, setSearchEngineShortcutsEnabled] = useState(
     () => initialSettings.searchEngineShortcutsEnabled,
   );
@@ -701,10 +703,9 @@ export default function Settings() {
 
   const canConfigureRunOnStartupSetting = electron?.isMacOS || electron?.platform === 'win32';
   const isDevSettingsEnabled = initialSettings.dev;
-  const settingsSectionTabs: Array<{ id: SettingsSectionId; label: string }> =
-    isDevSettingsEnabled
-      ? [...SETTINGS_SECTION_TABS, { id: 'dev', label: 'Dev' }]
-      : SETTINGS_SECTION_TABS;
+  const settingsSectionTabs: Array<{ id: SettingsSectionId; label: string }> = isDevSettingsEnabled
+    ? [...SETTINGS_SECTION_TABS, { id: 'dev', label: 'Dev' }]
+    : SETTINGS_SECTION_TABS;
 
   return (
     <div className="settings-page">
@@ -965,10 +966,7 @@ export default function Settings() {
                     ))}
                   </select>
                 </div>
-                <label
-                  htmlFor="search-engine-shortcuts-enabled"
-                  className="settings-setting-row"
-                >
+                <label htmlFor="search-engine-shortcuts-enabled" className="settings-setting-row">
                   <span className="settings-setting-meta">
                     <span className="settings-setting-label">Enable engine shortcuts</span>
                     <span className="settings-setting-description">
@@ -1346,7 +1344,8 @@ export default function Settings() {
                   <span className="settings-setting-meta">
                     <span className="settings-setting-label">Use native context menus</span>
                     <span className="settings-setting-description">
-                      Show your OS context menu. Turn off to use Mira&apos;s custom menus. (not recomended)
+                      Show your OS context menu. Turn off to use Mira&apos;s custom menus. (not
+                      recomended)
                     </span>
                   </span>
                   <input
@@ -1561,8 +1560,7 @@ export default function Settings() {
                   <span className="settings-setting-meta">
                     <span className="settings-setting-label">Performance overlay (WIP)</span>
                     <span className="settings-setting-description">
-                      Show a performance overlay.
-                      May be inaccurate.
+                      Show a performance overlay. May be inaccurate.
                     </span>
                   </span>
                   <input

@@ -3,19 +3,36 @@ import tseslint from 'typescript-eslint';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import prettier from 'eslint-config-prettier';
+import globals from 'globals';
 
 export default [
   {
     ignores: [
       "dist/**", 
+      "apps/desktop/dist/**",
       "node_modules/**", 
-      "releases/**"
+      "release/**",
+      "apps/desktop/release/**"
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['src/**/*.{ts,tsx,js,jsx}'],
+    files: ['electron/**/*.{js,ts}', 'apps/desktop/electron/**/*.{js,ts}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
+    },
+    rules: {
+      'no-redeclare': 'off',
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx,js,jsx}', 'apps/desktop/src/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -26,6 +43,7 @@ export default [
         },
       },
       globals: {
+        ...globals.browser,
         React: 'readonly',
       },
     },

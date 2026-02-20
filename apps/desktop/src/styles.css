@@ -147,21 +147,13 @@ body {
     var(--accentPrimary) 26%
   );
   --dropdownChoiceCheckColor: var(--accentText);
-  --toggleCheckedBg: color-mix(
-    in srgb,
-    var(--navButtonBgActive) 52%,
-    var(--accentPrimarySoft) 48%
-  );
+  --toggleCheckedBg: color-mix(in srgb, var(--navButtonBgActive) 52%, var(--accentPrimarySoft) 48%);
   --toggleCheckedBorder: color-mix(
     in srgb,
     var(--navButtonBorderActive) 46%,
     var(--accentPrimary) 54%
   );
-  --toggleCheckedKnob: color-mix(
-    in srgb,
-    var(--navButtonTextActive) 76%,
-    #dfdfd7 24%
-  );
+  --toggleCheckedKnob: color-mix(in srgb, var(--navButtonTextActive) 76%, #dfdfd7 24%);
 }
 
 body {
@@ -684,19 +676,11 @@ textarea {
 .settings-dropdown-choice-selected {
   background: var(
     --dropdownChoiceSelectedBg,
-    color-mix(
-      in srgb,
-      var(--navButtonBgActive) 86%,
-      var(--accentPrimarySoft) 14%
-    )
+    color-mix(in srgb, var(--navButtonBgActive) 86%, var(--accentPrimarySoft) 14%)
   );
   border-color: var(
     --dropdownChoiceSelectedBorder,
-    color-mix(
-      in srgb,
-      var(--navButtonBorderActive) 74%,
-      var(--accentPrimary) 26%
-    )
+    color-mix(in srgb, var(--navButtonBorderActive) 74%, var(--accentPrimary) 26%)
   );
   color: var(--navButtonTextActive);
 }
@@ -1190,11 +1174,7 @@ textarea {
 }
 
 .address-menu-item:active:not(:disabled) {
-  background: color-mix(
-    in srgb,
-    var(--navButtonBgActive) 84%,
-    var(--accentPrimary, #8f8f85) 16%
-  );
+  background: color-mix(in srgb, var(--navButtonBgActive) 84%, var(--accentPrimary, #8f8f85) 16%);
   border-color: color-mix(
     in srgb,
     var(--navButtonBorderActive) 74%,

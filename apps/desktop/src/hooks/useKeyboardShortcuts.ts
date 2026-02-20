@@ -438,14 +438,22 @@ export function useKeyboardShortcuts({
       }
 
       if (!isPrimaryModifier && !e.altKey && !e.ctrlKey && !e.metaKey) {
-        if ((!e.shiftKey && isSpace && !isEditableTarget) || (isArrowDown && !isEditableTarget) || isPageDown) {
+        if (
+          (!e.shiftKey && isSpace && !isEditableTarget) ||
+          (isArrowDown && !isEditableTarget) ||
+          isPageDown
+        ) {
           e.preventDefault();
           e.stopPropagation();
           scrollPage('page-down');
           return;
         }
 
-        if ((e.shiftKey && isSpace && !isEditableTarget) || (isArrowUp && !isEditableTarget) || isPageUp) {
+        if (
+          (e.shiftKey && isSpace && !isEditableTarget) ||
+          (isArrowUp && !isEditableTarget) ||
+          isPageUp
+        ) {
           e.preventDefault();
           e.stopPropagation();
           scrollPage('page-up');
@@ -655,7 +663,12 @@ export function useKeyboardShortcuts({
         return;
       }
       if (action === 'scroll-page') {
-        if (payload === 'page-down' || payload === 'page-up' || payload === 'top' || payload === 'bottom') {
+        if (
+          payload === 'page-down' ||
+          payload === 'page-up' ||
+          payload === 'top' ||
+          payload === 'bottom'
+        ) {
           state.scrollPage(payload);
         }
       }

@@ -227,9 +227,7 @@ const baseFontsByMode: Record<ThemeMode, Record<string, string>> = {
   },
   light: {
     ...DEFAULT_THEME_FONTS,
-    ...(Object.keys(defaultLightBaseFonts).length
-      ? defaultLightBaseFonts
-      : defaultDarkBaseFonts),
+    ...(Object.keys(defaultLightBaseFonts).length ? defaultLightBaseFonts : defaultDarkBaseFonts),
   },
 };
 
