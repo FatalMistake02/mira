@@ -8,7 +8,6 @@
 - [x] Start on startup
 - [x] Onboarding
 - [x] Fix bugs/issues
-- [ ] Right-click menu (most actions don't work properly)
 - [ ] Improve performance
 - [x] Fix links not able to open new tabs
 - [x] Fix some link types not working
