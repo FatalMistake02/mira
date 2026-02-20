@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  History,
+  Plus,
+  Printer,
+  RotateCw,
+  Settings2,
+  SquareArrowOutUpRight,
+  X,
+} from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import DownloadButton from './DownloadButton';
 import { getBrowserSettings, getSearchUrlFromInput } from '../features/settings/browserSettings';
@@ -19,6 +31,15 @@ function ForwardIcon() {
 
 type AddressBarProps = {
   inputRef?: React.RefObject<HTMLInputElement | null>;
+};
+
+type AddressMenuAction = {
+  id: string;
+  label: string;
+  shortcut?: string;
+  icon: React.ComponentType<{ size?: string | number; className?: string }>;
+  danger?: boolean;
+  onSelect: () => void;
 };
 
 export default function AddressBar({ inputRef }: AddressBarProps) {
@@ -167,6 +188,74 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     return () => window.removeEventListener('mousedown', onPointerDown);
   }, [menuOpen]);
 
+  const openSettings = () => {
+    const existingSettingsTab = tabs.find((tab) => tab.url === 'mira://Settings');
+
+    if (existingSettingsTab) {
+      setActive(existingSettingsTab.id);
+    } else if (activeTab?.url === newTabPage) {
+      navigate('mira://Settings');
+    } else {
+      newTab('mira://Settings');
+    }
+  };
+
+  const menuActions: AddressMenuAction[] = [
+    {
+      id: 'new-tab',
+      label: 'New Tab',
+      shortcut: `${primaryModifierLabel}+T`,
+      icon: Plus,
+      onSelect: () => newTab(),
+    },
+    {
+      id: 'new-window',
+      label: 'New Window',
+      shortcut: `${primaryModifierLabel}+N`,
+      icon: SquareArrowOutUpRight,
+      onSelect: openNewWindow,
+    },
+    {
+      id: 'history',
+      label: 'History',
+      shortcut: `${primaryModifierLabel}+${electron?.isMacOS ? 'Y' : 'H'}`,
+      icon: History,
+      onSelect: openHistory,
+    },
+    {
+      id: 'downloads',
+      label: 'Downloads',
+      shortcut: `${primaryModifierLabel}+J`,
+      icon: Download,
+      onSelect: openDownloads,
+    },
+    {
+      id: 'print',
+      label: 'Print...',
+      shortcut: `${primaryModifierLabel}+P`,
+      icon: Printer,
+      onSelect: printPage,
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: Settings2,
+      onSelect: openSettings,
+    },
+    {
+      id: 'close-window',
+      label: 'Close Window',
+      icon: X,
+      danger: true,
+      onSelect: closeWindow,
+    },
+  ];
+
+  const onSelectMenuAction = (action: AddressMenuAction) => {
+    action.onSelect();
+    setMenuOpen(false);
+  };
+
   return (
     <div
       style={{
@@ -265,7 +354,11 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         <button
           onClick={() => setMenuOpen((prev) => !prev)}
           title="Menu"
-          className="theme-btn theme-btn-nav nav-icon-btn"
+          className={`theme-btn theme-btn-nav nav-icon-btn address-menu-trigger ${
+            menuOpen ? 'address-menu-trigger-open' : ''
+          }`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
           style={{
             padding: '4px 8px',
             height: 'var(--layoutNavButtonHeight, 30px)',
@@ -275,108 +368,62 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
             marginLeft: 2,
           }}
         >
-          <ChevronDown size={16} strokeWidth={2.1} aria-hidden="true" />
+          <ChevronDown
+            size={16}
+            strokeWidth={2.1}
+            aria-hidden="true"
+            className="address-menu-trigger-icon"
+          />
         </button>
 
         {menuOpen && (
           <div
-            className="theme-panel"
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 6px)',
-              right: 0,
-              minWidth: 160,
-              borderRadius: 8,
-              overflow: 'hidden',
-              zIndex: 1200,
-              padding: 6,
-            }}
+            className="theme-panel address-menu-panel"
+            role="menu"
+            aria-label="Browser menu"
+            style={{ zIndex: 1200 }}
           >
-            <button
-              type="button"
-              className="theme-btn theme-btn-nav"
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
-              onClick={() => {
-                newTab();
-                setMenuOpen(false);
-              }}
-            >
-              New Tab ({primaryModifierLabel}+T)
-            </button>
-            <button
-              type="button"
-              className="theme-btn theme-btn-nav"
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
-              onClick={() => {
-                openNewWindow();
-                setMenuOpen(false);
-              }}
-            >
-              New Window ({primaryModifierLabel}+N)
-            </button>
-            <button
-              type="button"
-              className="theme-btn theme-btn-nav"
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
-              onClick={() => {
-                openHistory();
-                setMenuOpen(false);
-              }}
-            >
-              History ({primaryModifierLabel}+{electron?.isMacOS ? "Y" : "H"})
-            </button>
-            <button
-              type="button"
-              className="theme-btn theme-btn-nav"
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
-              onClick={() => {
-                openDownloads();
-                setMenuOpen(false);
-              }}
-            >
-              Downloads ({primaryModifierLabel}+J)
-            </button>
-            <button
-              type="button"
-              className="theme-btn theme-btn-nav"
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
-              onClick={() => {
-                printPage();
-                setMenuOpen(false);
-              }}
-            >
-              Print... ({primaryModifierLabel}+P)
-            </button>
-            <button
-              type="button"
-              className="theme-btn theme-btn-nav"
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
-              onClick={() => {
-                const existingSettingsTab = tabs.find((tab) => tab.url === 'mira://Settings');
-
-                if (existingSettingsTab) {
-                  setActive(existingSettingsTab.id);
-                } else if (activeTab?.url === newTabPage) {
-                  navigate('mira://Settings');
-                } else {
-                  newTab('mira://Settings');
-                }
-                setMenuOpen(false);
-              }}
-            >
-              Settings
-            </button>
-            <button
-              type="button"
-              className="theme-btn theme-btn-nav"
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px' }}
-              onClick={() => {
-                closeWindow();
-                setMenuOpen(false);
-              }}
-            >
-              Close
-            </button>
+            {menuActions.slice(0, 6).map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  role="menuitem"
+                  className={`theme-btn address-menu-item ${action.danger ? 'address-menu-item-danger' : ''}`}
+                  onClick={() => onSelectMenuAction(action)}
+                >
+                  <Icon size={14} className="address-menu-item-icon" />
+                  <span className="address-menu-item-label">{action.label}</span>
+                  {action.shortcut ? (
+                    <span className="address-menu-item-shortcut">{action.shortcut}</span>
+                  ) : (
+                    <span className="address-menu-item-shortcut address-menu-item-shortcut-empty" />
+                  )}
+                </button>
+              );
+            })}
+            <hr className="address-menu-divider" />
+            {menuActions.slice(6).map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  role="menuitem"
+                  className={`theme-btn address-menu-item ${action.danger ? 'address-menu-item-danger' : ''}`}
+                  onClick={() => onSelectMenuAction(action)}
+                >
+                  <Icon size={14} className="address-menu-item-icon" />
+                  <span className="address-menu-item-label">{action.label}</span>
+                  {action.shortcut ? (
+                    <span className="address-menu-item-shortcut">{action.shortcut}</span>
+                  ) : (
+                    <span className="address-menu-item-shortcut address-menu-item-shortcut-empty" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

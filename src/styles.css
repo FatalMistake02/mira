@@ -1057,6 +1057,147 @@ body {
   background: linear-gradient(to left, var(--surfaceBg, var(--tabBg)), transparent);
 }
 
+.address-menu-trigger {
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.address-menu-trigger-icon {
+  transition: transform 160ms ease;
+}
+
+.address-menu-trigger-open {
+  background: var(--navButtonBgActive, var(--buttonBgActive));
+  color: var(--navButtonTextActive, var(--buttonTextActive));
+}
+
+.address-menu-trigger-open .address-menu-trigger-icon {
+  transform: rotate(180deg);
+}
+
+.address-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(280px, calc(100vw - 20px));
+  padding: 8px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-color: color-mix(
+    in srgb,
+    var(--surfaceBorder, var(--tabBorder)) 78%,
+    var(--accentPrimary, #8f8f85) 22%
+  );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surfaceBgHover, var(--tabBgHover)) 88%, transparent),
+    color-mix(in srgb, var(--surfaceBg, var(--tabBg)) 95%, transparent)
+  );
+  box-shadow: var(--dropdownShadow);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.address-menu-item {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--surfaceText, var(--tabText));
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.25;
+  padding: 7px 9px;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.address-menu-item:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--navButtonBgHover, var(--buttonBgHover)) 88%,
+    var(--accentPrimarySoft, #77776f) 12%
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--navButtonBorderHover, var(--buttonBorderHover)) 78%,
+    var(--accentPrimarySoft, #77776f) 22%
+  );
+  color: var(--surfaceTextHover, var(--tabTextHover));
+}
+
+.address-menu-item:active:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--navButtonBgActive, var(--buttonBgActive)) 84%,
+    var(--accentPrimary, #8f8f85) 16%
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--navButtonBorderActive, var(--buttonBorderActive)) 74%,
+    var(--accentPrimary, #8f8f85) 26%
+  );
+}
+
+.address-menu-item-icon {
+  opacity: 0.88;
+}
+
+.address-menu-item-label {
+  min-width: 0;
+}
+
+.address-menu-item-shortcut {
+  margin-left: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0.76;
+  letter-spacing: 0.01em;
+  color: var(--text3);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
+.address-menu-item-shortcut-empty {
+  visibility: hidden;
+}
+
+.address-menu-item-danger:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--windowCloseButtonBgHover, #e81123) 16%,
+    var(--navButtonBgHover, var(--buttonBgHover)) 84%
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--windowCloseButtonBgHover, #e81123) 32%,
+    var(--navButtonBorderHover, var(--buttonBorderHover)) 68%
+  );
+}
+
+.address-menu-item-danger:active:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--windowCloseButtonBgActive, #c50f1f) 20%,
+    var(--navButtonBgActive, var(--buttonBgActive)) 80%
+  );
+}
+
+.address-menu-divider {
+  border: 0;
+  height: 1px;
+  margin: 3px 2px;
+  background: color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 76%, transparent);
+}
+
 .mira-context-menu {
   position: fixed;
   display: flex;
