@@ -21,6 +21,7 @@
 ## v1.0.0 — Stable Release
 - [ ] Improve performance
 - [ ] Fix default browser
+- [ ] Fix auto update 
  
 ## v1.1.0
 - [ ] Bookmarks and favorites
