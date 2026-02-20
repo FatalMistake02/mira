@@ -124,6 +124,8 @@ const AD_BLOCK_CACHE_FILE = 'adblock-hosts-v1.txt';
 const AD_BLOCK_FETCH_TIMEOUT_MS = 15000;
 const AD_BLOCK_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TRACKER_BLOCK_LOCAL_FILE = path.join('src', 'assets', 'trackers.txt');
+const YOUTUBE_AD_CPN_TTL_MS = 30 * 60 * 1000;
+const MAX_TRACKED_YOUTUBE_AD_CPNS = 512;
 
 const DEFAULT_BLOCKED_AD_HOSTS = [
   'doubleclick.net',
@@ -196,7 +198,7 @@ function buildBlockRuleIndex(rules: Set<string>): BlockRuleIndex {
     const host = rule.slice(0, slashIndex);
     const rulePath = rule.slice(slashIndex);
     if (!host || !rulePath || rulePath === '/') {
-      hosts.add(host);
+      if (host) hosts.add(host);
       continue;
     }
 
@@ -213,6 +215,81 @@ function buildBlockRuleIndex(rules: Set<string>): BlockRuleIndex {
 
 let blockedTrackerRuleIndex = buildBlockRuleIndex(blockedTrackerRules);
 let blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
+const trackedYoutubeAdCpns = new Map<string, number>();
+
+function isYoutubeHost(hostname: string): boolean {
+  return hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
+}
+
+function isGoogleVideoHost(hostname: string): boolean {
+  return hostname === 'googlevideo.com' || hostname.endsWith('.googlevideo.com');
+}
+
+function normalizeCpnToken(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (normalized.length > 128) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(normalized)) return null;
+  return normalized;
+}
+
+function pruneTrackedYoutubeAdCpns(now: number): void {
+  for (const [cpn, expiresAt] of trackedYoutubeAdCpns) {
+    if (expiresAt <= now) trackedYoutubeAdCpns.delete(cpn);
+  }
+}
+
+function rememberYoutubeAdCpn(cpn: string, now: number): void {
+  pruneTrackedYoutubeAdCpns(now);
+  trackedYoutubeAdCpns.set(cpn, now + YOUTUBE_AD_CPN_TTL_MS);
+
+  if (trackedYoutubeAdCpns.size <= MAX_TRACKED_YOUTUBE_AD_CPNS) return;
+  const oldest = Array.from(trackedYoutubeAdCpns.entries()).sort((a, b) => a[1] - b[1]);
+  const overflow = trackedYoutubeAdCpns.size - MAX_TRACKED_YOUTUBE_AD_CPNS;
+  for (let i = 0; i < overflow; i += 1) {
+    const entry = oldest[i];
+    if (!entry) break;
+    trackedYoutubeAdCpns.delete(entry[0]);
+  }
+}
+
+function rememberYoutubeAdCpnFromUrl(parsed: URL): void {
+  const host = parsed.hostname.toLowerCase();
+  if (!isYoutubeHost(host)) return;
+
+  const pathname = parsed.pathname.toLowerCase();
+  const isAdSignalPath =
+    pathname.startsWith('/api/stats/ads') ||
+    pathname.startsWith('/pcs/activeview') ||
+    pathname.startsWith('/pagead/interaction') ||
+    pathname.startsWith('/pagead/adview');
+  if (!isAdSignalPath) return;
+
+  const adCpn = normalizeCpnToken(parsed.searchParams.get('ad_cpn'));
+  if (!adCpn) return;
+  rememberYoutubeAdCpn(adCpn, Date.now());
+}
+
+function shouldBlockYouTubeAdPlaybackByCpn(parsed: URL): boolean {
+  if (!adBlockEnabled) return false;
+
+  const host = parsed.hostname.toLowerCase();
+  const pathname = parsed.pathname.toLowerCase();
+  if (!isGoogleVideoHost(host) || pathname !== '/videoplayback') return false;
+
+  const cpn = normalizeCpnToken(parsed.searchParams.get('cpn'));
+  if (!cpn) return false;
+
+  const now = Date.now();
+  pruneTrackedYoutubeAdCpns(now);
+  const expiresAt = trackedYoutubeAdCpns.get(cpn);
+  if (!expiresAt || expiresAt <= now) {
+    if (expiresAt) trackedYoutubeAdCpns.delete(cpn);
+    return false;
+  }
+  return true;
+}
 
 interface WindowTitleBarOverlayState {
   color: string;
@@ -525,6 +602,8 @@ function shouldBlockRequest(url: string, resourceType: string): boolean {
 
     const host = parsed.hostname.toLowerCase();
     const pathname = parsed.pathname.toLowerCase();
+    rememberYoutubeAdCpnFromUrl(parsed);
+    if (shouldBlockYouTubeAdPlaybackByCpn(parsed)) return true;
     const adBlocked = adBlockEnabled && isBlockedByRules(host, pathname, blockedAdRuleIndex);
     const trackerBlocked = trackerBlockEnabled && isBlockedByRules(host, pathname, blockedTrackerRuleIndex);
     return adBlocked || trackerBlocked;
@@ -1947,6 +2026,7 @@ function setupAdBlocker() {
 
   ipcMain.handle('settings-set-ad-block-enabled', async (_, enabled: unknown) => {
     adBlockEnabled = enabled !== false;
+    if (!adBlockEnabled) trackedYoutubeAdCpns.clear();
     return adBlockEnabled;
   });
 
