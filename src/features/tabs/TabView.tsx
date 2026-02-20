@@ -291,6 +291,10 @@ export default function TabView() {
   });
   const [pageMenuState, setPageMenuState] = useState<PageContextMenuState | null>(null);
   const lastNativeContextCommandRef = React.useRef<{ signature: string; at: number } | null>(null);
+  const isMacOS = electron?.isMacOS ?? false;
+  const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
+  const redoShortcutLabel = isMacOS ? 'Cmd+Shift+Z' : 'Ctrl+Y';
+  const inspectShortcutLabel = isMacOS ? 'Cmd+Opt+I' : 'F12';
 
   useEffect(() => {
     const syncSettings = () => {
@@ -531,42 +535,52 @@ export default function TabView() {
     const item = (
       label: string,
       onSelect: () => void,
-      options?: { disabled?: boolean },
+      options?: { disabled?: boolean; shortcut?: string },
     ): ContextMenuEntry => ({
       type: 'item',
       label,
+      shortcut: options?.shortcut,
       onSelect,
       disabled: options?.disabled,
     });
     const separator = (): ContextMenuEntry => ({ type: 'separator' });
-    const inspectEntry = item('Inspect', () =>
-      runWebviewContextAction('inspect-element', { x: params.x, y: params.y }),
+    const inspectEntry = item(
+      'Inspect',
+      () => runWebviewContextAction('inspect-element', { x: params.x, y: params.y }),
+      { shortcut: inspectShortcutLabel },
     );
 
     if (params.isEditable) {
       return [
         item('Undo', () => runWebviewContextAction('edit-undo'), {
           disabled: !params.editFlags.canUndo,
+          shortcut: `${primaryShortcutLabel}+Z`,
         }),
         item('Redo', () => runWebviewContextAction('edit-redo'), {
           disabled: !params.editFlags.canRedo,
+          shortcut: redoShortcutLabel,
         }),
         separator(),
         item('Cut', () => runWebviewContextAction('edit-cut'), {
           disabled: !params.editFlags.canCut,
+          shortcut: `${primaryShortcutLabel}+X`,
         }),
         item('Copy', () => runWebviewContextAction('edit-copy'), {
           disabled: !params.editFlags.canCopy,
+          shortcut: `${primaryShortcutLabel}+C`,
         }),
         item('Paste', () => runWebviewContextAction('edit-paste'), {
           disabled: !params.editFlags.canPaste,
+          shortcut: `${primaryShortcutLabel}+V`,
         }),
         item('Paste as Plain Text', () => runWebviewContextAction('edit-paste-as-plain-text'), {
           disabled: !params.editFlags.canPasteAndMatchStyle,
+          shortcut: `${primaryShortcutLabel}+Shift+V`,
         }),
         separator(),
         item('Select All', () => runWebviewContextAction('edit-select-all'), {
           disabled: !params.editFlags.canSelectAll,
+          shortcut: `${primaryShortcutLabel}+A`,
         }),
         separator(),
         inspectEntry,
@@ -623,15 +637,18 @@ export default function TabView() {
     }
 
     return [
-      item('Back', () => goBack(), { disabled: !canGoBack }),
-      item('Forward', () => goForward(), { disabled: !canGoForward }),
-      item('Reload', () => reload()),
+      item('Back', () => goBack(), { disabled: !canGoBack, shortcut: 'Alt+Left' }),
+      item('Forward', () => goForward(), { disabled: !canGoForward, shortcut: 'Alt+Right' }),
+      item('Reload', () => reload(), { shortcut: `${primaryShortcutLabel}+R` }),
       separator(),
-      item('Save As', () => runWebviewContextAction('save-page-as')),
-      item('Print', () => printPage()),
+      item('Save As', () => runWebviewContextAction('save-page-as'), {
+        shortcut: `${primaryShortcutLabel}+S`,
+      }),
+      item('Print', () => printPage(), { shortcut: `${primaryShortcutLabel}+P` }),
       separator(),
       item('View Source', () => openInNewTabFromMenu(`view-source:${sourceUrl}`), {
         disabled: !sourceUrl,
+        shortcut: `${primaryShortcutLabel}+U`,
       }),
       inspectEntry,
     ];
@@ -644,6 +661,9 @@ export default function TabView() {
     reload,
     printPage,
     runWebviewContextAction,
+    inspectShortcutLabel,
+    primaryShortcutLabel,
+    redoShortcutLabel,
   ]);
 
   return (

@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
 import miraLogo from '../../assets/mira_logo.png';
 import ContextMenu, { type ContextMenuEntry } from '../../components/ContextMenu';
+import { electron } from '../../electronBridge';
 
 const TAB_TARGET_WIDTH = 'var(--layoutTabTargetWidth, 220px)';
 const TAB_MIN_WIDTH = 'var(--layoutTabMinWidth, 100px)';
@@ -65,6 +66,8 @@ export default function TabBar() {
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const isMacOS = electron?.isMacOS ?? false;
+  const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const prevTabCountRef = useRef(tabs.length);
   const tabElementRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -144,6 +147,7 @@ export default function TabBar() {
       {
         type: 'item',
         label: 'Reload',
+        shortcut: `${primaryShortcutLabel}+R`,
         onSelect: () => reloadTab(tabMenuState.tabId),
       },
       {
@@ -155,6 +159,7 @@ export default function TabBar() {
       {
         type: 'item',
         label: 'Close',
+        shortcut: `${primaryShortcutLabel}+W`,
         onSelect: () => closeTab(tabMenuState.tabId),
       },
       {
@@ -179,6 +184,7 @@ export default function TabBar() {
     closeTab,
     closeOtherTabs,
     closeTabsToRight,
+    primaryShortcutLabel,
   ]);
 
   useEffect(() => {

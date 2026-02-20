@@ -1088,6 +1088,20 @@ body {
   font-size: 13px;
   line-height: 1.25;
   cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mira-context-menu-item-label {
+  min-width: 0;
+}
+
+.mira-context-menu-item-shortcut {
+  margin-left: auto;
+  opacity: 0.72;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .mira-context-menu-item:hover:not(:disabled) {

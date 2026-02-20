@@ -4,6 +4,7 @@ export type ContextMenuEntry =
   | {
       type: 'item';
       label: string;
+      shortcut?: string;
       onSelect: () => void;
       disabled?: boolean;
     }
@@ -143,7 +144,10 @@ export default function ContextMenu({
               }, 0);
             }}
           >
-            {entry.label}
+            <span className="mira-context-menu-item-label">{entry.label}</span>
+            {entry.shortcut ? (
+              <span className="mira-context-menu-item-shortcut">{entry.shortcut}</span>
+            ) : null}
           </button>
           );
         })}

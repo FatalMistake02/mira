@@ -2374,17 +2374,20 @@ function setupWindowControlsHandlers() {
       command: string,
       options?: {
         enabled?: boolean;
+        accelerator?: string;
         extra?: Record<string, unknown>;
       },
     ) => ({
       label,
       enabled: options?.enabled ?? true,
+      accelerator: options?.accelerator,
       click: () => {
         sendCommand(command, options?.extra);
       },
     });
 
     const inspectEntry = menuItem('Inspect', 'inspect-element', {
+      accelerator: isMacOS ? 'Command+Alt+I' : 'F12',
       extra: {
         x: x ?? 0,
         y: y ?? 0,
@@ -2394,17 +2397,27 @@ function setupWindowControlsHandlers() {
     let template: MenuItemConstructorOptions[] = [];
     if (isEditable) {
       template = [
-        menuItem('Undo', 'edit-undo', { enabled: canUndo }),
-        menuItem('Redo', 'edit-redo', { enabled: canRedo }),
-        { type: 'separator' },
-        menuItem('Cut', 'edit-cut', { enabled: canCut }),
-        menuItem('Copy', 'edit-copy', { enabled: canCopy }),
-        menuItem('Paste', 'edit-paste', { enabled: canPaste }),
-        menuItem('Paste as Plain Text', 'edit-paste-as-plain-text', {
-          enabled: canPasteAndMatchStyle,
+        menuItem('Undo', 'edit-undo', {
+          enabled: canUndo,
+          accelerator: 'CommandOrControl+Z',
+        }),
+        menuItem('Redo', 'edit-redo', {
+          enabled: canRedo,
+          accelerator: isMacOS ? 'Shift+Command+Z' : 'CommandOrControl+Y',
         }),
         { type: 'separator' },
-        menuItem('Select All', 'edit-select-all', { enabled: canSelectAll }),
+        menuItem('Cut', 'edit-cut', { enabled: canCut, accelerator: 'CommandOrControl+X' }),
+        menuItem('Copy', 'edit-copy', { enabled: canCopy, accelerator: 'CommandOrControl+C' }),
+        menuItem('Paste', 'edit-paste', { enabled: canPaste, accelerator: 'CommandOrControl+V' }),
+        menuItem('Paste as Plain Text', 'edit-paste-as-plain-text', {
+          enabled: canPasteAndMatchStyle,
+          accelerator: isMacOS ? 'Shift+Command+V' : 'CommandOrControl+Shift+V',
+        }),
+        { type: 'separator' },
+        menuItem('Select All', 'edit-select-all', {
+          enabled: canSelectAll,
+          accelerator: 'CommandOrControl+A',
+        }),
         { type: 'separator' },
         inspectEntry,
       ];
@@ -2474,15 +2487,16 @@ function setupWindowControlsHandlers() {
       ];
     } else {
       template = [
-        menuItem('Back', 'go-back', { enabled: canGoBack }),
-        menuItem('Forward', 'go-forward', { enabled: canGoForward }),
-        menuItem('Reload', 'reload'),
+        menuItem('Back', 'go-back', { enabled: canGoBack, accelerator: 'Alt+Left' }),
+        menuItem('Forward', 'go-forward', { enabled: canGoForward, accelerator: 'Alt+Right' }),
+        menuItem('Reload', 'reload', { accelerator: 'CommandOrControl+R' }),
         { type: 'separator' },
-        menuItem('Save As', 'save-page-as'),
-        menuItem('Print', 'print'),
+        menuItem('Save As', 'save-page-as', { accelerator: 'CommandOrControl+S' }),
+        menuItem('Print', 'print', { accelerator: 'CommandOrControl+P' }),
         { type: 'separator' },
         menuItem('View Source', 'open-url-in-new-tab', {
           enabled: !!viewSourceUrl && canOpenInNewTab(viewSourceUrl),
+          accelerator: 'CommandOrControl+U',
           extra: {
             url: viewSourceUrl,
             baseUrl: pageURL,
@@ -2521,15 +2535,19 @@ function setupWindowControlsHandlers() {
       : null;
 
     const menu = Menu.buildFromTemplate([
-      { label: 'Undo', role: 'undo' },
-      { label: 'Redo', role: 'redo' },
+      { label: 'Undo', role: 'undo', accelerator: 'CommandOrControl+Z' },
+      { label: 'Redo', role: 'redo', accelerator: isMacOS ? 'Shift+Command+Z' : 'CommandOrControl+Y' },
       { type: 'separator' },
-      { label: 'Cut', role: 'cut' },
-      { label: 'Copy', role: 'copy' },
-      { label: 'Paste', role: 'paste' },
-      { label: 'Paste as Plain Text', role: 'pasteAndMatchStyle' },
+      { label: 'Cut', role: 'cut', accelerator: 'CommandOrControl+X' },
+      { label: 'Copy', role: 'copy', accelerator: 'CommandOrControl+C' },
+      { label: 'Paste', role: 'paste', accelerator: 'CommandOrControl+V' },
+      {
+        label: 'Paste as Plain Text',
+        role: 'pasteAndMatchStyle',
+        accelerator: isMacOS ? 'Shift+Command+V' : 'CommandOrControl+Shift+V',
+      },
       { type: 'separator' },
-      { label: 'Select All', role: 'selectAll' },
+      { label: 'Select All', role: 'selectAll', accelerator: 'CommandOrControl+A' },
     ]);
 
     try {
