@@ -4,6 +4,7 @@
 - [ ] Improve performance
 - [ ] Fix default browser
 - [ ] Fix auto update 
+- [ ] Fix target="_blank" links
  
 ## v1.1.0
 - [ ] Bookmarks and favorites
