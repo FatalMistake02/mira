@@ -112,6 +112,8 @@ export function useKeyboardShortcuts({
       const key = e.key.toLowerCase();
       const isPageUp = key === 'pageup';
       const isPageDown = key === 'pagedown';
+      const isArrowUp = key === 'arrowup';
+      const isArrowDown = key === 'arrowdown';
       const isSpace = e.key === ' ' || key === 'spacebar';
 
       if (isPrimaryModifier && !e.shiftKey && key === 't') {
@@ -370,14 +372,14 @@ export function useKeyboardShortcuts({
       }
 
       if (!isPrimaryModifier && !e.altKey && !e.ctrlKey && !e.metaKey) {
-        if ((!e.shiftKey && isSpace) || isPageDown) {
+        if ((!e.shiftKey && isSpace && !isEditableTarget) || (isArrowDown && !isEditableTarget) || isPageDown) {
           e.preventDefault();
           e.stopPropagation();
           scrollPage('page-down');
           return;
         }
 
-        if ((e.shiftKey && isSpace) || isPageUp) {
+        if ((e.shiftKey && isSpace && !isEditableTarget) || (isArrowUp && !isEditableTarget) || isPageUp) {
           e.preventDefault();
           e.stopPropagation();
           scrollPage('page-up');
