@@ -18,6 +18,7 @@
 - Add search engine settings
 - Add dev settings
 - Add most common shortcuts
+- _blank and data-link links work now
 
 ## v0.8.1 - 2026-02-17
 

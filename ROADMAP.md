@@ -10,8 +10,8 @@
 - [x] Fix bugs/issues
 - [ ] Right-click menu (most actions don't work properly)
 - [ ] Improve performance
-- [ ] Fix links not able to open new tabs
-- [ ] Fix some link types not working
+- [x] Fix links not able to open new tabs
+- [x] Fix some link types not working
 - [x] Add about:blank 
 - [x] All shortcuts
 - [ ] Fix shortcuts not always working

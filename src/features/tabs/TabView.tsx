@@ -58,6 +58,12 @@ interface WebviewContextMenuEvent extends Event {
   params?: WebviewContextMenuParams;
 }
 
+interface WebviewNewWindowEvent extends Event {
+  url?: string;
+  frameName?: string;
+  disposition?: string;
+}
+
 interface WebviewElement extends HTMLElement {
   src: string;
   reload: () => void;
@@ -78,6 +84,7 @@ interface WebviewElement extends HTMLElement {
   pageFaviconUpdatedHandler?: (e: WebviewPageFaviconUpdatedEvent) => void;
   foundInPageHandler?: (e: WebviewFoundInPageEvent) => void;
   contextMenuHandler?: (e: WebviewContextMenuEvent) => void;
+  newWindowHandler?: (e: WebviewNewWindowEvent) => void;
 }
 
 interface NormalizedContextMenuEditFlags {
@@ -541,6 +548,9 @@ export default function TabView() {
                   if (wv.contextMenuHandler) {
                     wv.removeEventListener('context-menu', wv.contextMenuHandler as EventListener);
                   }
+                  if (wv.newWindowHandler) {
+                    wv.removeEventListener('new-window', wv.newWindowHandler as EventListener);
+                  }
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
@@ -555,6 +565,35 @@ export default function TabView() {
                   };
                   const domReadyHandler = () => {
                     applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
+                    // Inject script to handle data-link attributes
+                    const dataLinkScript = `(() => {
+  document.addEventListener('click', (e) => {
+    const target = e.target instanceof Element ? e.target : e.target?.parentElement;
+    if (!target) return;
+    
+    // Handle data-link attribute
+    const element = target.closest('[data-link]');
+    if (element) {
+      const link = element.getAttribute('data-link');
+      if (link) {
+        const newTabAttr = element.getAttribute('data-link-new-tab');
+        const openNewTab = newTabAttr === 'true' || newTabAttr === '';
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (openNewTab) {
+          // Use window.open to trigger new-window event (opens in new tab)
+          window.open(link, '_blank', 'noopener,noreferrer');
+        } else {
+          // Navigate in current tab
+          window.location.href = link;
+        }
+      }
+    }
+  }, true);
+})();`;
+                    wv.executeJavaScript(dataLinkScript).catch(() => undefined);
                   };
                   const didPageTitleUpdatedHandler = (e: Event) => {
                     const ev = e as WebviewPageTitleUpdatedEvent;
@@ -608,6 +647,33 @@ export default function TabView() {
                       params,
                     });
                   };
+                  const newWindowHandler = (e: Event) => {
+                    const ev = e as WebviewNewWindowEvent;
+                    const url = typeof ev.url === 'string' ? ev.url.trim() : '';
+                    const disposition = typeof ev.disposition === 'string' ? ev.disposition.toLowerCase() : '';
+                    
+                    if (!url) {
+                      e.preventDefault();
+                      return;
+                    }
+                    
+                    // Prevent the default behavior of opening in a new window
+                    e.preventDefault();
+                    
+                    // Open in a new tab based on disposition
+                    if (disposition === 'new-window') {
+                      // Open in new window
+                      const ipc = electron?.ipcRenderer;
+                      if (ipc) {
+                        void ipc.invoke('window-new-with-url', url).catch(() => undefined);
+                      } else {
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      }
+                    } else {
+                      // Open in new tab (default for target="_blank")
+                      newTab(url, { activate: true });
+                    }
+                  };
 
                   wv.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
                   wv.didNavigateInPageHandler = didNavigateInPageHandler as (
@@ -624,6 +690,7 @@ export default function TabView() {
                     e: WebviewFoundInPageEvent,
                   ) => void;
                   wv.contextMenuHandler = contextMenuHandler as (e: WebviewContextMenuEvent) => void;
+                  wv.newWindowHandler = newWindowHandler as (e: WebviewNewWindowEvent) => void;
 
                   wv.addEventListener('did-navigate', didNavigateHandler);
                   wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
@@ -632,6 +699,7 @@ export default function TabView() {
                   wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
                   wv.addEventListener('found-in-page', foundInPageHandler);
                   wv.addEventListener('context-menu', contextMenuHandler);
+                  wv.addEventListener('new-window', newWindowHandler);
 
                   const trackedSrc = wv.getAttribute(WEBVIEW_TRACKED_SRC_ATTR) ?? '';
                   const nextSrc = normalizeComparableUrl(tab.url);
