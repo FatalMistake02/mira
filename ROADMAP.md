@@ -7,6 +7,7 @@
 - [ ] Fix target="_blank" links
 
 ## v1.1.0
+- [ ] Ad blocker blocks Youtube videos
 - [ ] Bookmarks and favorites
       Bookmark page: Ctrl+D
       Bookmark all tabs: Ctrl+Shift+D
@@ -20,7 +21,6 @@
       New private window: Ctrl+Shift+N
 
 ## v1.2.0
-- [ ] Ad blocker blocks Youtube videos
 - [ ] Tab groups and colors
 - [ ] Vertical tabs sidebar
 - [ ] Split view tabs
