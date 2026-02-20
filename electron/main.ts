@@ -499,7 +499,12 @@ function isBlockedByRules(hostname: string, pathname: string, index: BlockRuleIn
     const pathRules = index.hostPaths.get(candidate);
     if (pathRules) {
       for (const pathRule of pathRules) {
-        if (normalizedPathname.startsWith(pathRule)) return true;
+        if (
+          normalizedPathname === pathRule ||
+          normalizedPathname.startsWith(pathRule + '/') ||
+          normalizedPathname.startsWith(pathRule + '?') ||
+          normalizedPathname.startsWith(pathRule + '#')
+        ) return true;
       }
     }
 
