@@ -108,12 +108,39 @@ jobs:
 
           worktree_dir="$(mktemp -d)"
           git worktree add "$worktree_dir" "origin/$default_branch"
-
-          cp apps/desktop/package.json "$worktree_dir/apps/desktop/package.json"
-          cp package-lock.json "$worktree_dir/package-lock.json"
-          cp CHANGELOG.md "$worktree_dir/CHANGELOG.md"
-
           cd "$worktree_dir"
+          npm version ${{ steps.tag_version.outputs.version }} --workspace apps/desktop --no-git-tag-version
+
+          changelog_file="CHANGELOG.md"
+          release_date="$(date -u +%Y-%m-%d)"
+          release_heading="## v${{ steps.tag_version.outputs.version }} - $release_date"
+
+          if ! grep -qF "$release_heading" "$changelog_file"; then
+            if ! grep -qE '^## Unreleased$' "$changelog_file"; then
+              echo "CHANGELOG.md does not contain an '## Unreleased' section."
+              exit 1
+            fi
+
+            tmp_file="$(mktemp)"
+            awk -v heading="$release_heading" '
+              BEGIN { replaced=0 }
+              !replaced && $0=="## Unreleased" {
+                print "## Unreleased"
+                print ""
+                print heading
+                replaced=1
+                next
+              }
+              { print }
+              END {
+                if (!replaced) {
+                  exit 1
+                }
+              }
+            ' "$changelog_file" > "$tmp_file"
+            mv "$tmp_file" "$changelog_file"
+          fi
+
           git add apps/desktop/package.json package-lock.json CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No package/changelog changes to commit."
