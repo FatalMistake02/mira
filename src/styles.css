@@ -288,6 +288,24 @@ body {
   color: var(--downloadButtonTextActive, var(--buttonTextActive));
 }
 
+.theme-btn-go {
+  background: color-mix(in srgb, var(--accentPrimary) 8%, var(--navButtonBg, var(--buttonBg)));
+  border: 1px solid color-mix(in srgb, var(--accentPrimary) 32%, var(--navButtonBorder, var(--buttonBorder)));
+  color: var(--accentText);
+}
+
+.theme-btn-go:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accentPrimary) 16%, var(--navButtonBgHover, var(--buttonBgHover)));
+  border-color: color-mix(in srgb, var(--accentPrimary) 48%, var(--navButtonBorderHover, var(--buttonBorderHover)));
+  color: var(--accentText);
+}
+
+.theme-btn-go:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accentPrimary) 24%, var(--navButtonBgActive, var(--buttonBgActive)));
+  border-color: color-mix(in srgb, var(--accentPrimary) 64%, var(--navButtonBorderActive, var(--buttonBorderActive)));
+  color: var(--accentText);
+}
+
 .settings-page {
   padding: 24px;
   max-width: 980px;
