@@ -16,4 +16,7 @@ declare global {
   }
 }
 
+/**
+ * Typed access point for the preload bridge injected by Electron.
+ */
 export const electron = window.electron;

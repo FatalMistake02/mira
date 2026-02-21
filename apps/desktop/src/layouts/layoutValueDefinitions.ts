@@ -194,10 +194,16 @@ export const LAYOUT_VALUE_DEFINITIONS: LayoutValueDefinition[] = [
 
 const displayNameByKey = new Map(LAYOUT_VALUE_DEFINITIONS.map((entry) => [entry.key, entry.label]));
 
+/**
+ * Returns a human-readable label for a layout value key.
+ */
 export function getLayoutValueDisplayName(key: string): string {
   return displayNameByKey.get(key) ?? key;
 }
 
+/**
+ * Builds the default layout variable map from definition metadata.
+ */
 export function getDefaultLayoutValues(): Record<string, string> {
   return Object.fromEntries(
     LAYOUT_VALUE_DEFINITIONS.map((entry) => [entry.key, entry.defaultValue]),

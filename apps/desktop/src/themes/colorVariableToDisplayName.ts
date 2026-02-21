@@ -79,6 +79,10 @@ function splitCamelCase(value: string): string {
   return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 }
 
+/**
+ * Returns a user-facing label for a theme color token.
+ * Falls back to a prettified key name when no explicit label exists.
+ */
 export function getThemeColorDisplayName(key: string): string {
   const known = THEME_COLOR_DISPLAY_NAMES[key];
   if (known) return known;

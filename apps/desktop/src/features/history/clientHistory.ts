@@ -32,6 +32,9 @@ function saveLocal(entries: HistoryEntry[]) {
   localStorage.setItem(DEV_HISTORY_KEY, JSON.stringify(prune(entries)));
 }
 
+/**
+ * Adds a new visit entry unless the URL is internal or a near-duplicate of the latest visit.
+ */
 export async function addHistoryEntry(url: string, title: string): Promise<void> {
   const normalized = url.trim();
   if (!normalized || normalized.startsWith('mira://')) return;
@@ -62,6 +65,9 @@ export async function addHistoryEntry(url: string, title: string): Promise<void>
   ]);
 }
 
+/**
+ * Updates a stored history title for an existing URL, or creates an entry in fallback mode.
+ */
 export async function updateHistoryEntryTitle(url: string, title: string): Promise<boolean> {
   const normalizedUrl = url.trim();
   const normalizedTitle = title.trim();
@@ -96,6 +102,9 @@ export async function updateHistoryEntryTitle(url: string, title: string): Promi
   return true;
 }
 
+/**
+ * Returns history entries newest-first with retention pruning applied.
+ */
 export async function listHistoryEntries(): Promise<HistoryEntry[]> {
   if (electron?.ipcRenderer) {
     const list = await electron.ipcRenderer.invoke<HistoryEntry[]>('history-list');
@@ -107,6 +116,9 @@ export async function listHistoryEntries(): Promise<HistoryEntry[]> {
   return entries;
 }
 
+/**
+ * Deletes a single history record by id.
+ */
 export async function deleteHistoryEntry(id: string): Promise<boolean> {
   const normalizedId = id.trim();
   if (!normalizedId) return false;
@@ -122,6 +134,9 @@ export async function deleteHistoryEntry(id: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Clears all retained history entries.
+ */
 export async function clearHistoryEntries(): Promise<boolean> {
   if (electron?.ipcRenderer) {
     return !!(await electron.ipcRenderer.invoke<boolean>('history-clear'));

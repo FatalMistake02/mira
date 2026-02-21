@@ -88,12 +88,18 @@ const DownloadContext = createContext<{
   openFolder: (path: string) => void;
 } | null>(null);
 
+/**
+ * Returns the active download context.
+ */
 export const useDownloads = () => {
   const ctx = useContext(DownloadContext);
   if (!ctx) throw new Error('useDownloads must be used within DownloadProvider');
   return ctx;
 };
 
+/**
+ * Subscribes to download IPC events and exposes download state/actions to descendants.
+ */
 export default function DownloadProvider({ children }: { children: React.ReactNode }) {
   const [downloads, dispatch] = useReducer(reducer, []);
 

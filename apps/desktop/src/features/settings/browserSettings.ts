@@ -357,6 +357,9 @@ function normalizeDevSetting(value: unknown): boolean {
   return value;
 }
 
+/**
+ * Coerces arbitrary persisted data into a fully valid browser settings object.
+ */
 export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   if (typeof value !== 'object' || value === null) {
     return DEFAULT_BROWSER_SETTINGS;
@@ -404,10 +407,16 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
   };
 }
 
+/**
+ * Converts the tab sleep setting into milliseconds.
+ */
 export function getTabSleepAfterMs(settings: BrowserSettings): number {
   return settings.tabSleepValue * TAB_SLEEP_UNIT_TO_MS[settings.tabSleepUnit];
 }
 
+/**
+ * Builds a search URL for a query using the selected engine template.
+ */
 export function getSearchUrlForQuery(query: string, engine: SearchEngine): string {
   const searchQuery = new URLSearchParams({ q: query }).toString();
 
@@ -434,6 +443,9 @@ export function getSearchUrlForQuery(query: string, engine: SearchEngine): strin
   }
 }
 
+/**
+ * Returns the effective set of engine shortcut tokens (e.g. `!g`, `!d`).
+ */
 export function getSearchEngineShortcuts(
   shortcutPrefix: string,
   shortcutChars: SearchEngineShortcutChars,
@@ -448,6 +460,9 @@ export function getSearchEngineShortcuts(
   }));
 }
 
+/**
+ * Parses a user search input, applying engine shortcut overrides when enabled.
+ */
 export function parseSearchInput(
   input: string,
   fallbackEngine: SearchEngine,
@@ -498,6 +513,9 @@ export function parseSearchInput(
   };
 }
 
+/**
+ * Parses search input and returns a complete provider URL.
+ */
 export function getSearchUrlFromInput(
   input: string,
   fallbackEngine: SearchEngine,
@@ -515,6 +533,9 @@ export function getSearchUrlFromInput(
   return getSearchUrlForQuery(query, engine);
 }
 
+/**
+ * Reads and normalizes browser settings from local storage.
+ */
 export function getBrowserSettings(): BrowserSettings {
   try {
     const raw = localStorage.getItem(BROWSER_SETTINGS_STORAGE_KEY);
@@ -527,6 +548,9 @@ export function getBrowserSettings(): BrowserSettings {
   }
 }
 
+/**
+ * Merges, normalizes, persists, and broadcasts updated browser settings.
+ */
 export function saveBrowserSettings(next: Partial<BrowserSettings>): BrowserSettings {
   const merged = {
     ...getBrowserSettings(),

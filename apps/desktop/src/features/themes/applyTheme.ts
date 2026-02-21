@@ -2,6 +2,10 @@ import type { Theme } from '../../themes/types';
 
 let previouslyAppliedThemeKeys = new Set<string>();
 
+/**
+ * Applies theme color/font tokens as CSS custom properties on `:root`.
+ * Any tokens no longer present are removed.
+ */
 export function applyTheme(theme: Theme | null | undefined) {
   if (!theme || typeof theme !== 'object') return;
   if (!theme.colors || typeof theme.colors !== 'object') return;

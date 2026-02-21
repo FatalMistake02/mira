@@ -1,3 +1,6 @@
+/**
+ * In-memory tab model for navigation state and tab lifecycle flags.
+ */
 export type Tab = {
   id: string;
   url: string;
