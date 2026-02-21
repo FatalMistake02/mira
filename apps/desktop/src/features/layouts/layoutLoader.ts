@@ -127,6 +127,9 @@ function createCustomLayoutId(layout: Layout, existingIds: Set<string>): string 
   return candidate;
 }
 
+/**
+ * Returns bundled and custom layouts merged by id, with custom entries taking precedence.
+ */
 export function getAllLayouts(): LayoutEntry[] {
   const customEntries: LayoutEntry[] = readCustomLayouts().map((entry) => ({
     id: entry.id,
@@ -140,6 +143,10 @@ export function getAllLayouts(): LayoutEntry[] {
   return Array.from(byId.values());
 }
 
+/**
+ * Resolves a layout by id. Falls back to the layout with DEFAULT_LAYOUT_ID,
+ * or the first available layout, or null if no layouts exist.
+ */
 export function getLayoutById(layoutId: string | null | undefined): Layout | null {
   const allLayouts = getAllLayouts();
   const selected = allLayouts.find((entry) => entry.id === layoutId);
@@ -148,6 +155,9 @@ export function getLayoutById(layoutId: string | null | undefined): Layout | nul
   return fallback?.layout ?? null;
 }
 
+/**
+ * Validates and imports a custom layout JSON payload into local storage.
+ */
 export function importLayoutFromJson(jsonText: string): LayoutEntry {
   let parsed: unknown;
   try {
@@ -175,6 +185,9 @@ export function importLayoutFromJson(jsonText: string): LayoutEntry {
   };
 }
 
+/**
+ * Removes a custom layout by id.
+ */
 export function deleteCustomLayout(layoutId: string): boolean {
   const customLayouts = readCustomLayouts();
   const nextCustomLayouts = customLayouts.filter((entry) => entry.id !== layoutId);
