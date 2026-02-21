@@ -2269,6 +2269,22 @@ function setupAdBlocker() {
   ses.webRequest.onBeforeRequest((details, callback) => {
     callback({ cancel: shouldBlockRequest(details.url, details.resourceType) });
   });
+  ses.webRequest.onCompleted((details) => {
+    if (details.resourceType !== 'mainFrame') return;
+    if (typeof details.webContentsId !== 'number' || details.webContentsId <= 0) return;
+    if (typeof details.statusCode !== 'number' || details.statusCode < 400) return;
+
+    const target = electronWebContents.fromId(details.webContentsId);
+    if (!target || target.isDestroyed()) return;
+    const host = target.hostWebContents;
+    if (!host || host.isDestroyed()) return;
+
+    host.send('webview-main-frame-http-error', {
+      webContentsId: details.webContentsId,
+      url: details.url,
+      statusCode: details.statusCode,
+    });
+  });
 
   ipcMain.handle('settings-set-ad-block-enabled', async (_, enabled: unknown) => {
     adBlockEnabled = enabled !== false;

@@ -10,6 +10,13 @@ interface WebviewNavigationEvent extends Event {
   url: string;
 }
 
+interface WebviewDidFailLoadEvent extends Event {
+  errorCode: number;
+  errorDescription: string;
+  validatedURL: string;
+  isMainFrame: boolean;
+}
+
 interface WebviewPageTitleUpdatedEvent extends Event {
   title: string;
 }
@@ -79,6 +86,8 @@ interface WebviewElement extends HTMLElement {
   getWebContentsId?: () => number;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
   didNavigateInPageHandler?: (e: WebviewNavigationEvent) => void;
+  didStartLoadingHandler?: () => void;
+  didFailLoadHandler?: (e: WebviewDidFailLoadEvent) => void;
   domReadyHandler?: () => void;
   didPageTitleUpdatedHandler?: (e: WebviewPageTitleUpdatedEvent) => void;
   pageFaviconUpdatedHandler?: (e: WebviewPageFaviconUpdatedEvent) => void;
@@ -126,8 +135,20 @@ interface NativeContextCommandPayload {
   baseUrl?: unknown;
 }
 
+interface MainFrameHttpErrorPayload {
+  webContentsId?: unknown;
+  url?: unknown;
+  statusCode?: unknown;
+}
+
+interface ExternalErrorState {
+  route: 'errors/404' | 'errors/network';
+  failedUrlComparable: string;
+}
+
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
 const WEBVIEW_TRACKED_SRC_ATTR = 'data-mira-tracked-src';
+const WEBVIEW_TAB_ID_ATTR = 'data-mira-tab-id';
 
 /**
  * Produces a stable comparable URL string used to suppress redundant webview reloads.
@@ -273,11 +294,18 @@ function isInternal(url: string) {
 }
 
 function renderInternal(url: string, reloadToken: number) {
-  const routeRaw = url.replace(/^mira:\/\//, '').replace(/^\/+|\/+$/g, '');
+  const routeRawWithParams = url.replace(/^mira:\/\//, '');
+  const routeRaw = routeRawWithParams.split(/[?#]/, 1)[0].replace(/^\/+|\/+$/g, '');
   const route = routeRaw.toLowerCase();
   const Page = pages[route];
   if (Page) return <Page key={`${route}-${reloadToken}`} />;
-  return <div style={{ padding: 20 }}>Unknown internal page: {routeRaw}</div>;
+
+  const NotFoundPage = pages['errors/404'] ?? pages['404'];
+  if (NotFoundPage) {
+    return <NotFoundPage key={`errors/404-${reloadToken}`} />;
+  }
+
+  return <div style={{ padding: 20 }}>Unknown internal page: {routeRaw || '(root)'}</div>;
 }
 
 /**
@@ -309,6 +337,9 @@ export default function TabView() {
     return getThemeById(settings.themeId)?.mode ?? 'dark';
   });
   const [pageMenuState, setPageMenuState] = useState<PageContextMenuState | null>(null);
+  const [externalErrorByTabId, setExternalErrorByTabId] = useState<Record<string, ExternalErrorState>>(
+    {},
+  );
   const lastNativeContextCommandRef = React.useRef<{ signature: string; at: number } | null>(null);
   const isMacOS = electron?.isMacOS ?? false;
   const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
@@ -338,6 +369,80 @@ export default function TabView() {
   }, [rawFileDarkModeEnabled, themeMode]);
 
   const shouldApplyRawFileDarkMode = rawFileDarkModeEnabled && themeMode === 'dark';
+
+  const clearExternalErrorForTab = useCallback((tabId: string) => {
+    setExternalErrorByTabId((current) => {
+      if (!(tabId in current)) return current;
+      const next = { ...current };
+      delete next[tabId];
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const tabById = new Map(tabs.map((tab) => [tab.id, tab]));
+    setExternalErrorByTabId((current) => {
+      let changed = false;
+      const next: Record<string, ExternalErrorState> = {};
+      for (const [tabId, errorState] of Object.entries(current)) {
+        const tab = tabById.get(tabId);
+        if (!tab) {
+          changed = true;
+          continue;
+        }
+        const tabUrlComparable = normalizeComparableUrl(tab.url);
+        if (errorState.failedUrlComparable && errorState.failedUrlComparable !== tabUrlComparable) {
+          changed = true;
+          continue;
+        }
+        next[tabId] = errorState;
+      }
+      return changed ? next : current;
+    });
+  }, [tabs]);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onMainFrameHttpError = (_event: unknown, payload: unknown) => {
+      if (typeof payload !== 'object' || !payload) return;
+      const candidate = payload as MainFrameHttpErrorPayload;
+      const webContentsId =
+        typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+          ? Math.floor(candidate.webContentsId)
+          : -1;
+      if (webContentsId <= 0) return;
+
+      const statusCode =
+        typeof candidate.statusCode === 'number' && Number.isFinite(candidate.statusCode)
+          ? Math.floor(candidate.statusCode)
+          : 0;
+      if (statusCode < 400) return;
+
+      const webviewNodes = Array.from(document.querySelectorAll('webview')) as WebviewElement[];
+      const matchingWebview = webviewNodes.find((node) => {
+        if (typeof node.getWebContentsId !== 'function') return false;
+        return node.getWebContentsId() === webContentsId;
+      });
+      if (!matchingWebview) return;
+
+      const tabId = matchingWebview.getAttribute(WEBVIEW_TAB_ID_ATTR)?.trim();
+      if (!tabId) return;
+      const errorUrl = typeof candidate.url === 'string' ? candidate.url.trim() : '';
+
+      setExternalErrorByTabId((current) => ({
+        ...current,
+        [tabId]: {
+          route: statusCode === 404 ? 'errors/404' : 'errors/network',
+          failedUrlComparable: normalizeComparableUrl(errorUrl),
+        },
+      }));
+    };
+
+    ipc.on('webview-main-frame-http-error', onMainFrameHttpError);
+    return () => ipc.off('webview-main-frame-http-error', onMainFrameHttpError);
+  }, []);
 
   const closePageMenu = useCallback(() => {
     setPageMenuState(null);
@@ -735,8 +840,9 @@ export default function TabView() {
                 {renderInternal(tab.url, tab.reloadToken)}
               </div>
             ) : (
-              <webview
-                ref={(el) => {
+              <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+                <webview
+                  ref={(el) => {
                   if (!el) {
                     // When the element unmounts we deregister it
                     registerWebview(tab.id, null);
@@ -744,6 +850,7 @@ export default function TabView() {
                   }
                   const wv = el as unknown as WebviewElement;
                   registerWebview(tab.id, wv);
+                  wv.setAttribute(WEBVIEW_TAB_ID_ATTR, tab.id);
 
                   // Clean any old listeners that might still be attached
                   if (wv.didNavigateHandler) {
@@ -754,6 +861,15 @@ export default function TabView() {
                       'did-navigate-in-page',
                       wv.didNavigateInPageHandler as EventListener,
                     );
+                  }
+                  if (wv.didStartLoadingHandler) {
+                    wv.removeEventListener(
+                      'did-start-loading',
+                      wv.didStartLoadingHandler as EventListener,
+                    );
+                  }
+                  if (wv.didFailLoadHandler) {
+                    wv.removeEventListener('did-fail-load', wv.didFailLoadHandler as EventListener);
                   }
                   if (wv.domReadyHandler) {
                     wv.removeEventListener('dom-ready', wv.domReadyHandler as EventListener);
@@ -782,14 +898,32 @@ export default function TabView() {
                   const didNavigateHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
+                    clearExternalErrorForTab(tab.id);
                     navigate(ev.url, tab.id);
                     applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
                   };
                   const didNavigateInPageHandler = (e: Event) => {
                     const ev = e as WebviewNavigationEvent;
                     wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
+                    clearExternalErrorForTab(tab.id);
                     navigate(ev.url, tab.id);
                     applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
+                  };
+                  const didStartLoadingHandler = () => {
+                    clearExternalErrorForTab(tab.id);
+                  };
+                  const didFailLoadHandler = (e: Event) => {
+                    const ev = e as WebviewDidFailLoadEvent;
+                    if (!ev.isMainFrame) return;
+                    // Ignore cancellations from abort/redirect churn.
+                    if (ev.errorCode === 0 || ev.errorCode === -3) return;
+                    setExternalErrorByTabId((current) => ({
+                      ...current,
+                      [tab.id]: {
+                        route: 'errors/network',
+                        failedUrlComparable: normalizeComparableUrl(ev.validatedURL ?? tab.url),
+                      },
+                    }));
                   };
                   const domReadyHandler = () => {
                     applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
@@ -943,6 +1077,8 @@ export default function TabView() {
                   wv.didNavigateInPageHandler = didNavigateInPageHandler as (
                     e: WebviewNavigationEvent,
                   ) => void;
+                  wv.didStartLoadingHandler = didStartLoadingHandler;
+                  wv.didFailLoadHandler = didFailLoadHandler as (e: WebviewDidFailLoadEvent) => void;
                   wv.domReadyHandler = domReadyHandler;
                   wv.didPageTitleUpdatedHandler = didPageTitleUpdatedHandler as (
                     e: WebviewPageTitleUpdatedEvent,
@@ -960,6 +1096,8 @@ export default function TabView() {
 
                   wv.addEventListener('did-navigate', didNavigateHandler);
                   wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
+                  wv.addEventListener('did-start-loading', didStartLoadingHandler);
+                  wv.addEventListener('did-fail-load', didFailLoadHandler);
                   wv.addEventListener('dom-ready', domReadyHandler);
                   wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
                   wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
@@ -973,10 +1111,57 @@ export default function TabView() {
                     wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, nextSrc);
                     wv.src = tab.url;
                   }
-                }}
-                allowpopups={true}
-                style={{ flex: 1, width: '100%', height: '100%' }}
-              />
+                  }}
+                  allowpopups={true}
+                  style={{ flex: 1, width: '100%', height: '100%' }}
+                />
+                {(() => {
+                  const externalError = externalErrorByTabId[tab.id];
+                  if (!externalError) return null;
+                  const ErrorPage = pages[externalError.route];
+                  if (ErrorPage) {
+                    return (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          zIndex: 1,
+                          background: 'var(--bg)',
+                        }}
+                      >
+                        <ErrorPage />
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        zIndex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'column',
+                        gap: 12,
+                        background: 'var(--bg)',
+                        color: 'var(--text1)',
+                      }}
+                    >
+                      <div>Failed to load this page.</div>
+                      <button
+                        type="button"
+                        onClick={reload}
+                        className="theme-btn theme-btn-go"
+                        style={{ padding: '8px 14px', fontSize: 14 }}
+                      >
+                        Reload
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
             )}
           </div>
         );
