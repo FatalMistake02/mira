@@ -122,6 +122,8 @@ export const useTabs = () => useContext(TabsContext);
 const MAX_RECENTLY_CLOSED_TABS = 25;
 const REOPEN_CLOSED_TAB_DEDUPE_WINDOW_MS = 400;
 const REOPEN_CLOSED_TAB_ACTIVATE_DELAY_MS = 120;
+const IPC_OPEN_TAB_ACTIVATE_DELAY_MS = 110;
+const IPC_OPEN_TAB_NAVIGATE_DELAY_MS = 50;
 const ZOOM_STEP = 0.1;
 const MIN_ZOOM_FACTOR = 0.25;
 const MAX_ZOOM_FACTOR = 5;
@@ -274,6 +276,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
   const lastReopenClosedTabAtRef = useRef(0);
   const reopenTabActivationTimerRef = useRef<number | null>(null);
+  const ipcOpenTabActivateTimerRef = useRef<number | null>(null);
+  const ipcOpenTabNavigateTimerRef = useRef<number | null>(null);
   const zoomFactorByTabRef = useRef<Record<string, number>>({});
   const activeFindInPageMatches = findInPageMatchesByTab[activeId] ?? {
     activeMatchOrdinal: 0,
@@ -1550,7 +1554,46 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         navigateRef.current(normalized, activeTab.id);
         return;
       }
-      newTabRef.current(normalized);
+
+      if (ipcOpenTabActivateTimerRef.current !== null) {
+        window.clearTimeout(ipcOpenTabActivateTimerRef.current);
+        ipcOpenTabActivateTimerRef.current = null;
+      }
+      if (ipcOpenTabNavigateTimerRef.current !== null) {
+        window.clearTimeout(ipcOpenTabNavigateTimerRef.current);
+        ipcOpenTabNavigateTimerRef.current = null;
+      }
+
+      const defaultNewTabUrl = getBrowserSettings().newTabPage;
+      const nowForTab = Date.now();
+      const stagedTabId = crypto.randomUUID();
+      const stagedTab: Tab = {
+        id: stagedTabId,
+        url: defaultNewTabUrl,
+        title: defaultNewTabUrl.startsWith('mira://') ? miraUrlToName(defaultNewTabUrl) : defaultNewTabUrl,
+        favicon: defaultNewTabUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+        history: [defaultNewTabUrl],
+        historyIndex: 0,
+        reloadToken: 0,
+        isSleeping: false,
+        lastActiveAt: nowForTab,
+      };
+      setTabs((currentTabs) =>
+        currentTabs
+          .map((tab) => (tab.id === activeIdRef.current ? { ...tab, lastActiveAt: nowForTab } : tab))
+          .concat(stagedTab),
+      );
+
+      ipcOpenTabActivateTimerRef.current = window.setTimeout(() => {
+        ipcOpenTabActivateTimerRef.current = null;
+        if (!tabsRef.current.some((tab) => tab.id === stagedTabId)) return;
+        setActiveId(stagedTabId);
+
+        ipcOpenTabNavigateTimerRef.current = window.setTimeout(() => {
+          ipcOpenTabNavigateTimerRef.current = null;
+          navigateRef.current(normalized, stagedTabId);
+        }, IPC_OPEN_TAB_NAVIGATE_DELAY_MS);
+      }, IPC_OPEN_TAB_ACTIVATE_DELAY_MS);
     };
 
     ipc.on('open-url-in-new-tab', onOpenUrlInNewTab);
@@ -1575,6 +1618,14 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       if (reopenTabActivationTimerRef.current !== null) {
         window.clearTimeout(reopenTabActivationTimerRef.current);
         reopenTabActivationTimerRef.current = null;
+      }
+      if (ipcOpenTabActivateTimerRef.current !== null) {
+        window.clearTimeout(ipcOpenTabActivateTimerRef.current);
+        ipcOpenTabActivateTimerRef.current = null;
+      }
+      if (ipcOpenTabNavigateTimerRef.current !== null) {
+        window.clearTimeout(ipcOpenTabNavigateTimerRef.current);
+        ipcOpenTabNavigateTimerRef.current = null;
       }
     },
     [],
