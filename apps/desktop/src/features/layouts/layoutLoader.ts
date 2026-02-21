@@ -144,7 +144,8 @@ export function getAllLayouts(): LayoutEntry[] {
 }
 
 /**
- * Resolves a layout by id and falls back to the default bundled layout.
+ * Resolves a layout by id. Falls back to the layout with DEFAULT_LAYOUT_ID,
+ * or the first available layout, or null if no layouts exist.
  */
 export function getLayoutById(layoutId: string | null | undefined): Layout | null {
   const allLayouts = getAllLayouts();
