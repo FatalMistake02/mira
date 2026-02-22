@@ -43,7 +43,9 @@ function OfflineRunnerGame() {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const gameOverRef = useRef(false);
   const scoreRef = useRef(0);
-  const bestRef = useRef(0);
+  const BEST_SCORE_KEY = 'mira-offline-best-score';
+  const bestRef = useRef(parseInt(localStorage.getItem(BEST_SCORE_KEY) ?? '0', 10) || 0);
+
   const playerYRef = useRef(0);
   const playerVRef = useRef(0);
   const playerRotationRef = useRef(PLAYER_REST_ROTATION);
@@ -146,6 +148,7 @@ function OfflineRunnerGame() {
             gameOverRef.current = true;
             const rounded = Math.floor(scoreRef.current);
             bestRef.current = Math.max(bestRef.current, rounded);
+            localStorage.setItem(BEST_SCORE_KEY, String(bestRef.current));
             break;
           }
         }
