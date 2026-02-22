@@ -2,7 +2,7 @@ import { useTabs } from '../../features/tabs/TabsProvider';
 import ErrorLayout from './ErrorLayout';
 
 export default function ExternalNetworkErrorPage() {
-  const { reload } = useTabs();
+  const { reload, navigateToNewTabPage } = useTabs();
 
   return (
     <ErrorLayout
@@ -10,6 +10,7 @@ export default function ExternalNetworkErrorPage() {
       subtitle="This site can't be reached"
       description="Check your connection, proxy, VPN, or firewall, then try again."
       onReload={reload}
+      onOpenNewTab={navigateToNewTabPage}
     />
   );
 }
