@@ -52,8 +52,6 @@ function OfflineRunnerGame() {
   const spawnInRef = useRef(0.9);
 
   useEffect(() => {
-    document.body.dataset.miraOfflineGameActive = 'true';
-
     const image = new Image();
     image.src = miraIcon;
     imageRef.current = image;
@@ -62,6 +60,8 @@ function OfflineRunnerGame() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    document.body.dataset.miraOfflineGameActive = 'true';
 
     const groundY = GAME_HEIGHT - GROUND_HEIGHT;
     const basePlayerY = groundY - PLAYER_SIZE;
