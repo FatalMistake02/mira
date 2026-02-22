@@ -48,8 +48,8 @@ export default function ErrorLayout({
           src={miraIcon}
           alt="Mira Home"
           style={{
-            width: 110,
-            height: 110,
+            width: 200,
+            height: 200,
             objectFit: 'contain',
             display: 'block',
           }}

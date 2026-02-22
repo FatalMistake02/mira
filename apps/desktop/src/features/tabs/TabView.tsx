@@ -142,13 +142,14 @@ interface MainFrameHttpErrorPayload {
 }
 
 interface ExternalErrorState {
-  route: 'errors/external-404' | 'errors/external-network';
+  route: 'errors/external-404' | 'errors/external-network' | 'errors/external-offline';
   failedUrlComparable: string;
 }
 
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
 const WEBVIEW_TRACKED_SRC_ATTR = 'data-mira-tracked-src';
 const WEBVIEW_TAB_ID_ATTR = 'data-mira-tab-id';
+const ERR_INTERNET_DISCONNECTED = -106;
 
 /**
  * Produces a stable comparable URL string used to suppress redundant webview reloads.
@@ -917,10 +918,14 @@ export default function TabView() {
                     if (!ev.isMainFrame) return;
                     // Ignore cancellations from abort/redirect churn.
                     if (ev.errorCode === 0 || ev.errorCode === -3) return;
+                    const route =
+                      ev.errorCode === ERR_INTERNET_DISCONNECTED
+                        ? 'errors/external-offline'
+                        : 'errors/external-network';
                     setExternalErrorByTabId((current) => ({
                       ...current,
                       [tab.id]: {
-                        route: 'errors/external-network',
+                        route,
                         failedUrlComparable: normalizeComparableUrl(ev.validatedURL ?? tab.url),
                       },
                     }));
