@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import miraIcon from '../../assets/mira_icon.png';
 
 type ErrorLayoutProps = {
@@ -6,6 +7,7 @@ type ErrorLayoutProps = {
   description: string;
   onReload: () => void;
   onOpenNewTab: () => void;
+  children?: ReactNode;
 };
 
 export default function ErrorLayout({
@@ -14,6 +16,7 @@ export default function ErrorLayout({
   description,
   onReload,
   onOpenNewTab,
+  children,
 }: ErrorLayoutProps) {
   return (
     <div
@@ -58,6 +61,7 @@ export default function ErrorLayout({
       <h1 style={{ margin: 0, fontSize: 48, lineHeight: 1.1 }}>{title}</h1>
       <h2 style={{ margin: '10px 0 0 0', fontSize: 24, fontWeight: 600 }}>{subtitle}</h2>
       <p style={{ margin: '12px 0 0 0', fontSize: 15, color: 'var(--text2)' }}>{description}</p>
+      {children}
       <button
         type="button"
         onClick={onReload}

@@ -185,6 +185,7 @@ export function useKeyboardShortcuts({
       const isArrowUp = key === 'arrowup';
       const isArrowDown = key === 'arrowdown';
       const isSpace = e.key === ' ' || key === 'spacebar';
+      const isOfflineGameActive = document.body.dataset.miraOfflineGameActive === 'true';
 
       if (isPrimaryModifier && !e.shiftKey && key === 't') {
         e.preventDefault();
@@ -443,7 +444,7 @@ export function useKeyboardShortcuts({
 
       if (!isPrimaryModifier && !e.altKey && !e.ctrlKey && !e.metaKey) {
         if (
-          (!e.shiftKey && isSpace && !isEditableTarget) ||
+          (!isOfflineGameActive && !e.shiftKey && isSpace && !isEditableTarget) ||
           (isArrowDown && !isEditableTarget) ||
           isPageDown
         ) {
@@ -454,8 +455,8 @@ export function useKeyboardShortcuts({
         }
 
         if (
-          (e.shiftKey && isSpace && !isEditableTarget) ||
-          (isArrowUp && !isEditableTarget) ||
+          (!isOfflineGameActive && e.shiftKey && isSpace && !isEditableTarget) ||
+          (!isOfflineGameActive && isArrowUp && !isEditableTarget) ||
           isPageUp
         ) {
           e.preventDefault();
