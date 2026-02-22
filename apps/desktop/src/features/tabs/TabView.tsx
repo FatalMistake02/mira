@@ -142,7 +142,7 @@ interface MainFrameHttpErrorPayload {
 }
 
 interface ExternalErrorState {
-  route: 'errors/404' | 'errors/network';
+  route: 'errors/external-404' | 'errors/external-network';
   failedUrlComparable: string;
 }
 
@@ -300,7 +300,7 @@ function renderInternal(url: string, reloadToken: number) {
   const Page = pages[route];
   if (Page) return <Page key={`${route}-${reloadToken}`} />;
 
-  const NotFoundPage = pages['errors/404'] ?? pages['404'];
+  const NotFoundPage = pages['errors/internal-404'] ?? pages['errors/404'] ?? pages['404'];
   if (NotFoundPage) {
     return <NotFoundPage key={`errors/404-${reloadToken}`} />;
   }
@@ -434,7 +434,7 @@ export default function TabView() {
       setExternalErrorByTabId((current) => ({
         ...current,
         [tabId]: {
-          route: statusCode === 404 ? 'errors/404' : 'errors/network',
+          route: statusCode === 404 ? 'errors/external-404' : 'errors/external-network',
           failedUrlComparable: normalizeComparableUrl(errorUrl),
         },
       }));
@@ -920,7 +920,7 @@ export default function TabView() {
                     setExternalErrorByTabId((current) => ({
                       ...current,
                       [tab.id]: {
-                        route: 'errors/network',
+                        route: 'errors/external-network',
                         failedUrlComparable: normalizeComparableUrl(ev.validatedURL ?? tab.url),
                       },
                     }));
@@ -1118,7 +1118,11 @@ export default function TabView() {
                 {(() => {
                   const externalError = externalErrorByTabId[tab.id];
                   if (!externalError) return null;
-                  const ErrorPage = pages[externalError.route];
+                  const ErrorPage =
+                    pages[externalError.route] ??
+                    (externalError.route === 'errors/external-404'
+                      ? pages['errors/404']
+                      : pages['errors/network']);
                   if (ErrorPage) {
                     return (
                       <div
