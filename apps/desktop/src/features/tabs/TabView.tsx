@@ -333,6 +333,9 @@ export default function TabView() {
   const [nativeTextFieldContextMenu, setNativeTextFieldContextMenu] = useState(
     () => getBrowserSettings().nativeTextFieldContextMenu,
   );
+  const [renderOrderTabIds, setRenderOrderTabIds] = useState<string[]>(() =>
+    tabs.map((tab) => tab.id),
+  );
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     const settings = getBrowserSettings();
     return getThemeById(settings.themeId)?.mode ?? 'dark';
@@ -346,6 +349,14 @@ export default function TabView() {
   const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
   const redoShortcutLabel = isMacOS ? 'Cmd+Shift+Z' : 'Ctrl+Y';
   const inspectShortcutLabel = isMacOS ? 'Cmd+Opt+I' : 'F12';
+  const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
+  const renderTabs = useMemo(
+    () =>
+      renderOrderTabIds
+        .map((id) => tabsById.get(id))
+        .filter((tab): tab is (typeof tabs)[number] => !!tab),
+    [renderOrderTabIds, tabsById],
+  );
 
   useEffect(() => {
     const syncSettings = () => {
@@ -399,6 +410,22 @@ export default function TabView() {
         next[tabId] = errorState;
       }
       return changed ? next : current;
+    });
+  }, [tabs]);
+
+  useEffect(() => {
+    const nextIds = tabs.map((tab) => tab.id);
+    setRenderOrderTabIds((current) => {
+      const nextIdSet = new Set(nextIds);
+      const kept = current.filter((id) => nextIdSet.has(id));
+      const keptSet = new Set(kept);
+      const additions = nextIds.filter((id) => !keptSet.has(id));
+      const merged = kept.concat(additions);
+      if (merged.length !== current.length) return merged;
+      for (let index = 0; index < merged.length; index += 1) {
+        if (merged[index] !== current[index]) return merged;
+      }
+      return current;
     });
   }, [tabs]);
 
@@ -817,7 +844,7 @@ export default function TabView() {
 
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
-      {tabs.map((tab) => {
+      {renderTabs.map((tab) => {
         const isVisible = tab.id === activeId;
         if (tabSleepMode === 'discard' && tab.isSleeping && !isVisible) {
           return null;
