@@ -184,6 +184,9 @@ interface BlockRuleIndex {
   hostPaths: Map<string, string[]>;
 }
 
+/**
+ * Splits blocking rules into host-only and host+path indexes for fast matching.
+ */
 function buildBlockRuleIndex(rules: Set<string>): BlockRuleIndex {
   const hosts = new Set<string>();
   const hostPaths = new Map<string, string[]>();
@@ -217,14 +220,23 @@ let blockedTrackerRuleIndex = buildBlockRuleIndex(blockedTrackerRules);
 let blockedAdRuleIndex = buildBlockRuleIndex(blockedAdRules);
 const trackedYoutubeAdCpns = new Map<string, number>();
 
+/**
+ * Returns whether a hostname is a YouTube domain.
+ */
 function isYoutubeHost(hostname: string): boolean {
   return hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
 }
 
+/**
+ * Returns whether a hostname is a Google Video CDN domain.
+ */
 function isGoogleVideoHost(hostname: string): boolean {
   return hostname === 'googlevideo.com' || hostname.endsWith('.googlevideo.com');
 }
 
+/**
+ * Normalizes and validates ad CPN tokens extracted from requests.
+ */
 function normalizeCpnToken(value: string | null): string | null {
   if (!value) return null;
   const normalized = value.trim();

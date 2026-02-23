@@ -68,6 +68,10 @@ interface IpcShortcutState {
   activateTabByNumber: (number: number) => void;
 }
 
+/**
+ * Registers browser-style keyboard shortcuts and maps them to tab/window actions.
+ * In Electron mode, overlapping shortcuts are delegated to main-process accelerators.
+ */
 export function useKeyboardShortcuts({
   tabs,
   newTab,

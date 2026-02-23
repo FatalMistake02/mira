@@ -231,6 +231,9 @@ const baseFontsByMode: Record<ThemeMode, Record<string, string>> = {
   },
 };
 
+/**
+ * Ensures a theme has valid color/font values, filling missing tokens from mode defaults.
+ */
 export function resolveThemeWithModeFallback(theme: Theme): Theme {
   return resolveThemeWithModeFallbackInternal(theme, baseColorsByMode, baseFontsByMode);
 }
@@ -289,6 +292,9 @@ function createCustomThemeId(theme: Theme, existingIds: Set<string>): string {
   return candidate;
 }
 
+/**
+ * Returns bundled and custom themes merged by id, with custom entries taking precedence.
+ */
 export function getAllThemes(): ThemeEntry[] {
   const customEntries: ThemeEntry[] = readCustomThemes().map((entry) => ({
     id: entry.id,
@@ -303,6 +309,9 @@ export function getAllThemes(): ThemeEntry[] {
   return Array.from(byId.values());
 }
 
+/**
+ * Resolves a theme by id and falls back to the configured default theme.
+ */
 export function getThemeById(themeId: string | null | undefined): Theme | null {
   const allThemes = getAllThemes();
   const selected = allThemes.find((entry) => entry.id === themeId);
@@ -312,6 +321,9 @@ export function getThemeById(themeId: string | null | undefined): Theme | null {
   return fallback?.theme ?? null;
 }
 
+/**
+ * Validates and imports a custom theme JSON payload into local storage.
+ */
 export function importThemeFromJson(jsonText: string): ThemeEntry {
   let parsed: unknown;
   try {
@@ -343,6 +355,9 @@ export function importThemeFromJson(jsonText: string): ThemeEntry {
   };
 }
 
+/**
+ * Removes a custom theme by id.
+ */
 export function deleteCustomTheme(themeId: string): boolean {
   const customThemes = readCustomThemes();
   const nextCustomThemes = customThemes.filter((entry) => entry.id !== themeId);

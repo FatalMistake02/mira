@@ -129,6 +129,9 @@ interface NativeContextCommandPayload {
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
 const WEBVIEW_TRACKED_SRC_ATTR = 'data-mira-tracked-src';
 
+/**
+ * Produces a stable comparable URL string used to suppress redundant webview reloads.
+ */
 function normalizeComparableUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) return '';
@@ -139,6 +142,9 @@ function normalizeComparableUrl(url: string): string {
   }
 }
 
+/**
+ * Resolves context-menu URLs, supporting relative links against the page URL.
+ */
 function resolveContextMenuUrl(rawUrl: string, baseUrl?: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) return '';
@@ -153,6 +159,9 @@ function resolveContextMenuUrl(rawUrl: string, baseUrl?: string): string {
   }
 }
 
+/**
+ * Guards "open in new tab" actions to known-safe schemes handled by the app.
+ */
 function canOpenInNewTab(url: string): boolean {
   const trimmed = url.trim();
   if (!trimmed) return false;
@@ -196,6 +205,9 @@ function normalizeContextMenuParams(
   };
 }
 
+/**
+ * Applies/removes a dark style override for raw text files in GitHub raw views.
+ */
 function applyRawFileDarkModeStyle(webview: WebviewElement, shouldApply: boolean) {
   const script = `(() => {
   const shouldApply = ${shouldApply ? 'true' : 'false'};
@@ -268,6 +280,9 @@ function renderInternal(url: string, reloadToken: number) {
   return <div style={{ padding: 20 }}>Unknown internal page: {routeRaw}</div>;
 }
 
+/**
+ * Renders either an internal page or a live Electron webview for the active tab.
+ */
 export default function TabView() {
   const {
     tabs,

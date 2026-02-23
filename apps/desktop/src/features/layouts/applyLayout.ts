@@ -1,8 +1,14 @@
 import type { Layout } from '../../layouts/types';
 
 let previouslyAppliedLayoutKeys = new Set<string>();
+/**
+ * Emitted after layout CSS variables are reapplied.
+ */
 export const LAYOUT_APPLIED_EVENT = 'mira-layout-applied';
 
+/**
+ * Applies layout variable overrides to `:root` and removes stale keys.
+ */
 export function applyLayout(layout: Layout | null | undefined) {
   if (!layout || typeof layout !== 'object') return;
   if (!layout.values || typeof layout.values !== 'object') return;
