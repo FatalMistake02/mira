@@ -41,6 +41,7 @@ function OfflineRunnerGame() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<number | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const startedRef = useRef(false);
   const gameOverRef = useRef(false);
   const scoreRef = useRef(0);
   const BEST_SCORE_KEY = 'mira-offline-best-score';
@@ -80,6 +81,8 @@ function OfflineRunnerGame() {
     };
 
     const jumpOrRestart = () => {
+      if (!startedRef.current) startedRef.current = true;
+
       if (gameOverRef.current) {
         reset();
         return;
@@ -99,7 +102,7 @@ function OfflineRunnerGame() {
       const dt = clampDeltaTime(now - lastNow);
       lastNow = now;
 
-      if (!gameOverRef.current) {
+      if (startedRef.current && !gameOverRef.current) {
         scoreRef.current += dt * 18;
 
         playerVRef.current += GRAVITY * dt;
@@ -201,6 +204,13 @@ function OfflineRunnerGame() {
         ctx.fillText('Game Over', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 12);
         ctx.font = '600 16px sans-serif';
         ctx.fillText('Press Space, Arrow Up, or Tap to restart', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
+      } else if (!startedRef.current) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.font = '700 22px sans-serif';
+        ctx.fillText('Press Space, Arrow Up, or Tap to start', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 8);
       }
 
       frameRef.current = window.requestAnimationFrame(loop);
@@ -241,8 +251,10 @@ function OfflineRunnerGame() {
             playerSpinSpeedRef.current = 0;
             obstaclesRef.current = [];
             spawnInRef.current = 0.8;
+            startedRef.current = true;
             return;
           }
+          if (!startedRef.current) startedRef.current = true;
           if (playerYRef.current >= GAME_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE - 0.1) {
             playerVRef.current = JUMP_VELOCITY;
             playerSpinSpeedRef.current = PLAYER_AIR_SPIN_SPEED;
@@ -259,7 +271,7 @@ function OfflineRunnerGame() {
         }}
       />
       <div style={{ marginTop: 8, color: 'var(--text2)', fontSize: 13 }}>
-        Press <strong>Space</strong> or <strong>Up</strong> to jump.
+        Press <strong>Space</strong> or <strong>Up</strong> to start and jump.
       </div>
     </div>
   );
