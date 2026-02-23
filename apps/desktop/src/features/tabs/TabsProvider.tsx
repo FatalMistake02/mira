@@ -586,6 +586,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     switch (sanitized.toLowerCase()) {
       case 'newtab':
         return 'New Tab';
+      case 'themecreator':
+        return 'Theme Creator';
       default:
         // return a capitalized version of the url
         return sanitized.charAt(0).toUpperCase() + sanitized.slice(1);
