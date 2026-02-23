@@ -147,7 +147,7 @@ body {
     var(--accentPrimary) 26%
   );
   --dropdownChoiceCheckColor: var(--accentText);
-  --toggleCheckedBg: color-mix(in srgb, var(--navButtonBgActive) 52%, var(--accentPrimarySoft) 48%);
+  --toggleCheckedBg: var(--navButtonBgActive);
   --toggleCheckedBorder: color-mix(
     in srgb,
     var(--navButtonBorderActive) 46%,
