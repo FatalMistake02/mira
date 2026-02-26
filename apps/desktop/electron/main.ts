@@ -2344,6 +2344,39 @@ function setupAdBlocker() {
   });
 }
 
+function setupMainFrameHttpErrorReporter() {
+  const ses = session.defaultSession;
+  ses.webRequest.onCompleted((details) => {
+    if (details.resourceType !== 'mainFrame') return;
+
+    if (adBlockEnabled) {
+      try {
+        const parsed = new URL(details.url);
+        const protocol = parsed.protocol.toLowerCase();
+        if (protocol === 'http:' || protocol === 'https:') {
+          rememberYoutubeAdCpnFromUrl(parsed);
+        }
+      } catch {
+        // Ignore invalid URLs from request details.
+      }
+    }
+
+    if (typeof details.webContentsId !== 'number' || details.webContentsId <= 0) return;
+    if (typeof details.statusCode !== 'number' || details.statusCode < 400) return;
+
+    const target = electronWebContents.fromId(details.webContentsId);
+    if (!target || target.isDestroyed()) return;
+    const host = target.hostWebContents;
+    if (!host || host.isDestroyed()) return;
+
+    host.send('webview-main-frame-http-error', {
+      webContentsId: details.webContentsId,
+      url: details.url,
+      statusCode: details.statusCode,
+    });
+  });
+}
+
 function setupWindowControlsHandlers() {
   ipcMain.handle('window-new', (event) => {
     const sourceWindow = BrowserWindow.fromWebContents(event.sender);
@@ -3729,6 +3762,7 @@ app.whenReady().then(async () => {
   setupUpdateHandlers();
   setupWebviewTabOpenHandler();
   setupAdBlocker();
+  setupMainFrameHttpErrorReporter();
   setupWindowControlsHandlers();
   setupDefaultBrowserHandlers();
   setupIncomingUrlHandlers();

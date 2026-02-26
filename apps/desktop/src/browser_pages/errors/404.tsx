@@ -2,7 +2,7 @@ import { useTabs } from '../../features/tabs/TabsProvider';
 import ErrorLayout from './ErrorLayout';
 
 export default function NotFoundPage() {
-  const { reload } = useTabs();
+  const { reload, navigateToNewTabPage } = useTabs();
 
   return (
     <ErrorLayout
@@ -10,6 +10,7 @@ export default function NotFoundPage() {
       subtitle="Page not found"
       description="This internal page does not exist."
       onReload={reload}
+      onOpenNewTab={navigateToNewTabPage}
     />
   );
 }
