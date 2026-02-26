@@ -5,7 +5,8 @@
 - [ ] Fix default browser
 - [ ] Fix auto update
 - [ ] Fix target="_blank" links
-
+- [ ] Fix all other issues
+ 
 ## v1.1.0
 - [ ] Ad blocker blocks Youtube videos
 - [ ] Bookmarks and favorites
