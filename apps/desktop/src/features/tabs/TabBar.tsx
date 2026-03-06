@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
+import type { Tab } from './types';
 import miraLogo from '../../assets/mira_logo.png';
 import ContextMenu, { type ContextMenuEntry } from '../../components/ContextMenu';
 import { electron } from '../../electronBridge';
@@ -13,6 +14,14 @@ const TAB_ROW_HEIGHT = 'var(--layoutTabHeight, 30px)';
 const TAB_SWAP_TRIGGER_RATIO = 0.1;
 const TAB_SWAP_MIN_POINTER_DELTA_PX = 10;
 const TAB_SWAP_COOLDOWN_MS = 70;
+const TAB_APPEAR_SETTLE_MS = 24;
+const TAB_ENTER_EXIT_DURATION_MS = 180;
+
+type RenderedTabState = {
+  tab: Tab;
+  phase: 'entering' | 'stable' | 'exiting';
+  lastKnownIndex: number;
+};
 
 function getDisplayTitle(url: string, title?: string): string {
   const normalizedTitle = title?.trim();
@@ -76,13 +85,115 @@ export default function TabBar() {
   const prevTabCountRef = useRef(tabs.length);
   const tabElementRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const previousRectsRef = useRef<Record<string, DOMRect>>({});
-  const dragStartClientXRef = useRef(0);
-  const dragPointerToCenterRef = useRef(0);
+  const enterTimerByTabIdRef = useRef<Record<string, number>>({});
+  const exitTimerByTabIdRef = useRef<Record<string, number>>({});
+  const dragPointerToLeftRef = useRef(0);
+  const dragOffsetXRef = useRef(0);
   const lastSwapClientXRef = useRef<number | null>(null);
   const lastSwapAtRef = useRef(0);
   const dragMovedRef = useRef(false);
   const suppressClickRef = useRef(false);
   const lastNativeTabCommandRef = useRef<{ signature: string; at: number } | null>(null);
+  const [renderedTabs, setRenderedTabs] = useState<RenderedTabState[]>(() =>
+    tabs.map((tab, index) => ({ tab, phase: 'stable', lastKnownIndex: index })),
+  );
+  const renderedTabsRef = useRef<RenderedTabState[]>(renderedTabs);
+
+  useEffect(() => {
+    renderedTabsRef.current = renderedTabs;
+  }, [renderedTabs]);
+
+  useEffect(() => {
+    dragOffsetXRef.current = dragOffsetX;
+  }, [dragOffsetX]);
+
+  useEffect(() => {
+    return () => {
+      for (const timeout of Object.values(enterTimerByTabIdRef.current)) {
+        window.clearTimeout(timeout);
+      }
+      for (const timeout of Object.values(exitTimerByTabIdRef.current)) {
+        window.clearTimeout(timeout);
+      }
+      enterTimerByTabIdRef.current = {};
+      exitTimerByTabIdRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    const previous = renderedTabsRef.current;
+    const previousById = new Map(previous.map((item) => [item.tab.id, item]));
+    const nextById = new Map(tabs.map((tab) => [tab.id, tab]));
+    const enteringIds: string[] = [];
+    const removed: RenderedTabState[] = [];
+
+    const next: RenderedTabState[] = tabs.map((tab, index) => {
+      const existing = previousById.get(tab.id);
+      if (!existing) {
+        enteringIds.push(tab.id);
+        return { tab, phase: 'entering', lastKnownIndex: index };
+      }
+      return {
+        tab,
+        phase: existing.phase === 'exiting' ? 'stable' : existing.phase,
+        lastKnownIndex: index,
+      };
+    });
+
+    for (const item of previous) {
+      if (!nextById.has(item.tab.id)) {
+        removed.push(item);
+      }
+    }
+
+    removed
+      .sort((a, b) => a.lastKnownIndex - b.lastKnownIndex)
+      .forEach((item, offset) => {
+        const insertAt = Math.min(item.lastKnownIndex + offset, next.length);
+        next.splice(insertAt, 0, {
+          tab: item.tab,
+          phase: 'exiting',
+          lastKnownIndex: item.lastKnownIndex,
+        });
+      });
+
+    for (const tab of tabs) {
+      const id = tab.id;
+      const exitTimer = exitTimerByTabIdRef.current[id];
+      if (exitTimer) {
+        window.clearTimeout(exitTimer);
+        delete exitTimerByTabIdRef.current[id];
+      }
+    }
+
+    for (const id of enteringIds) {
+      const existingTimer = enterTimerByTabIdRef.current[id];
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+      enterTimerByTabIdRef.current[id] = window.setTimeout(() => {
+        setRenderedTabs((current) =>
+          current.map((item) =>
+            item.tab.id === id && item.phase === 'entering' ? { ...item, phase: 'stable' } : item,
+          ),
+        );
+        delete enterTimerByTabIdRef.current[id];
+      }, TAB_APPEAR_SETTLE_MS);
+    }
+
+    for (const item of removed) {
+      const id = item.tab.id;
+      const existingTimer = exitTimerByTabIdRef.current[id];
+      if (existingTimer) continue;
+      exitTimerByTabIdRef.current[id] = window.setTimeout(() => {
+        setRenderedTabs((current) => current.filter((entry) => entry.tab.id !== id));
+        delete exitTimerByTabIdRef.current[id];
+      }, TAB_ENTER_EXIT_DURATION_MS);
+    }
+
+    renderedTabsRef.current = next;
+    setRenderedTabs(next);
+  }, [tabs]);
 
   useEffect(() => {
     const syncSettings = () => {
@@ -92,14 +203,6 @@ export default function TabBar() {
     window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
     return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
   }, []);
-
-  const getTabGapPx = () => {
-    const raw = getComputedStyle(document.documentElement)
-      .getPropertyValue('--layoutTabGap')
-      .trim();
-    const parsed = Number.parseFloat(raw);
-    return Number.isFinite(parsed) ? parsed : 6;
-  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -256,7 +359,12 @@ export default function TabBar() {
     if (!draggingTabId) return;
 
     const onMouseMove = (event: MouseEvent) => {
-      const nextOffset = event.clientX - dragStartClientXRef.current;
+      const draggedEl = tabElementRefs.current[draggingTabId];
+      if (!draggedEl) return;
+      const draggedRect = draggedEl.getBoundingClientRect();
+      const desiredLeft = event.clientX - dragPointerToLeftRef.current;
+      const untransformedLeft = draggedRect.left - dragOffsetXRef.current;
+      const nextOffset = desiredLeft - untransformedLeft;
       setDragOffsetX(nextOffset);
 
       if (Math.abs(nextOffset) > 2) {
@@ -268,9 +376,7 @@ export default function TabBar() {
       const now = Date.now();
       if (now - lastSwapAtRef.current < TAB_SWAP_COOLDOWN_MS) return;
 
-      const draggedCenterX = event.clientX - dragPointerToCenterRef.current;
-      const gapPx = getTabGapPx();
-
+      const draggedCenterX = desiredLeft + draggedRect.width / 2;
       if (currentIndex > 0) {
         const prevTab = tabs[currentIndex - 1];
         const prevEl = prevTab ? tabElementRefs.current[prevTab.id] : null;
@@ -282,7 +388,6 @@ export default function TabBar() {
             Math.abs(event.clientX - lastSwapClientXRef.current) >= TAB_SWAP_MIN_POINTER_DELTA_PX;
           if (draggedCenterX < prevTrigger && canSwap) {
             moveTabToIndex(draggingTabId, currentIndex - 1);
-            dragStartClientXRef.current -= prevRect.width + gapPx;
             lastSwapClientXRef.current = event.clientX;
             lastSwapAtRef.current = now;
             return;
@@ -301,7 +406,6 @@ export default function TabBar() {
             Math.abs(event.clientX - lastSwapClientXRef.current) >= TAB_SWAP_MIN_POINTER_DELTA_PX;
           if (draggedCenterX > nextTrigger && canSwap) {
             moveTabToIndex(draggingTabId, currentIndex + 1);
-            dragStartClientXRef.current += nextRect.width + gapPx;
             lastSwapClientXRef.current = event.clientX;
             lastSwapAtRef.current = now;
             return;
@@ -314,6 +418,7 @@ export default function TabBar() {
       const moved = dragMovedRef.current;
       setDraggingTabId(null);
       setDragOffsetX(0);
+      dragOffsetXRef.current = 0;
       lastSwapClientXRef.current = null;
       lastSwapAtRef.current = 0;
       dragMovedRef.current = false;
@@ -337,15 +442,16 @@ export default function TabBar() {
 
   useLayoutEffect(() => {
     const nextRects: Record<string, DOMRect> = {};
-    for (const tab of tabs) {
-      const el = tabElementRefs.current[tab.id];
+    for (const item of renderedTabs) {
+      const tabId = item.tab.id;
+      const el = tabElementRefs.current[tabId];
       if (!el) continue;
       const nextRect = el.getBoundingClientRect();
-      nextRects[tab.id] = nextRect;
+      nextRects[tabId] = nextRect;
 
-      const prevRect = previousRectsRef.current[tab.id];
+      const prevRect = previousRectsRef.current[tabId];
       if (!prevRect) continue;
-      if (tab.id === draggingTabId) continue;
+      if (tabId === draggingTabId) continue;
       const deltaX = prevRect.left - nextRect.left;
       if (Math.abs(deltaX) < 2) continue;
 
@@ -360,7 +466,7 @@ export default function TabBar() {
       });
     }
     previousRectsRef.current = nextRects;
-  }, [tabs, draggingTabId]);
+  }, [renderedTabs, draggingTabId]);
 
   return (
     <div
@@ -394,11 +500,13 @@ export default function TabBar() {
             WebkitAppRegion: 'drag',
           }}
         >
-          {tabs.map((tab) => {
+          {renderedTabs.map(({ tab, phase }) => {
             const displayFavicon = getDisplayFavicon(tab.url, tab.favicon);
             const displayTitle = getDisplayTitle(tab.url, tab.title);
             const isInternalTab = tab.url.startsWith('mira://');
             const faviconSize = isInternalTab ? 22 : 16;
+            const isExiting = phase === 'exiting';
+            const isCollapsed = phase !== 'stable';
 
             return (
               <div
@@ -408,26 +516,29 @@ export default function TabBar() {
                 }}
                 data-tab-id={tab.id}
                 onClick={() => {
+                  if (isExiting) return;
                   if (suppressClickRef.current) return;
                   setActive(tab.id);
                 }}
                 onMouseDown={(event) => {
+                  if (isExiting) return;
                   if (event.button !== 0) return;
                   const targetEl = tabElementRefs.current[tab.id];
                   if (targetEl) {
                     const rect = targetEl.getBoundingClientRect();
-                    dragPointerToCenterRef.current = event.clientX - (rect.left + rect.width / 2);
+                    dragPointerToLeftRef.current = event.clientX - rect.left;
                   } else {
-                    dragPointerToCenterRef.current = 0;
+                    dragPointerToLeftRef.current = 0;
                   }
-                  dragStartClientXRef.current = event.clientX;
                   lastSwapClientXRef.current = null;
                   lastSwapAtRef.current = 0;
                   dragMovedRef.current = false;
                   setDragOffsetX(0);
+                  dragOffsetXRef.current = 0;
                   setDraggingTabId(tab.id);
                 }}
                 onContextMenu={(event) => {
+                  if (isExiting) return;
                   event.preventDefault();
                   if (nativeContextMenusEnabled && electron?.ipcRenderer) {
                     const tabIndex = tabs.findIndex((entry) => entry.id === tab.id);
@@ -450,7 +561,6 @@ export default function TabBar() {
                 className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
                 style={{
                   height: TAB_ROW_HEIGHT,
-                  padding: '0 10px',
                   cursor: 'default',
                   WebkitAppRegion: 'no-drag',
                   borderRadius:
@@ -462,8 +572,10 @@ export default function TabBar() {
                   alignItems: 'center',
                   whiteSpace: 'nowrap',
                   flex: `1 1 ${TAB_TARGET_WIDTH}`,
-                  minWidth: TAB_MIN_WIDTH,
-                  maxWidth: TAB_TARGET_WIDTH,
+                  minWidth: isCollapsed ? 0 : TAB_MIN_WIDTH,
+                  maxWidth: isCollapsed ? 0 : TAB_TARGET_WIDTH,
+                  overflow: 'hidden',
+                  padding: isCollapsed ? '0' : '0 10px',
                   position: 'relative',
                   marginBottom:
                     tab.id === activeId
@@ -471,11 +583,15 @@ export default function TabBar() {
                       : 'var(--layoutBorderWidth, 1px)',
                   background:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
-                  opacity: draggingTabId === tab.id ? 0.75 : 1,
+                  opacity: isCollapsed ? 0 : draggingTabId === tab.id ? 0.75 : 1,
                   transform: draggingTabId === tab.id ? `translateX(${dragOffsetX}px)` : undefined,
                   borderBottomColor:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
-                  transition: draggingTabId === tab.id ? 'none' : 'opacity 110ms ease',
+                  pointerEvents: isExiting ? 'none' : 'auto',
+                  transition:
+                    draggingTabId === tab.id
+                      ? 'none'
+                      : `min-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), max-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), padding ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), opacity ${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms ease`,
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
                   boxShadow:
                     draggingTabId === tab.id
