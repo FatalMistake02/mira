@@ -123,6 +123,7 @@ body {
   --tabCloseButtonBgActive: color-mix(in srgb, var(--tabText, var(--text1)) 20%, transparent);
   --tabPlaceholderBg: color-mix(in srgb, var(--surfaceBorder, var(--tabBorder)) 55%, transparent);
   --tabDragShadow: 0 6px 18px color-mix(in srgb, var(--bg) 72%, transparent);
+  --tabDragOpacity: 1;
   --menuShadow: 0 10px 30px color-mix(in srgb, var(--bg) 78%, transparent);
   --contextMenuBg: var(--surfaceBg, var(--tabBg));
   --contextMenuBgHover: var(--surfaceBgHover, var(--tabBgHover));
