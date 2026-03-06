@@ -153,6 +153,9 @@ export default function Settings() {
   const [rawFileDarkModeEnabled, setRawFileDarkModeEnabled] = useState(
     () => initialSettings.rawFileDarkModeEnabled,
   );
+  const [animationsEnabled, setAnimationsEnabled] = useState(
+    () => initialSettings.animationsEnabled,
+  );
   const [nativeTextFieldContextMenu, setNativeTextFieldContextMenu] = useState(
     () => initialSettings.nativeTextFieldContextMenu,
   );
@@ -299,6 +302,7 @@ export default function Settings() {
         searchEngineShortcutChars,
         themeId,
         rawFileDarkModeEnabled,
+        animationsEnabled,
         nativeTextFieldContextMenu,
         layoutId,
         tabSleepValue,
@@ -335,6 +339,7 @@ export default function Settings() {
     searchEngineShortcutChars,
     themeId,
     rawFileDarkModeEnabled,
+    animationsEnabled,
     nativeTextFieldContextMenu,
     layoutId,
     tabSleepValue,
@@ -1297,6 +1302,30 @@ export default function Settings() {
                     Open Layout Creator
                   </button>
                 </div>
+              </section>
+
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Animations</h2>
+                </div>
+                <label htmlFor="animations-enabled" className="settings-setting-row">
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Animations</span>
+                    <span className="settings-setting-description">
+                      Enable animations.
+                    </span>
+                  </span>
+                  <input
+                    id="animations-enabled"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={animationsEnabled}
+                    onChange={(e) => {
+                      setAnimationsEnabled(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </label>
               </section>
 
               {!!importMessage && (

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add animations toggle
+
 ## v0.9.0 - 2026-02-20
 
 - Add auto update
