@@ -81,6 +81,9 @@ export default function TabBar() {
   const [nativeContextMenusEnabled, setNativeContextMenusEnabled] = useState(
     () => getBrowserSettings().nativeTextFieldContextMenu,
   );
+  const [animationsEnabled, setAnimationsEnabled] = useState(
+    () => getBrowserSettings().animationsEnabled,
+  );
   const isMacOS = electron?.isMacOS ?? false;
   const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -124,6 +127,26 @@ export default function TabBar() {
   }, []);
 
   useEffect(() => {
+    if (!animationsEnabled) {
+      for (const timeout of Object.values(enterTimerByTabIdRef.current)) {
+        window.clearTimeout(timeout);
+      }
+      for (const timeout of Object.values(exitTimerByTabIdRef.current)) {
+        window.clearTimeout(timeout);
+      }
+      enterTimerByTabIdRef.current = {};
+      exitTimerByTabIdRef.current = {};
+
+      const immediate: RenderedTabState[] = tabs.map((tab, index) => ({
+        tab,
+        phase: 'stable',
+        lastKnownIndex: index,
+      }));
+      renderedTabsRef.current = immediate;
+      setRenderedTabs(immediate);
+      return;
+    }
+
     const previous = renderedTabsRef.current;
     const previousById = new Map(previous.map((item) => [item.tab.id, item]));
     const nextById = new Map(tabs.map((tab) => [tab.id, tab]));
@@ -196,11 +219,13 @@ export default function TabBar() {
 
     renderedTabsRef.current = next;
     setRenderedTabs(next);
-  }, [tabs]);
+  }, [tabs, animationsEnabled]);
 
   useEffect(() => {
     const syncSettings = () => {
-      setNativeContextMenusEnabled(getBrowserSettings().nativeTextFieldContextMenu);
+      const settings = getBrowserSettings();
+      setNativeContextMenusEnabled(settings.nativeTextFieldContextMenu);
+      setAnimationsEnabled(settings.animationsEnabled);
     };
     syncSettings();
     window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
@@ -467,6 +492,7 @@ export default function TabBar() {
       if (tabId === releasedDragTabId) continue;
       const deltaX = prevRect.left - nextRect.left;
       if (Math.abs(deltaX) < 2) continue;
+      if (!animationsEnabled) continue;
 
       // Prevent direction glitches by dropping any previous in-flight transform animations.
       for (const animation of el.getAnimations()) {
@@ -482,7 +508,7 @@ export default function TabBar() {
     if (releasedDragTabId) {
       releasedDragTabIdRef.current = null;
     }
-  }, [renderedTabs, draggingTabId]);
+  }, [renderedTabs, draggingTabId, animationsEnabled]);
 
   return (
     <div
@@ -610,7 +636,7 @@ export default function TabBar() {
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
                   pointerEvents: isExiting ? 'none' : 'auto',
                   transition:
-                    draggingTabId === tab.id
+                    !animationsEnabled || draggingTabId === tab.id
                       ? 'none'
                       : `min-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), max-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), padding ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), opacity ${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms ease`,
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
