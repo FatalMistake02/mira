@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronLeft,
@@ -14,8 +14,14 @@ import {
 } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import DownloadButton from './DownloadButton';
-import { getBrowserSettings, getSearchUrlFromInput } from '../features/settings/browserSettings';
+import {
+  BROWSER_SETTINGS_CHANGED_EVENT,
+  getBrowserSettings,
+  getSearchUrlFromInput,
+} from '../features/settings/browserSettings';
 import { electron } from '../electronBridge';
+
+const MAIN_MENU_ANIMATION_MS = 150;
 
 function ReloadIcon() {
   return <RotateCw size={16} strokeWidth={1.9} aria-hidden="true" />;
@@ -58,7 +64,40 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   } = useTabs();
   const [input, setInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuClosing, setMenuClosing] = useState(false);
+  const [animationsEnabled, setAnimationsEnabled] = useState(
+    () => getBrowserSettings().animationsEnabled,
+  );
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuCloseTimerRef = useRef<number | null>(null);
+
+  const clearMenuCloseTimer = useCallback(() => {
+    if (menuCloseTimerRef.current === null) return;
+    window.clearTimeout(menuCloseTimerRef.current);
+    menuCloseTimerRef.current = null;
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    clearMenuCloseTimer();
+    if (!animationsEnabled) {
+      setMenuOpen(false);
+      setMenuClosing(false);
+      return;
+    }
+
+    setMenuOpen(false);
+    setMenuClosing(true);
+    menuCloseTimerRef.current = window.setTimeout(() => {
+      setMenuClosing(false);
+      menuCloseTimerRef.current = null;
+    }, MAIN_MENU_ANIMATION_MS);
+  }, [animationsEnabled, clearMenuCloseTimer]);
+
+  const openMenu = useCallback(() => {
+    clearMenuCloseTimer();
+    setMenuClosing(false);
+    setMenuOpen(true);
+  }, [clearMenuCloseTimer]);
 
   useEffect(() => {
     const activeTab = tabs.find((t) => t.id === activeId);
@@ -177,17 +216,33 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   };
 
   useEffect(() => {
-    if (!menuOpen) return;
+    const syncSettings = () => {
+      setAnimationsEnabled(getBrowserSettings().animationsEnabled);
+    };
+    syncSettings();
+    window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
+    return () => window.removeEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearMenuCloseTimer();
+    };
+  }, [clearMenuCloseTimer]);
+
+  useEffect(() => {
+    const menuVisible = menuOpen || menuClosing;
+    if (!menuVisible) return;
 
     const onPointerDown = (event: MouseEvent) => {
       if (!menuRef.current) return;
       if (menuRef.current.contains(event.target as Node)) return;
-      setMenuOpen(false);
+      closeMenu();
     };
 
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [menuOpen]);
+  }, [menuOpen, menuClosing, closeMenu]);
 
   const openSettings = () => {
     const existingSettingsTab = tabs.find((tab) => tab.url === 'mira://Settings');
@@ -254,8 +309,10 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
 
   const onSelectMenuAction = (action: AddressMenuAction) => {
     action.onSelect();
-    setMenuOpen(false);
+    closeMenu();
   };
+
+  const menuVisible = menuOpen || menuClosing;
 
   return (
     <div
@@ -353,7 +410,13 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
 
       <div ref={menuRef} style={{ position: 'relative' }}>
         <button
-          onClick={() => setMenuOpen((prev) => !prev)}
+          onClick={() => {
+            if (menuOpen) {
+              closeMenu();
+              return;
+            }
+            openMenu();
+          }}
           title="Menu"
           className={`theme-btn theme-btn-nav nav-icon-btn address-menu-trigger ${
             menuOpen ? 'address-menu-trigger-open' : ''
@@ -377,9 +440,15 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
           />
         </button>
 
-        {menuOpen && (
+        {menuVisible && (
           <div
-            className="theme-panel address-menu-panel"
+            className={`theme-panel address-menu-panel ${
+              animationsEnabled
+                ? menuOpen
+                  ? 'address-menu-panel-open'
+                  : 'address-menu-panel-closing'
+                : ''
+            }`}
             role="menu"
             aria-label="Browser menu"
             style={{ zIndex: 1200 }}

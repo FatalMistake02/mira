@@ -713,7 +713,11 @@ export default function Settings() {
     : SETTINGS_SECTION_TABS;
 
   return (
-    <div className="settings-page">
+    <div
+      className={`settings-page ${
+        animationsEnabled ? 'settings-page-animations-enabled' : 'settings-page-animations-disabled'
+      }`}
+    >
       <header className="settings-header">
         <div>
           <h1 className="settings-title">Settings</h1>
@@ -753,10 +757,11 @@ export default function Settings() {
         </div>
 
         <div
+          key={activeSection}
           id={`settings-panel-${activeSection}`}
           role="tabpanel"
           aria-labelledby={`settings-tab-${activeSection}`}
-          className="settings-section"
+          className={`settings-section ${animationsEnabled ? 'settings-section-animated' : ''}`}
         >
           {activeSection === 'general' && (
             <>
