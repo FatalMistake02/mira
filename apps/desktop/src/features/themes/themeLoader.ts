@@ -112,6 +112,9 @@ function isValidThemeColorValue(key: string, value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
   if (CSS_VAR_PATTERN.test(trimmed)) return true;
+  if (key.toLowerCase().includes('opacity')) {
+    return supportsCssValue('opacity', trimmed);
+  }
   if (key.toLowerCase().includes('shadow')) {
     return supportsCssValue('box-shadow', trimmed);
   }

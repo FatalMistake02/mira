@@ -16,6 +16,8 @@ const TAB_SWAP_MIN_POINTER_DELTA_PX = 10;
 const TAB_SWAP_COOLDOWN_MS = 70;
 const TAB_APPEAR_SETTLE_MS = 24;
 const TAB_ENTER_EXIT_DURATION_MS = 180;
+const TAB_REORDER_ANIMATION_MS = 170;
+const TAB_REORDER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 type RenderedTabState = {
   tab: Tab;
@@ -93,6 +95,7 @@ export default function TabBar() {
   const lastSwapAtRef = useRef(0);
   const dragMovedRef = useRef(false);
   const suppressClickRef = useRef(false);
+  const releasedDragTabIdRef = useRef<string | null>(null);
   const lastNativeTabCommandRef = useRef<{ signature: string; at: number } | null>(null);
   const [renderedTabs, setRenderedTabs] = useState<RenderedTabState[]>(() =>
     tabs.map((tab, index) => ({ tab, phase: 'stable', lastKnownIndex: index })),
@@ -416,6 +419,7 @@ export default function TabBar() {
 
     const onMouseUp = () => {
       const moved = dragMovedRef.current;
+      releasedDragTabIdRef.current = draggingTabId;
       setDraggingTabId(null);
       setDragOffsetX(0);
       dragOffsetXRef.current = 0;
@@ -442,16 +446,25 @@ export default function TabBar() {
 
   useLayoutEffect(() => {
     const nextRects: Record<string, DOMRect> = {};
+    const releasedDragTabId = releasedDragTabIdRef.current;
     for (const item of renderedTabs) {
       const tabId = item.tab.id;
       const el = tabElementRefs.current[tabId];
       if (!el) continue;
       const nextRect = el.getBoundingClientRect();
-      nextRects[tabId] = nextRect;
-
       const prevRect = previousRectsRef.current[tabId];
+      if (tabId === draggingTabId) {
+        // Keep the pre-drag baseline rect so the drop doesn't animate from transformed geometry.
+        if (prevRect) {
+          nextRects[tabId] = prevRect;
+        } else {
+          nextRects[tabId] = nextRect;
+        }
+        continue;
+      }
+      nextRects[tabId] = nextRect;
       if (!prevRect) continue;
-      if (tabId === draggingTabId) continue;
+      if (tabId === releasedDragTabId) continue;
       const deltaX = prevRect.left - nextRect.left;
       if (Math.abs(deltaX) < 2) continue;
 
@@ -461,11 +474,14 @@ export default function TabBar() {
       }
 
       el.animate([{ transform: `translateX(${deltaX}px)` }, { transform: 'translateX(0px)' }], {
-        duration: 90,
-        easing: 'cubic-bezier(0.2, 0, 0.2, 1)',
+        duration: TAB_REORDER_ANIMATION_MS,
+        easing: TAB_REORDER_EASING,
       });
     }
     previousRectsRef.current = nextRects;
+    if (releasedDragTabId) {
+      releasedDragTabIdRef.current = null;
+    }
   }, [renderedTabs, draggingTabId]);
 
   return (
@@ -583,7 +599,12 @@ export default function TabBar() {
                       : 'var(--layoutBorderWidth, 1px)',
                   background:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
-                  opacity: isCollapsed ? 0 : draggingTabId === tab.id ? 0.75 : 1,
+                  opacity:
+                    isCollapsed
+                      ? 0
+                      : draggingTabId === tab.id
+                        ? 'var(--tabDragOpacity, 1)'
+                        : 1,
                   transform: draggingTabId === tab.id ? `translateX(${dragOffsetX}px)` : undefined,
                   borderBottomColor:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
