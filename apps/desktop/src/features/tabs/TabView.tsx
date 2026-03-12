@@ -341,9 +341,9 @@ export default function TabView() {
     return getThemeById(settings.themeId)?.mode ?? 'dark';
   });
   const [pageMenuState, setPageMenuState] = useState<PageContextMenuState | null>(null);
-  const [externalErrorByTabId, setExternalErrorByTabId] = useState<Record<string, ExternalErrorState>>(
-    {},
-  );
+  const [externalErrorByTabId, setExternalErrorByTabId] = useState<
+    Record<string, ExternalErrorState>
+  >({});
   const lastNativeContextCommandRef = React.useRef<{ signature: string; at: number } | null>(null);
   const isMacOS = electron?.isMacOS ?? false;
   const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
@@ -871,96 +871,108 @@ export default function TabView() {
               <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
                 <webview
                   ref={(el) => {
-                  if (!el) {
-                    // When the element unmounts we deregister it
-                    registerWebview(tab.id, null);
-                    return;
-                  }
-                  const wv = el as unknown as WebviewElement;
-                  registerWebview(tab.id, wv);
-                  wv.setAttribute(WEBVIEW_TAB_ID_ATTR, tab.id);
+                    if (!el) {
+                      // When the element unmounts we deregister it
+                      registerWebview(tab.id, null);
+                      return;
+                    }
+                    const wv = el as unknown as WebviewElement;
+                    registerWebview(tab.id, wv);
+                    wv.setAttribute(WEBVIEW_TAB_ID_ATTR, tab.id);
 
-                  // Clean any old listeners that might still be attached
-                  if (wv.didNavigateHandler) {
-                    wv.removeEventListener('did-navigate', wv.didNavigateHandler as EventListener);
-                  }
-                  if (wv.didNavigateInPageHandler) {
-                    wv.removeEventListener(
-                      'did-navigate-in-page',
-                      wv.didNavigateInPageHandler as EventListener,
-                    );
-                  }
-                  if (wv.didStartLoadingHandler) {
-                    wv.removeEventListener(
-                      'did-start-loading',
-                      wv.didStartLoadingHandler as EventListener,
-                    );
-                  }
-                  if (wv.didFailLoadHandler) {
-                    wv.removeEventListener('did-fail-load', wv.didFailLoadHandler as EventListener);
-                  }
-                  if (wv.domReadyHandler) {
-                    wv.removeEventListener('dom-ready', wv.domReadyHandler as EventListener);
-                  }
-                  if (wv.didPageTitleUpdatedHandler) {
-                    wv.removeEventListener(
-                      'page-title-updated',
-                      wv.didPageTitleUpdatedHandler as EventListener,
-                    );
-                  }
-                  if (wv.pageFaviconUpdatedHandler) {
-                    wv.removeEventListener(
-                      'page-favicon-updated',
-                      wv.pageFaviconUpdatedHandler as EventListener,
-                    );
-                  }
-                  if (wv.foundInPageHandler) {
-                    wv.removeEventListener('found-in-page', wv.foundInPageHandler as EventListener);
-                  }
-                  if (wv.contextMenuHandler) {
-                    wv.removeEventListener('context-menu', wv.contextMenuHandler as EventListener);
-                  }
-                  if (wv.newWindowHandler) {
-                    wv.removeEventListener('new-window', wv.newWindowHandler as EventListener);
-                  }
-                  const didNavigateHandler = (e: Event) => {
-                    const ev = e as WebviewNavigationEvent;
-                    wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
-                    clearExternalErrorForTab(tab.id);
-                    navigate(ev.url, tab.id);
-                    applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
-                  };
-                  const didNavigateInPageHandler = (e: Event) => {
-                    const ev = e as WebviewNavigationEvent;
-                    wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
-                    clearExternalErrorForTab(tab.id);
-                    navigate(ev.url, tab.id);
-                    applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
-                  };
-                  const didStartLoadingHandler = () => {
-                    clearExternalErrorForTab(tab.id);
-                  };
-                  const didFailLoadHandler = (e: Event) => {
-                    const ev = e as WebviewDidFailLoadEvent;
-                    if (!ev.isMainFrame) return;
-                    // Ignore cancellations from abort/redirect churn.
-                    if (ev.errorCode === 0 || ev.errorCode === -3) return;
-                    const route =
-                      ev.errorCode === ERR_INTERNET_DISCONNECTED
-                        ? 'errors/external-offline'
-                        : 'errors/external-network';
-                    setExternalErrorByTabId((current) => ({
-                      ...current,
-                      [tab.id]: {
-                        route,
-                        failedUrlComparable: normalizeComparableUrl(ev.validatedURL ?? tab.url),
-                      },
-                    }));
-                  };
-                  const domReadyHandler = () => {
-                    applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
-                    // Inject script to handle data-link attributes
-                    const dataLinkScript = `(() => {
+                    // Clean any old listeners that might still be attached
+                    if (wv.didNavigateHandler) {
+                      wv.removeEventListener(
+                        'did-navigate',
+                        wv.didNavigateHandler as EventListener,
+                      );
+                    }
+                    if (wv.didNavigateInPageHandler) {
+                      wv.removeEventListener(
+                        'did-navigate-in-page',
+                        wv.didNavigateInPageHandler as EventListener,
+                      );
+                    }
+                    if (wv.didStartLoadingHandler) {
+                      wv.removeEventListener(
+                        'did-start-loading',
+                        wv.didStartLoadingHandler as EventListener,
+                      );
+                    }
+                    if (wv.didFailLoadHandler) {
+                      wv.removeEventListener(
+                        'did-fail-load',
+                        wv.didFailLoadHandler as EventListener,
+                      );
+                    }
+                    if (wv.domReadyHandler) {
+                      wv.removeEventListener('dom-ready', wv.domReadyHandler as EventListener);
+                    }
+                    if (wv.didPageTitleUpdatedHandler) {
+                      wv.removeEventListener(
+                        'page-title-updated',
+                        wv.didPageTitleUpdatedHandler as EventListener,
+                      );
+                    }
+                    if (wv.pageFaviconUpdatedHandler) {
+                      wv.removeEventListener(
+                        'page-favicon-updated',
+                        wv.pageFaviconUpdatedHandler as EventListener,
+                      );
+                    }
+                    if (wv.foundInPageHandler) {
+                      wv.removeEventListener(
+                        'found-in-page',
+                        wv.foundInPageHandler as EventListener,
+                      );
+                    }
+                    if (wv.contextMenuHandler) {
+                      wv.removeEventListener(
+                        'context-menu',
+                        wv.contextMenuHandler as EventListener,
+                      );
+                    }
+                    if (wv.newWindowHandler) {
+                      wv.removeEventListener('new-window', wv.newWindowHandler as EventListener);
+                    }
+                    const didNavigateHandler = (e: Event) => {
+                      const ev = e as WebviewNavigationEvent;
+                      wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
+                      clearExternalErrorForTab(tab.id);
+                      navigate(ev.url, tab.id);
+                      applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
+                    };
+                    const didNavigateInPageHandler = (e: Event) => {
+                      const ev = e as WebviewNavigationEvent;
+                      wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
+                      clearExternalErrorForTab(tab.id);
+                      navigate(ev.url, tab.id);
+                      applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
+                    };
+                    const didStartLoadingHandler = () => {
+                      clearExternalErrorForTab(tab.id);
+                    };
+                    const didFailLoadHandler = (e: Event) => {
+                      const ev = e as WebviewDidFailLoadEvent;
+                      if (!ev.isMainFrame) return;
+                      // Ignore cancellations from abort/redirect churn.
+                      if (ev.errorCode === 0 || ev.errorCode === -3) return;
+                      const route =
+                        ev.errorCode === ERR_INTERNET_DISCONNECTED
+                          ? 'errors/external-offline'
+                          : 'errors/external-network';
+                      setExternalErrorByTabId((current) => ({
+                        ...current,
+                        [tab.id]: {
+                          route,
+                          failedUrlComparable: normalizeComparableUrl(ev.validatedURL ?? tab.url),
+                        },
+                      }));
+                    };
+                    const domReadyHandler = () => {
+                      applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
+                      // Inject script to handle data-link attributes
+                      const dataLinkScript = `(() => {
   document.addEventListener('click', (e) => {
     const target = e.target instanceof Element ? e.target : e.target?.parentElement;
     if (!target) return;
@@ -987,162 +999,168 @@ export default function TabView() {
     }
   }, true);
 })();`;
-                    wv.executeJavaScript(dataLinkScript).catch(() => undefined);
-                  };
-                  const didPageTitleUpdatedHandler = (e: Event) => {
-                    const ev = e as WebviewPageTitleUpdatedEvent;
-                    updateTabMetadata(tab.id, { title: ev.title });
-                  };
-                  const pageFaviconUpdatedHandler = (e: Event) => {
-                    const ev = e as WebviewPageFaviconUpdatedEvent;
-                    updateTabMetadata(tab.id, { favicon: ev.favicons?.[0] ?? null });
-                  };
-                  const foundInPageHandler = (e: Event) => {
-                    const ev = e as WebviewFoundInPageEvent;
-                    const result = ev.result ?? ev;
-                    const requestId =
-                      typeof result.requestId === 'number' ? result.requestId : Number.NaN;
-                    if (!Number.isFinite(requestId)) return;
+                      wv.executeJavaScript(dataLinkScript).catch(() => undefined);
+                    };
+                    const didPageTitleUpdatedHandler = (e: Event) => {
+                      const ev = e as WebviewPageTitleUpdatedEvent;
+                      updateTabMetadata(tab.id, { title: ev.title });
+                    };
+                    const pageFaviconUpdatedHandler = (e: Event) => {
+                      const ev = e as WebviewPageFaviconUpdatedEvent;
+                      updateTabMetadata(tab.id, { favicon: ev.favicons?.[0] ?? null });
+                    };
+                    const foundInPageHandler = (e: Event) => {
+                      const ev = e as WebviewFoundInPageEvent;
+                      const result = ev.result ?? ev;
+                      const requestId =
+                        typeof result.requestId === 'number' ? result.requestId : Number.NaN;
+                      if (!Number.isFinite(requestId)) return;
 
-                    const activeMatchOrdinal =
-                      typeof result.activeMatchOrdinal === 'number' ? result.activeMatchOrdinal : 0;
-                    const matches = typeof result.matches === 'number' ? result.matches : 0;
-                    updateFindInPageMatches(tab.id, requestId, activeMatchOrdinal, matches);
-                  };
-                  const contextMenuHandler = (e: Event) => {
-                    const ev = e as WebviewContextMenuEvent;
-                    const params = normalizeContextMenuParams(ev.params);
+                      const activeMatchOrdinal =
+                        typeof result.activeMatchOrdinal === 'number'
+                          ? result.activeMatchOrdinal
+                          : 0;
+                      const matches = typeof result.matches === 'number' ? result.matches : 0;
+                      updateFindInPageMatches(tab.id, requestId, activeMatchOrdinal, matches);
+                    };
+                    const contextMenuHandler = (e: Event) => {
+                      const ev = e as WebviewContextMenuEvent;
+                      const params = normalizeContextMenuParams(ev.params);
 
-                    if (nativeTextFieldContextMenu) {
-                      const ipc = electron?.ipcRenderer;
+                      if (nativeTextFieldContextMenu) {
+                        const ipc = electron?.ipcRenderer;
+                        const webContentsId =
+                          typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
+                        if (ipc && Number.isFinite(webContentsId) && webContentsId > 0) {
+                          e.preventDefault();
+                          setPageMenuState(null);
+
+                          let x = params.x;
+                          let y = params.y;
+                          if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+                            const webviewRect = wv.getBoundingClientRect();
+                            x = webviewRect.left + params.x;
+                            y = webviewRect.top + params.y;
+                          }
+
+                          const currentTab = tabs.find((entry) => entry.id === tab.id) ?? tab;
+                          const canGoBack = currentTab.historyIndex > 0;
+                          const canGoForward =
+                            currentTab.historyIndex < currentTab.history.length - 1;
+                          const sourceUrl = params.pageURL || currentTab.url || '';
+
+                          void ipc
+                            .invoke('webview-show-native-context-menu', {
+                              webContentsId: Math.floor(webContentsId),
+                              x,
+                              y,
+                              params,
+                              context: {
+                                canGoBack,
+                                canGoForward,
+                                sourceUrl,
+                              },
+                            })
+                            .catch(() => undefined);
+                          return;
+                        }
+                      }
+
+                      e.preventDefault();
+
                       const webContentsId =
                         typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
-                      if (ipc && Number.isFinite(webContentsId) && webContentsId > 0) {
+                      if (!Number.isFinite(webContentsId) || webContentsId <= 0) return;
+
+                      let x = params.x;
+                      let y = params.y;
+
+                      // Some environments report coordinates relative to the webview bounds.
+                      // If direct values look invalid, fall back to translating by webview offset.
+                      if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+                        const webviewRect = wv.getBoundingClientRect();
+                        x = webviewRect.left + params.x;
+                        y = webviewRect.top + params.y;
+                      }
+                      setPageMenuState({
+                        tabId: tab.id,
+                        webContentsId: Math.floor(webContentsId),
+                        x,
+                        y,
+                        params,
+                      });
+                    };
+                    const newWindowHandler = (e: Event) => {
+                      const ev = e as WebviewNewWindowEvent;
+                      const url = typeof ev.url === 'string' ? ev.url.trim() : '';
+                      const disposition =
+                        typeof ev.disposition === 'string' ? ev.disposition.toLowerCase() : '';
+
+                      if (!url) {
                         e.preventDefault();
-                        setPageMenuState(null);
-
-                        let x = params.x;
-                        let y = params.y;
-                        if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
-                          const webviewRect = wv.getBoundingClientRect();
-                          x = webviewRect.left + params.x;
-                          y = webviewRect.top + params.y;
-                        }
-
-                        const currentTab = tabs.find((entry) => entry.id === tab.id) ?? tab;
-                        const canGoBack = currentTab.historyIndex > 0;
-                        const canGoForward =
-                          currentTab.historyIndex < currentTab.history.length - 1;
-                        const sourceUrl = params.pageURL || currentTab.url || '';
-
-                        void ipc
-                          .invoke('webview-show-native-context-menu', {
-                            webContentsId: Math.floor(webContentsId),
-                            x,
-                            y,
-                            params,
-                            context: {
-                              canGoBack,
-                              canGoForward,
-                              sourceUrl,
-                            },
-                          })
-                          .catch(() => undefined);
                         return;
                       }
-                    }
 
-                    e.preventDefault();
-
-                    const webContentsId =
-                      typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
-                    if (!Number.isFinite(webContentsId) || webContentsId <= 0) return;
-
-                    let x = params.x;
-                    let y = params.y;
-
-                    // Some environments report coordinates relative to the webview bounds.
-                    // If direct values look invalid, fall back to translating by webview offset.
-                    if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
-                      const webviewRect = wv.getBoundingClientRect();
-                      x = webviewRect.left + params.x;
-                      y = webviewRect.top + params.y;
-                    }
-                    setPageMenuState({
-                      tabId: tab.id,
-                      webContentsId: Math.floor(webContentsId),
-                      x,
-                      y,
-                      params,
-                    });
-                  };
-                  const newWindowHandler = (e: Event) => {
-                    const ev = e as WebviewNewWindowEvent;
-                    const url = typeof ev.url === 'string' ? ev.url.trim() : '';
-                    const disposition =
-                      typeof ev.disposition === 'string' ? ev.disposition.toLowerCase() : '';
-
-                    if (!url) {
+                      // Prevent the default behavior of opening in a new window
                       e.preventDefault();
-                      return;
-                    }
 
-                    // Prevent the default behavior of opening in a new window
-                    e.preventDefault();
-
-                    // Open in a new tab based on disposition
-                    if (disposition === 'new-window') {
-                      // Open in new window
-                      const ipc = electron?.ipcRenderer;
-                      if (ipc) {
-                        void ipc.invoke('window-new-with-url', url).catch(() => undefined);
+                      // Open in a new tab based on disposition
+                      if (disposition === 'new-window') {
+                        // Open in new window
+                        const ipc = electron?.ipcRenderer;
+                        if (ipc) {
+                          void ipc.invoke('window-new-with-url', url).catch(() => undefined);
+                        } else {
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        }
                       } else {
-                        window.open(url, '_blank', 'noopener,noreferrer');
+                        // Open in new tab (default for target="_blank")
+                        newTab(url, { activate: true });
                       }
-                    } else {
-                      // Open in new tab (default for target="_blank")
-                      newTab(url, { activate: true });
+                    };
+
+                    wv.didNavigateHandler = didNavigateHandler as (
+                      e: WebviewNavigationEvent,
+                    ) => void;
+                    wv.didNavigateInPageHandler = didNavigateInPageHandler as (
+                      e: WebviewNavigationEvent,
+                    ) => void;
+                    wv.didStartLoadingHandler = didStartLoadingHandler;
+                    wv.didFailLoadHandler = didFailLoadHandler as (
+                      e: WebviewDidFailLoadEvent,
+                    ) => void;
+                    wv.domReadyHandler = domReadyHandler;
+                    wv.didPageTitleUpdatedHandler = didPageTitleUpdatedHandler as (
+                      e: WebviewPageTitleUpdatedEvent,
+                    ) => void;
+                    wv.pageFaviconUpdatedHandler = pageFaviconUpdatedHandler as (
+                      e: WebviewPageFaviconUpdatedEvent,
+                    ) => void;
+                    wv.foundInPageHandler = foundInPageHandler as (
+                      e: WebviewFoundInPageEvent,
+                    ) => void;
+                    wv.contextMenuHandler = contextMenuHandler as (
+                      e: WebviewContextMenuEvent,
+                    ) => void;
+                    wv.newWindowHandler = newWindowHandler as (e: WebviewNewWindowEvent) => void;
+
+                    wv.addEventListener('did-navigate', didNavigateHandler);
+                    wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
+                    wv.addEventListener('did-start-loading', didStartLoadingHandler);
+                    wv.addEventListener('did-fail-load', didFailLoadHandler);
+                    wv.addEventListener('dom-ready', domReadyHandler);
+                    wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
+                    wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
+                    wv.addEventListener('found-in-page', foundInPageHandler);
+                    wv.addEventListener('context-menu', contextMenuHandler);
+                    wv.addEventListener('new-window', newWindowHandler);
+
+                    const trackedSrc = wv.getAttribute(WEBVIEW_TRACKED_SRC_ATTR) ?? '';
+                    const nextSrc = normalizeComparableUrl(tab.url);
+                    if (trackedSrc !== nextSrc) {
+                      wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, nextSrc);
+                      wv.src = tab.url;
                     }
-                  };
-
-                  wv.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
-                  wv.didNavigateInPageHandler = didNavigateInPageHandler as (
-                    e: WebviewNavigationEvent,
-                  ) => void;
-                  wv.didStartLoadingHandler = didStartLoadingHandler;
-                  wv.didFailLoadHandler = didFailLoadHandler as (e: WebviewDidFailLoadEvent) => void;
-                  wv.domReadyHandler = domReadyHandler;
-                  wv.didPageTitleUpdatedHandler = didPageTitleUpdatedHandler as (
-                    e: WebviewPageTitleUpdatedEvent,
-                  ) => void;
-                  wv.pageFaviconUpdatedHandler = pageFaviconUpdatedHandler as (
-                    e: WebviewPageFaviconUpdatedEvent,
-                  ) => void;
-                  wv.foundInPageHandler = foundInPageHandler as (
-                    e: WebviewFoundInPageEvent,
-                  ) => void;
-                  wv.contextMenuHandler = contextMenuHandler as (
-                    e: WebviewContextMenuEvent,
-                  ) => void;
-                  wv.newWindowHandler = newWindowHandler as (e: WebviewNewWindowEvent) => void;
-
-                  wv.addEventListener('did-navigate', didNavigateHandler);
-                  wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
-                  wv.addEventListener('did-start-loading', didStartLoadingHandler);
-                  wv.addEventListener('did-fail-load', didFailLoadHandler);
-                  wv.addEventListener('dom-ready', domReadyHandler);
-                  wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
-                  wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
-                  wv.addEventListener('found-in-page', foundInPageHandler);
-                  wv.addEventListener('context-menu', contextMenuHandler);
-                  wv.addEventListener('new-window', newWindowHandler);
-
-                  const trackedSrc = wv.getAttribute(WEBVIEW_TRACKED_SRC_ATTR) ?? '';
-                  const nextSrc = normalizeComparableUrl(tab.url);
-                  if (trackedSrc !== nextSrc) {
-                    wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, nextSrc);
-                    wv.src = tab.url;
-                  }
                   }}
                   allowpopups={true}
                   style={{ flex: 1, width: '100%', height: '100%' }}

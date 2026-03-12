@@ -625,12 +625,11 @@ export default function TabBar() {
                       : 'var(--layoutBorderWidth, 1px)',
                   background:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
-                  opacity:
-                    isCollapsed
-                      ? 0
-                      : draggingTabId === tab.id
-                        ? 'var(--tabDragOpacity, 1)'
-                        : 1,
+                  opacity: isCollapsed
+                    ? 0
+                    : draggingTabId === tab.id
+                      ? 'var(--tabDragOpacity, 1)'
+                      : 1,
                   transform: draggingTabId === tab.id ? `translateX(${dragOffsetX}px)` : undefined,
                   borderBottomColor:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,

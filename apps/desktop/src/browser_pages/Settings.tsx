@@ -1316,9 +1316,7 @@ export default function Settings() {
                 <label htmlFor="animations-enabled" className="settings-setting-row">
                   <span className="settings-setting-meta">
                     <span className="settings-setting-label">Animations</span>
-                    <span className="settings-setting-description">
-                      Enable animations.
-                    </span>
+                    <span className="settings-setting-description">Enable animations.</span>
                   </span>
                   <input
                     id="animations-enabled"

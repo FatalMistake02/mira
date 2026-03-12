@@ -203,7 +203,11 @@ function OfflineRunnerGame() {
         ctx.font = '700 30px sans-serif';
         ctx.fillText('Game Over', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 12);
         ctx.font = '600 16px sans-serif';
-        ctx.fillText('Press Space, Arrow Up, or Tap to restart', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
+        ctx.fillText(
+          'Press Space, Arrow Up, or Tap to restart',
+          GAME_WIDTH / 2,
+          GAME_HEIGHT / 2 + 20,
+        );
       } else if (!startedRef.current) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);

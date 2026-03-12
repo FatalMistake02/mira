@@ -1584,7 +1584,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       const stagedTab: Tab = {
         id: stagedTabId,
         url: defaultNewTabUrl,
-        title: defaultNewTabUrl.startsWith('mira://') ? miraUrlToName(defaultNewTabUrl) : defaultNewTabUrl,
+        title: defaultNewTabUrl.startsWith('mira://')
+          ? miraUrlToName(defaultNewTabUrl)
+          : defaultNewTabUrl,
         favicon: defaultNewTabUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
         history: [defaultNewTabUrl],
         historyIndex: 0,
@@ -1594,7 +1596,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       };
       setTabs((currentTabs) =>
         currentTabs
-          .map((tab) => (tab.id === activeIdRef.current ? { ...tab, lastActiveAt: nowForTab } : tab))
+          .map((tab) =>
+            tab.id === activeIdRef.current ? { ...tab, lastActiveAt: nowForTab } : tab,
+          )
           .concat(stagedTab),
       );
 
