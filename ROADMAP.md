@@ -29,6 +29,7 @@
 - [ ] Mute tabs
 - [ ] Tab move to window
 - [ ] Cast
+- [ ] Forward and backward context menu
 
 ## v1.3.0
 - [ ] Reader mode view
