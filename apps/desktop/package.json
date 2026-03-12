@@ -97,40 +97,41 @@
       "category": "public.app-category.utilities"
     },
     "linux": {
-      "artifactName": "${productName}-${version}-linux.${ext}",
-      "target": [
-        "AppImage",
-        "deb",
-        "rpm"
-      ],
-      "mimeTypes": [
-        "text/html",
-        "application/xhtml+xml"
-      ],
-      "fileAssociations": [
-        {
-          "ext": "htm",
-          "name": "HTML Document",
-          "mimeType": "text/html"
-        },
-        {
-          "ext": "html",
-          "name": "HTML Document",
-          "mimeType": "text/html"
-        },
-        {
-          "ext": "shtml",
-          "name": "HTML Document",
-          "mimeType": "text/html"
-        },
-        {
-          "ext": "xhtml",
-          "name": "HTML Document",
-          "mimeType": "application/xhtml+xml"
-        }
-      ],
-      "category": "Utility"
+  "artifactName": "${productName}-${version}-linux.${ext}",
+  "target": [
+    "AppImage",
+    "deb",
+    "rpm"
+  ],
+  "mimeTypes": [
+    "text/html",
+    "application/xhtml+xml"
+  ],
+  "fileAssociations": [
+    {
+      "ext": "htm",
+      "name": "HTML Document",
+      "mimeType": "text/html"
+    },
+    {
+      "ext": "html",
+      "name": "HTML Document",
+      "mimeType": "text/html"
+    },
+    {
+      "ext": "shtml",
+      "name": "HTML Document",
+      "mimeType": "text/html"
+    },
+    {
+      "ext": "xhtml",
+      "name": "HTML Document",
+      "mimeType": "application/xhtml+xml"
     }
+  ],
+  "category": "Utility"
+}
+
   },
   "dependencies": {
     "eslint-config-prettier": "^10.1.8",
