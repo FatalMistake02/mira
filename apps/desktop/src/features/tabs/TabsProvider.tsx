@@ -768,7 +768,12 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       const next = t.filter((tab) => tab.id !== id);
       if (id !== activeId || !next.length) return next;
 
-      const nextActiveId = next[0].id;
+      const closingIndex = t.findIndex((tab) => tab.id === id);
+      const nextIndex =
+        closingIndex >= 0 ? Math.min(closingIndex, next.length - 1) : next.length - 1;
+      const nextActive = next[nextIndex];
+      if (!nextActive) return next;
+      const nextActiveId = nextActive.id;
       const now = Date.now();
       setActiveId(nextActiveId);
       return next.map((tab) =>
