@@ -1526,10 +1526,10 @@ export default function Settings() {
                 {canAutoInstallOnLaunch && (
                   <label htmlFor="auto-update-on-launch" className="settings-setting-row">
                     <span className="settings-setting-meta">
-                      <span className="settings-setting-label">Auto-update on launch</span>
-                      <span className="settings-setting-description">
-                        On app start, check for updates and automatically install when available.
-                      </span>
+                    <span className="settings-setting-label">Auto-update on launch</span>
+                    <span className="settings-setting-description">
+                        On app start, check for updates and prompt to install when available.
+                    </span>
                     </span>
                     <input
                       id="auto-update-on-launch"

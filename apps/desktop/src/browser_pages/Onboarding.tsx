@@ -424,7 +424,7 @@ export default function Onboarding() {
                 <span className="settings-setting-meta">
                   <span className="settings-setting-label">Auto-update on launch</span>
                   <span className="settings-setting-description">
-                    Check updates on app launch and auto install when possible.
+                    Check updates on app launch and prompt to install when available.
                   </span>
                 </span>
                 <input

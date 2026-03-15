@@ -7,6 +7,7 @@ import AddressBar from './components/AddressBar';
 import FindBar from './components/FindBar';
 import TopBar from './components/TopBar';
 import RestoreTabsPrompt from './components/RestoreTabsPrompt';
+import UpdatePrompt, { type UpdateCheckPayload } from './components/UpdatePrompt';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import DownloadProvider from './features/downloads/DownloadProvider';
 import { electron } from './electronBridge';
@@ -34,6 +35,10 @@ type PerfOverlayStats = {
   frameTimeMs: number;
   totalMemoryMb: number | null;
 };
+
+type UpdateCheckResponse =
+  | { ok: true; data: UpdateCheckPayload }
+  | { ok: false; error: string };
 
 function readHeapMetric(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
@@ -183,9 +188,10 @@ function PerfOverlay() {
 function Browser() {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const previousTabIdsRef = useRef<string[] | null>(null);
-  const didRequestLaunchAutoUpdateRef = useRef(false);
+  const didCheckLaunchUpdateRef = useRef(false);
   const [findBarOpen, setFindBarOpen] = useState(false);
   const [findBarFocusToken, setFindBarFocusToken] = useState(0);
+  const [pendingUpdate, setPendingUpdate] = useState<UpdateCheckPayload | null>(null);
   const [showPerfOverlay, setShowPerfOverlay] = useState(() => {
     const settings = getBrowserSettings();
     return settings.dev && settings.showPerfOverlay;
@@ -218,6 +224,7 @@ function Browser() {
     toggleFullScreen,
     scrollPage,
     activeId,
+    restorePromptOpen,
   } = useTabs();
   const openFindBar = useCallback(() => {
     setFindBarOpen(true);
@@ -304,17 +311,25 @@ function Browser() {
   }, []);
 
   useEffect(() => {
-    if (!electron?.ipcRenderer || didRequestLaunchAutoUpdateRef.current) return;
+    if (!electron?.ipcRenderer || didCheckLaunchUpdateRef.current) return;
 
     const settings = getBrowserSettings();
     if (!settings.autoUpdateOnLaunch) return;
 
-    didRequestLaunchAutoUpdateRef.current = true;
-    void electron.ipcRenderer
-      .invoke('updates-run-launch-auto', {
-        includePrerelease: settings.includePrereleaseUpdates,
-      })
-      .catch(() => undefined);
+    didCheckLaunchUpdateRef.current = true;
+    const runLaunchUpdateCheck = async () => {
+      try {
+        const response = await electron.ipcRenderer.invoke<UpdateCheckResponse>('updates-check', {
+          includePrerelease: settings.includePrereleaseUpdates,
+        });
+        if (!response.ok) return;
+        if (!response.data.hasUpdate) return;
+        setPendingUpdate(response.data);
+      } catch {
+        // Swallow launch-time update errors to avoid blocking startup.
+      }
+    };
+    void runLaunchUpdateCheck();
   }, []);
 
   useEffect(() => {
@@ -354,6 +369,11 @@ function Browser() {
       <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
       <TabView />
       <RestoreTabsPrompt />
+      <UpdatePrompt
+        open={!!pendingUpdate && !restorePromptOpen}
+        update={pendingUpdate}
+        onLater={() => setPendingUpdate(null)}
+      />
       {showPerfOverlay && <PerfOverlay />}
     </div>
   );

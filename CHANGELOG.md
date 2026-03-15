@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Update prompt
+
 ## v0.9.3 - 2026-03-12
 
 - Linux release
