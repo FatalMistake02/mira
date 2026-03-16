@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.10.0 - 2026-03-16
+
 - Update prompt
 - Links work on windows
 
