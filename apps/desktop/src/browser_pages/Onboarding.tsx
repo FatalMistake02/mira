@@ -4,6 +4,7 @@ import { electron } from '../electronBridge';
 import {
   getBrowserSettings,
   saveBrowserSettings,
+  type AutoUpdateMode,
   type StartupRestoreBehavior,
 } from '../features/settings/browserSettings';
 import { applyTheme } from '../features/themes/applyTheme';
@@ -76,7 +77,7 @@ export default function Onboarding() {
   const [trackerBlockEnabled, setTrackerBlockEnabled] = useState(
     () => initialSettings.trackerBlockEnabled,
   );
-  const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(
+  const [autoUpdateMode, setAutoUpdateMode] = useState<AutoUpdateMode>(
     () => initialSettings.autoUpdateOnLaunch,
   );
   const [canConfigureRunOnStartup, setCanConfigureRunOnStartup] = useState(false);
@@ -150,9 +151,10 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (canAutoInstallOnLaunch) return;
-    if (!autoUpdateOnLaunch) return;
-    setAutoUpdateOnLaunch(false);
-  }, [canAutoInstallOnLaunch, autoUpdateOnLaunch]);
+    if (autoUpdateMode === 'auto-on-launch' || autoUpdateMode === 'auto-on-close') {
+      setAutoUpdateMode('ask-on-launch');
+    }
+  }, [canAutoInstallOnLaunch, autoUpdateMode]);
 
   const finishOnboarding = async () => {
     if (isFinishing) return;
@@ -165,7 +167,10 @@ export default function Onboarding() {
       runOnStartup: canConfigureRunOnStartup ? runOnStartup : false,
       adBlockEnabled,
       trackerBlockEnabled,
-      autoUpdateOnLaunch: canAutoInstallOnLaunch ? autoUpdateOnLaunch : false,
+      autoUpdateOnLaunch:
+        canAutoInstallOnLaunch || autoUpdateMode === 'off' || autoUpdateMode === 'ask-on-launch'
+          ? autoUpdateMode
+          : 'ask-on-launch',
     });
 
     if (!electron?.ipcRenderer) {
@@ -420,28 +425,41 @@ export default function Onboarding() {
                 </div>
               )}
 
-              <label className="settings-setting-row" htmlFor="onboarding-auto-update">
+              <label className="settings-setting-row" htmlFor="onboarding-auto-update-mode">
                 <span className="settings-setting-meta">
-                  <span className="settings-setting-label">Auto-update on launch</span>
+                  <span className="settings-setting-label">Automatic updates</span>
                   <span className="settings-setting-description">
-                    Check updates on app launch and prompt to install when available.
+                    Choose when Mira should check for and apply updates.
                   </span>
                 </span>
-                <input
-                  id="onboarding-auto-update"
-                  type="checkbox"
-                  className="settings-toggle settings-setting-control"
-                  checked={autoUpdateOnLaunch}
-                  disabled={!canAutoInstallOnLaunch}
-                  onChange={(event) => setAutoUpdateOnLaunch(event.currentTarget.checked)}
-                />
+                <select
+                  id="onboarding-auto-update-mode"
+                  value={autoUpdateMode}
+                  className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                  onChange={(event) => {
+                    const nextMode = event.currentTarget.value as AutoUpdateMode;
+                    if (
+                      nextMode === 'off'
+                      || nextMode === 'ask-on-launch'
+                      || nextMode === 'ask-on-close'
+                      || nextMode === 'auto-on-launch'
+                      || nextMode === 'auto-on-close'
+                    ) {
+                      setAutoUpdateMode(nextMode);
+                    }
+                  }}
+                >
+                  <option value="off">Off (only manual checks)</option>
+                  <option value="ask-on-launch">Ask when Mira starts</option>
+                  <option value="ask-on-close">Ask when Mira closes</option>
+                  <option value="auto-on-launch" disabled={!canAutoInstallOnLaunch}>
+                    Auto update on launch
+                  </option>
+                  <option value="auto-on-close" disabled={!canAutoInstallOnLaunch}>
+                    Auto update on close
+                  </option>
+                </select>
               </label>
-
-              {!canAutoInstallOnLaunch && (
-                <div className="theme-text2" style={{ fontSize: 12 }}>
-                  Auto-update on launch is unavailable in this build.
-                </div>
-              )}
             </div>
           )}
 

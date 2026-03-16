@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Progress on fixing updates
+
 ## v0.10.0 - 2026-03-16
 
 - Update prompt

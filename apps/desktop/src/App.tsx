@@ -15,6 +15,7 @@ import Onboarding from './browser_pages/Onboarding';
 import {
   BROWSER_SETTINGS_CHANGED_EVENT,
   getBrowserSettings,
+  type AutoUpdateMode,
 } from './features/settings/browserSettings';
 import { applyTheme } from './features/themes/applyTheme';
 import { getThemeById } from './features/themes/themeLoader';
@@ -314,11 +315,19 @@ function Browser() {
     if (!electron?.ipcRenderer || didCheckLaunchUpdateRef.current) return;
 
     const settings = getBrowserSettings();
-    if (!settings.autoUpdateOnLaunch) return;
+    const mode = settings.autoUpdateOnLaunch as AutoUpdateMode;
+    if (mode === 'off' || mode === 'ask-on-close' || mode === 'auto-on-close') return;
 
     didCheckLaunchUpdateRef.current = true;
     const runLaunchUpdateCheck = async () => {
       try {
+        if (mode === 'auto-on-launch') {
+          await electron.ipcRenderer.invoke('updates-run-launch-auto', {
+            includePrerelease: settings.includePrereleaseUpdates,
+          });
+          return;
+        }
+
         const response = await electron.ipcRenderer.invoke<UpdateCheckResponse>('updates-check', {
           includePrerelease: settings.includePrereleaseUpdates,
         });

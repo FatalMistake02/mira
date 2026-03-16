@@ -5,6 +5,13 @@ export type TabSleepUnit = 'seconds' | 'minutes' | 'hours';
 export type TabSleepMode = 'freeze' | 'discard';
 export type DevToolsOpenMode = 'side' | 'window';
 export type StartupRestoreBehavior = 'ask' | 'windows' | 'tabs' | 'fresh';
+
+export type AutoUpdateMode =
+  | 'off'
+  | 'ask-on-launch'
+  | 'ask-on-close'
+  | 'auto-on-launch'
+  | 'auto-on-close';
 export type SearchEngine =
   | 'google'
   | 'duckduckgo'
@@ -64,7 +71,7 @@ export type BrowserSettings = {
   showNewTabBranding: boolean;
   disableNewTabIntro: boolean;
   includePrereleaseUpdates: boolean;
-  autoUpdateOnLaunch: boolean;
+  autoUpdateOnLaunch: AutoUpdateMode;
   runOnStartup: boolean;
   startupRestoreBehavior: StartupRestoreBehavior;
   searchEngine: SearchEngine;
@@ -92,7 +99,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   showNewTabBranding: false,
   disableNewTabIntro: false,
   includePrereleaseUpdates: false,
-  autoUpdateOnLaunch: false,
+  autoUpdateOnLaunch: 'off',
   runOnStartup: false,
   startupRestoreBehavior: 'ask',
   searchEngine: 'google',
@@ -245,12 +252,23 @@ function normalizeIncludePrereleaseUpdates(value: unknown): boolean {
   return value;
 }
 
-function normalizeAutoUpdateOnLaunch(value: unknown): boolean {
-  if (typeof value !== 'boolean') {
-    return DEFAULT_BROWSER_SETTINGS.autoUpdateOnLaunch;
+function normalizeAutoUpdateOnLaunch(value: unknown): AutoUpdateMode {
+  // Backwards compatibility: older settings stored this as a boolean.
+  if (typeof value === 'boolean') {
+    return value ? 'ask-on-launch' : 'off';
   }
 
-  return value;
+  if (
+    value === 'off'
+    || value === 'ask-on-launch'
+    || value === 'ask-on-close'
+    || value === 'auto-on-launch'
+    || value === 'auto-on-close'
+  ) {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_SETTINGS.autoUpdateOnLaunch;
 }
 
 function normalizeRunOnStartup(value: unknown): boolean {

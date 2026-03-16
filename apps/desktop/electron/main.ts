@@ -117,6 +117,17 @@ let adBlockEnabled = true;
 let trackerBlockEnabled = false;
 let quitOnLastWindowClose = false;
 let hasAttemptedLaunchAutoUpdate = false;
+let hasAttemptedCloseAutoUpdate = false;
+
+type AutoUpdateMode =
+  | 'off'
+  | 'ask-on-launch'
+  | 'ask-on-close'
+  | 'auto-on-launch'
+  | 'auto-on-close';
+
+let configuredAutoUpdateMode: AutoUpdateMode = 'off';
+let configuredAutoUpdateIncludePrerelease = false;
 let onboardingCompleted = false;
 const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/FatalMistake02/mira/releases?per_page=40';
 const isPortableBuild = process.platform === 'win32' && !!process.env.PORTABLE_EXECUTABLE_FILE;
@@ -2201,6 +2212,66 @@ function setupUpdateHandlers() {
       }
     },
   );
+
+  ipcMain.handle(
+    'updates-configure-auto-mode',
+    (_event, payload: { mode?: unknown; includePrerelease?: unknown } | undefined) => {
+      const mode = payload?.mode;
+      if (
+        mode === 'off'
+        || mode === 'ask-on-launch'
+        || mode === 'ask-on-close'
+        || mode === 'auto-on-launch'
+        || mode === 'auto-on-close'
+      ) {
+        configuredAutoUpdateMode = mode;
+      } else {
+        configuredAutoUpdateMode = 'off';
+      }
+
+      configuredAutoUpdateIncludePrerelease = payload?.includePrerelease === true;
+      return { ok: true };
+    },
+  );
+
+  app.on('before-quit', async () => {
+    if (hasAttemptedCloseAutoUpdate) return;
+    if (
+      configuredAutoUpdateMode !== 'ask-on-close'
+      && configuredAutoUpdateMode !== 'auto-on-close'
+    ) {
+      return;
+    }
+
+    hasAttemptedCloseAutoUpdate = true;
+
+    try {
+      const result = await checkForUpdates(configuredAutoUpdateIncludePrerelease);
+      if (!result || !result.hasUpdate) return;
+
+      if (configuredAutoUpdateMode === 'ask-on-close') {
+        const { dialog } = await import('electron');
+        const response = await dialog.showMessageBox({
+          type: 'question',
+          buttons: ['Install update', 'Skip'],
+          defaultId: 0,
+          cancelId: 1,
+          title: 'Mira Update Available',
+          message: `Mira v${result.latestVersion} is available. Install now?`,
+          detail: `You are currently on v${result.currentVersion}.`,
+        });
+        if (response.response !== 0) return;
+      }
+
+      if (result.mode !== 'installer') return;
+
+      const downloadedPath = await downloadAssetToDownloads(result.downloadUrl, result.assetName);
+      const openError = await shell.openPath(downloadedPath);
+      if (openError) return;
+    } catch {
+      // Swallow close-time update errors to avoid blocking shutdown.
+    }
+  });
 }
 
 function triggerNewWindowFromShortcut(sourceWindow: BrowserWindow): void {

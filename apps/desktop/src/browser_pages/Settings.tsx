@@ -9,6 +9,7 @@ import {
   getBrowserSettings,
   getSearchEngineShortcuts,
   saveBrowserSettings,
+  type AutoUpdateMode,
   type DevToolsOpenMode,
   type SearchEngine,
   type SearchEngineShortcutChars,
@@ -178,7 +179,7 @@ export default function Settings() {
   const [includePrereleaseUpdates, setIncludePrereleaseUpdates] = useState(
     () => initialSettings.includePrereleaseUpdates,
   );
-  const [autoUpdateOnLaunch, setAutoUpdateOnLaunch] = useState(
+  const [autoUpdateMode, setAutoUpdateMode] = useState<AutoUpdateMode>(
     () => initialSettings.autoUpdateOnLaunch,
   );
   const [runOnStartup, setRunOnStartup] = useState(() => initialSettings.runOnStartup);
@@ -218,6 +219,16 @@ export default function Settings() {
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { navigate } = useTabs();
   const { clear: clearDownloads } = useDownloads();
+
+  useEffect(() => {
+    if (!electron?.ipcRenderer) return;
+    void electron.ipcRenderer
+      .invoke('updates-configure-auto-mode', {
+        mode: autoUpdateMode,
+        includePrerelease: includePrereleaseUpdates,
+      })
+      .catch(() => undefined);
+  }, [autoUpdateMode, includePrereleaseUpdates]);
 
   const handleThemeChange = (nextThemeId: string) => {
     setThemeId(nextThemeId);
@@ -315,7 +326,7 @@ export default function Settings() {
         showNewTabBranding,
         disableNewTabIntro,
         includePrereleaseUpdates,
-        autoUpdateOnLaunch,
+        autoUpdateOnLaunch: autoUpdateMode,
         runOnStartup,
         startupRestoreBehavior,
         showPerfOverlay,
@@ -352,7 +363,7 @@ export default function Settings() {
     showNewTabBranding,
     disableNewTabIntro,
     includePrereleaseUpdates,
-    autoUpdateOnLaunch,
+    autoUpdateMode,
     runOnStartup,
     startupRestoreBehavior,
     showPerfOverlay,
@@ -1523,26 +1534,42 @@ export default function Settings() {
                     }}
                   />
                 </label>
-                {canAutoInstallOnLaunch && (
-                  <label htmlFor="auto-update-on-launch" className="settings-setting-row">
-                    <span className="settings-setting-meta">
-                    <span className="settings-setting-label">Auto-update on launch</span>
+                <label htmlFor="auto-update-mode" className="settings-setting-row">
+                  <span className="settings-setting-meta">
+                    <span className="settings-setting-label">Automatic update behavior</span>
                     <span className="settings-setting-description">
-                        On app start, check for updates and prompt to install when available.
+                      Choose when Mira should check for and apply updates automatically.
                     </span>
-                    </span>
-                    <input
-                      id="auto-update-on-launch"
-                      type="checkbox"
-                      className="settings-toggle settings-setting-control"
-                      checked={autoUpdateOnLaunch}
-                      onChange={(e) => {
-                        setAutoUpdateOnLaunch(e.currentTarget.checked);
+                  </span>
+                  <select
+                    id="auto-update-mode"
+                    value={autoUpdateMode}
+                    onChange={(e) => {
+                      const nextMode = e.currentTarget.value as AutoUpdateMode;
+                      if (
+                        nextMode === 'off'
+                        || nextMode === 'ask-on-launch'
+                        || nextMode === 'ask-on-close'
+                        || nextMode === 'auto-on-launch'
+                        || nextMode === 'auto-on-close'
+                      ) {
+                        setAutoUpdateMode(nextMode);
                         setSaveStatus('saving');
-                      }}
-                    />
-                  </label>
-                )}
+                      }
+                    }}
+                    className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                  >
+                    <option value="off">Off (only manual checks)</option>
+                    <option value="ask-on-launch">Ask when Mira starts</option>
+                    <option value="ask-on-close">Ask when Mira closes</option>
+                    <option value="auto-on-launch" disabled={!canAutoInstallOnLaunch}>
+                      Auto update on launch
+                    </option>
+                    <option value="auto-on-close" disabled={!canAutoInstallOnLaunch}>
+                      Auto update on close
+                    </option>
+                  </select>
+                </label>
                 <div className="settings-setting-row">
                   <div className="settings-setting-meta">
                     <span className="settings-setting-label">Update actions</span>
