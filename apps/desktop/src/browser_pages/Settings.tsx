@@ -718,6 +718,7 @@ export default function Settings() {
   }, []);
 
   const canConfigureRunOnStartupSetting = electron?.isMacOS || electron?.platform === 'win32';
+  const isWindowsPlatform = electron?.platform === 'win32';
   const isDevSettingsEnabled = initialSettings.dev;
   const settingsSectionTabs: Array<{ id: SettingsSectionId; label: string }> = isDevSettingsEnabled
     ? [...SETTINGS_SECTION_TABS, { id: 'dev', label: 'Dev' }]
@@ -1493,7 +1494,7 @@ export default function Settings() {
                       className="theme-btn theme-btn-go settings-btn-pad"
                       disabled={
                         isSettingDefaultBrowser ||
-                        isDefaultBrowser === true ||
+                        (!isWindowsPlatform && isDefaultBrowser === true) ||
                         !canAttemptDefaultBrowserRegistration
                       }
                     >

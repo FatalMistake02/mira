@@ -1,6 +1,13 @@
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
 
+!define MIRA_STARTMENU_KEY "Software\Clients\StartMenuInternet\${PRODUCT_NAME}"
+!define MIRA_CAPABILITIES_KEY "${MIRA_STARTMENU_KEY}\Capabilities"
+!define MIRA_REGAPP_KEY "Software\RegisteredApplications"
+!define MIRA_HTML_PROGID "${APP_ID}.HTML"
+!define MIRA_URL_PROGID "${APP_ID}.URL"
+!define MIRA_EXECUTABLE_FILENAME "${PRODUCT_FILENAME}.exe"
+
 !ifndef BUILD_UNINSTALLER
 Var runShortcutPageDialog
 Var runShortcutDesktopCheckbox
@@ -71,7 +78,39 @@ Function ShortcutOptionsPageLeave
   ${NSD_GetState} $runShortcutTaskbarCheckbox $runShortcutTaskbarState
 FunctionEnd
 
+Function RegisterDefaultBrowser
+  ; ProgIDs
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}" "" "${PRODUCT_NAME} HTML Document"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}\DefaultIcon" "" "$INSTDIR\${MIRA_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}\shell\open\command" "" '"$INSTDIR\${MIRA_EXECUTABLE_FILENAME}" "%1"'
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}" "" "${PRODUCT_NAME} URL"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}" "URL Protocol" ""
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}\DefaultIcon" "" "$INSTDIR\${MIRA_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}\shell\open\command" "" '"$INSTDIR\${MIRA_EXECUTABLE_FILENAME}" "%1"'
+
+  ; Start menu internet registration
+  WriteRegStr SHELL_CONTEXT "${MIRA_STARTMENU_KEY}" "" "${PRODUCT_NAME}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_STARTMENU_KEY}\DefaultIcon" "" "$INSTDIR\${MIRA_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "${MIRA_STARTMENU_KEY}\shell\open\command" "" '"$INSTDIR\${MIRA_EXECUTABLE_FILENAME}"'
+
+  ; Default apps capabilities
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}" "ApplicationName" "${PRODUCT_NAME}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}" "ApplicationDescription" "${APP_DESCRIPTION}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}" "ApplicationIcon" "$INSTDIR\${MIRA_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".htm" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".html" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".shtml" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".xhtml" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\URLAssociations" "http" "${MIRA_URL_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\URLAssociations" "https" "${MIRA_URL_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_REGAPP_KEY}" "${PRODUCT_NAME}" "${MIRA_CAPABILITIES_KEY}"
+
+  ; Notify shell to refresh registered apps
+  System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
+FunctionEnd
+
 !macro customInstall
+  Call RegisterDefaultBrowser
   ${ifNot} ${isUpdated}
     ${if} $runShortcutShouldPrompt == "true"
     ${if} $runShortcutDesktopState == ${BST_CHECKED}
@@ -82,9 +121,19 @@ FunctionEnd
     ${endif}
 
     ${if} $runShortcutTaskbarState == ${BST_CHECKED}
-      ${StdUtils.InvokeShellVerb} $0 "$INSTDIR" "${APP_EXECUTABLE_FILENAME}" ${StdUtils.Const.ShellVerb.PinToTaskbar}
+      ${StdUtils.InvokeShellVerb} $0 "$INSTDIR" "${MIRA_EXECUTABLE_FILENAME}" ${StdUtils.Const.ShellVerb.PinToTaskbar}
     ${endif}
     ${endif}
   ${endif}
 !macroend
+!else
+
+!macro customUninstall
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}"
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}"
+  DeleteRegKey SHELL_CONTEXT "${MIRA_STARTMENU_KEY}"
+  DeleteRegValue SHELL_CONTEXT "${MIRA_REGAPP_KEY}" "${PRODUCT_NAME}"
+  System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
+!macroend
+
 !endif

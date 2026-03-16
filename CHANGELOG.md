@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Progress on fixing updates
+- Default browser on Windows now works
 
 ## v0.10.0 - 2026-03-16
 

@@ -9,9 +9,10 @@ import {
   session,
   webContents as electronWebContents,
 } from 'electron';
+import { execFileSync } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'electron';
-import { appendFileSync, promises as fs, unlinkSync, writeFileSync } from 'fs';
+import { appendFileSync, promises as fs, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
@@ -794,7 +795,146 @@ function setAsDefaultForProtocol(protocol: string): boolean {
 }
 
 function isDefaultBrowser(): boolean {
+  if (isWindows) {
+    const windowsResult = isDefaultBrowserWindows();
+    if (windowsResult !== null) {
+      return windowsResult;
+    }
+    return false;
+  }
+
   return isDefaultForProtocol('http') && isDefaultForProtocol('https');
+}
+
+let cachedBuildAppId: string | null | undefined;
+
+function getBuildAppId(): string | null {
+  if (cachedBuildAppId !== undefined) return cachedBuildAppId;
+  try {
+    const raw = readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8');
+    const parsed = JSON.parse(raw) as { build?: { appId?: unknown } };
+    const appId = typeof parsed?.build?.appId === 'string' ? parsed.build.appId : null;
+    cachedBuildAppId = appId;
+    return appId;
+  } catch {
+    cachedBuildAppId = null;
+    return null;
+  }
+}
+
+function readRegistryValue(key: string, valueName: string): string | null {
+  if (!isWindows) return null;
+  try {
+    const output = execFileSync('reg', ['query', key, '/v', valueName], {
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    const lines = output.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (!trimmed.toLowerCase().startsWith(valueName.toLowerCase())) continue;
+
+      const parts = trimmed.split(/\s{2,}/);
+      if (parts.length >= 3) {
+        return parts.slice(2).join(' ').trim();
+      }
+
+      const match = trimmed.match(new RegExp(`^${valueName}\\s+REG_\\w+\\s+(.*)$`, 'i'));
+      if (match?.[1]) return match[1].trim();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getWindowsUserChoiceProgId(protocol: 'http' | 'https'): string | null {
+  const key = `HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\${protocol}\\UserChoice`;
+  return readRegistryValue(key, 'ProgId');
+}
+
+function getWindowsRegisteredProtocolProgId(protocol: 'http' | 'https'): string | null {
+  const candidates: string[] = [];
+  const appName = app.getName();
+  if (appName) candidates.push(appName);
+  try {
+    const exeName = path.basename(app.getPath('exe'), path.extname(app.getPath('exe')));
+    if (exeName && !candidates.includes(exeName)) candidates.push(exeName);
+  } catch {
+    // ignore
+  }
+
+  for (const name of candidates) {
+    const keyUser = `HKCU\\Software\\Clients\\StartMenuInternet\\${name}\\Capabilities\\URLAssociations`;
+    const userValue = readRegistryValue(keyUser, protocol);
+    if (userValue) return userValue;
+
+    const keyMachine = `HKLM\\Software\\Clients\\StartMenuInternet\\${name}\\Capabilities\\URLAssociations`;
+    const machineValue = readRegistryValue(keyMachine, protocol);
+    if (machineValue) return machineValue;
+  }
+
+  const appId = getBuildAppId();
+  return appId ? `${appId}.URL` : null;
+}
+
+function isDefaultBrowserWindows(): boolean | null {
+  const httpChoice = getWindowsUserChoiceProgId('http');
+  const httpsChoice = getWindowsUserChoiceProgId('https');
+  if (!httpChoice || !httpsChoice) {
+    logDefaultBrowserDebug('windows-default-browser-userchoice-missing', {
+      httpChoice,
+      httpsChoice,
+    });
+    return null;
+  }
+
+  const expectedHttp = getWindowsRegisteredProtocolProgId('http');
+  const expectedHttps = getWindowsRegisteredProtocolProgId('https') ?? expectedHttp;
+  if (!expectedHttp || !expectedHttps) {
+    logDefaultBrowserDebug('windows-default-browser-expected-missing', {
+      expectedHttp,
+      expectedHttps,
+    });
+    return null;
+  }
+
+  const isDefault = httpChoice === expectedHttp && httpsChoice === expectedHttps;
+  logDefaultBrowserDebug('windows-default-browser-check', {
+    httpChoice,
+    httpsChoice,
+    expectedHttp,
+    expectedHttps,
+    isDefault,
+  });
+  return isDefault;
+}
+
+function getWindowsDefaultAppsSettingsUri(): string {
+  if (!isWindows) return 'ms-settings:defaultapps';
+
+  let registeredAppName = '';
+  try {
+    const exePath = app.getPath('exe');
+    const exeName = path.basename(exePath, path.extname(exePath));
+    registeredAppName = exeName || app.getName();
+    const isPerMachineInstall = exePath.toLowerCase().includes('\\program files\\');
+    if (!registeredAppName) return 'ms-settings:defaultapps';
+
+    const param = isPerMachineInstall ? 'registeredAppMachine' : 'registeredAppUser';
+    return `ms-settings:defaultapps?${param}=${encodeURIComponent(registeredAppName)}`;
+  } catch {
+    return 'ms-settings:defaultapps';
+  }
+}
+
+function openWindowsDefaultAppsSettings(): void {
+  if (!isWindows) return;
+  const uri = getWindowsDefaultAppsSettingsUri();
+  void shell.openExternal(uri).catch(() => {
+    void shell.openExternal('ms-settings:defaultapps');
+  });
 }
 
 type DefaultBrowserSupportCode =
@@ -3169,7 +3309,22 @@ function setupDefaultBrowserHandlers() {
     const didSetHttps = setAsDefaultForProtocol('https');
     const ok = didSetHttp && didSetHttps;
     const isDefault = isDefaultBrowser();
-    const requiresUserAction = ok && !isDefault;
+
+    // On Windows, even when registration APIs report success and
+    // `isDefaultBrowser()` returns true, the OS may still require the user
+    // to confirm Mira as the default in Settings. Treat *all* successful
+    // registrations as requiring manual confirmation on Windows so that we
+    // always guide the user and open the Default apps page.
+    const requiresUserAction = isWindows ? ok : ok && !isDefault;
+
+    if (ok && isWindows) {
+      try {
+        // Open the Default apps page, deep-linked to Mira when possible.
+        openWindowsDefaultAppsSettings();
+      } catch {
+        // Best-effort only; ignore failures and fall back to messaging.
+      }
+    }
 
     let message = '';
     if (!ok) {
@@ -3178,8 +3333,10 @@ function setupDefaultBrowserHandlers() {
       message = isMacOS
         ? 'Mira was registered for http/https. If it is still not default, set Mira in macOS System Settings > Desktop & Dock > Default web browser, then refresh.'
         : isWindows
-          ? 'Mira was registered for http/https. Windows may require confirmation in Settings before default status updates. Confirm Mira in Default apps or refresh status in a moment.'
+          ? 'Mira was registered for http/https. Windows requires confirmation in the Default apps settings before the default browser changes. The Settings app should now be open—choose Mira as the default Web browser, then click Refresh Status.'
           : 'Mira was registered for http/https. Confirm Mira in your OS default apps settings, then refresh status.';
+    } else {
+      message = 'Mira is now set as your default browser.';
     }
 
     logDefaultBrowserDebug('default-browser-set', {

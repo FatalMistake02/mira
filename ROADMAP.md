@@ -2,7 +2,7 @@
 
 ## v1.0.0 — Stable Release
 - [ ] Improve performance
-- [ ] Fix default browser
+- [x] Fix default browser
 - [ ] Fix auto update
 - [x] Fix target="_blank" links
 - [ ] Fix all other issues
