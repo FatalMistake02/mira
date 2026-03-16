@@ -977,29 +977,48 @@ export default function TabView() {
                       applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
                       // Inject script to handle data-link attributes
                       const dataLinkScript = `(() => {
+  const falsyAttr = (value) => value === 'false' || value === '0' || value === 'no';
+  const resolveUrl = (raw) => {
+    try {
+      return new URL(raw, window.location.href).toString();
+    } catch {
+      return raw;
+    }
+  };
+
   document.addEventListener('click', (e) => {
-    const target = e.target instanceof Element ? e.target : e.target?.parentElement;
-    if (!target) return;
-    
-    // Handle data-link attribute
-    const element = target.closest('[data-link]');
-    if (element) {
-      const link = element.getAttribute('data-link');
-      if (link) {
-        const newTabAttr = element.getAttribute('data-link-new-tab');
-        const openNewTab = newTabAttr === 'true' || newTabAttr === '';
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        if (openNewTab) {
-          // Use window.open to trigger new-window event (opens in new tab)
-          window.open(link, '_blank', 'noopener,noreferrer');
-        } else {
-          // Navigate in current tab
-          window.location.href = link;
-        }
-      }
+    const ev = e;
+    const path = typeof ev.composedPath === 'function' ? ev.composedPath() : [];
+    const candidate = (path[0] instanceof Element ? path[0] : ev.target) instanceof Element
+      ? (path[0] instanceof Element ? path[0] : ev.target)
+      : null;
+    if (!candidate) return;
+
+    const element = candidate.closest('[data-link]');
+    if (!element) return;
+
+    const rawLink = element.getAttribute('data-link') ?? '';
+    const link = rawLink.trim();
+    if (!link) return;
+
+    const hasNewTabAttr = element.hasAttribute('data-link-new-tab');
+    const newTabAttrValue = (element.getAttribute('data-link-new-tab') ?? '').trim().toLowerCase();
+    // Presence of data-link-new-tab should open in new tab, unless explicitly disabled.
+    const wantsNewTab = hasNewTabAttr && !falsyAttr(newTabAttrValue);
+
+    const isModifiedClick =
+      (ev instanceof MouseEvent)
+      && (ev.button === 1 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey);
+
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const resolved = resolveUrl(link);
+    if (wantsNewTab || isModifiedClick) {
+      // Use window.open to trigger webview new-window event (opens in new tab)
+      window.open(resolved, '_blank', 'noopener,noreferrer');
+    } else {
+      window.location.assign(resolved);
     }
   }, true);
 })();`;
