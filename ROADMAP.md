@@ -30,6 +30,7 @@
 - [ ] Tab move to window
 - [ ] Cast
 - [ ] Forward and backward context menu
+- [ ] Open downloads from pop up
 
 ## v1.3.0
 - [ ] Reader mode view
