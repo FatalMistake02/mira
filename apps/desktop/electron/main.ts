@@ -1655,10 +1655,9 @@ function setupWebviewTabOpenHandler() {
       }
     }
 
-    const host = contents.hostWebContents;
-    if (!host) return;
-
     contents.on('before-input-event', (event, input) => {
+      const host = contents.hostWebContents;
+      if (!host) return;
       if (input.type !== 'keyDown' || input.isAutoRepeat) return;
       const key = input.key.toLowerCase();
       const hasPrimaryModifier = input.control || input.meta;
@@ -1920,6 +1919,8 @@ function setupWebviewTabOpenHandler() {
     });
 
     contents.setWindowOpenHandler(({ url }) => {
+      const host = contents.hostWebContents;
+      if (!host) return { action: 'deny' };
       const normalized = (url ?? '').trim();
       if (!normalized || normalized === 'about:blank') {
         return { action: 'deny' };

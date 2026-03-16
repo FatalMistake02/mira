@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Update prompt
+- Links work on windows
 
 ## v0.9.3 - 2026-03-12
 

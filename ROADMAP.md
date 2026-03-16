@@ -4,7 +4,7 @@
 - [ ] Improve performance
 - [ ] Fix default browser
 - [ ] Fix auto update
-- [ ] Fix target="_blank" links
+- [x] Fix target="_blank" links
 - [ ] Fix all other issues
  
 ## v1.1.0

@@ -879,6 +879,10 @@ export default function TabView() {
                     const wv = el as unknown as WebviewElement;
                     registerWebview(tab.id, wv);
                     wv.setAttribute(WEBVIEW_TAB_ID_ATTR, tab.id);
+                    // Electron/Chromium treats `allowpopups` as a presence-based attribute.
+                    // React may serialize boolean props as `allowpopups="true"`, which can
+                    // fail to enable popups (e.g. target="_blank") depending on platform.
+                    wv.setAttribute('allowpopups', '');
 
                     // Clean any old listeners that might still be attached
                     if (wv.didNavigateHandler) {
@@ -1162,7 +1166,6 @@ export default function TabView() {
                       wv.src = tab.url;
                     }
                   }}
-                  allowpopups={true}
                   style={{ flex: 1, width: '100%', height: '100%' }}
                 />
                 {(() => {
