@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/desktop"
+    "apps/desktop",
+    "apps/mobile"
   ],
   "scripts": {
     "dev": "npm run dev --workspace apps/desktop",
@@ -16,6 +17,12 @@
     "build:nsis": "npm run build:nsis --workspace apps/desktop",
     "lint": "npm run lint --workspace apps/desktop",
     "preview": "npm run preview --workspace apps/desktop",
-    "format": "npm run format --workspace apps/desktop"
+    "format": "npm run format --workspace apps/desktop",
+    "mobile:start": "npm run start --workspace apps/mobile",
+    "mobile:android": "npm run android --workspace apps/mobile",
+    "mobile:ios": "npm run ios --workspace apps/mobile"
+  },
+  "dependencies": {
+    "mira-mobile": "^0.10.0"
   }
 }
