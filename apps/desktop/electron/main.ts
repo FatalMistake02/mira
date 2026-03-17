@@ -27,6 +27,9 @@ const isWindows = process.platform === 'win32';
 const ENABLE_APP_DEBUG_LOGS = true; // Set to false for shipping builds.
 const incomingBrowserUrlQueue: string[] = [];
 const APP_STATE_FILE = 'app-state.json';
+const PRINT_PREVIEW_CLEANUP_MS = 60 * 60 * 1000;
+const printPreviewCleanupTimers = new Map<string, NodeJS.Timeout>();
+const printPreviewTempFiles = new Set<string>();
 
 interface HistoryEntry {
   id: string;
@@ -427,6 +430,24 @@ function getPageSaveDefaultFileName(target: WebContents): string {
   }
 
   return 'page.html';
+}
+
+function schedulePrintPreviewCleanup(filePath: string): void {
+  if (!filePath) return;
+  printPreviewTempFiles.add(filePath);
+
+  const existing = printPreviewCleanupTimers.get(filePath);
+  if (existing) {
+    clearTimeout(existing);
+  }
+
+  const timer = setTimeout(() => {
+    printPreviewCleanupTimers.delete(filePath);
+    printPreviewTempFiles.delete(filePath);
+    fs.unlink(filePath).catch(() => undefined);
+  }, PRINT_PREVIEW_CLEANUP_MS);
+  timer.unref();
+  printPreviewCleanupTimers.set(filePath, timer);
 }
 
 function getAdBlockCachePath(): string {
@@ -3051,6 +3072,173 @@ function setupWindowControlsHandlers() {
     }
   });
 
+  ipcMain.handle('webview-print-preview', async (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return null;
+
+    const candidate = payload as {
+      webContentsId?: unknown;
+      options?: unknown;
+    };
+    const webContentsId =
+      typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+        ? Math.floor(candidate.webContentsId)
+        : -1;
+    if (webContentsId <= 0) return null;
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return null;
+
+    const host = target.hostWebContents;
+    if (!host || host.id !== event.sender.id) return null;
+
+    const rawOptions =
+      typeof candidate.options === 'object' && candidate.options !== null
+        ? (candidate.options as Record<string, unknown>)
+        : {};
+
+    // Map pageSize to dimensions in microns (required by Electron's printToPDF)
+    const pageSizeMap: Record<string, { width: number; height: number }> = {
+      A4: { width: 210000, height: 297000 },
+      A3: { width: 297000, height: 420000 },
+      A5: { width: 148000, height: 210000 },
+      Legal: { width: 216000, height: 356000 },
+      Letter: { width: 216000, height: 279000 },
+      Tabloid: { width: 279000, height: 432000 },
+    };
+
+    const pageSize = typeof rawOptions.pageSize === 'string' ? rawOptions.pageSize : 'A4';
+    const pageDimensions = pageSizeMap[pageSize] || pageSizeMap.A4;
+
+    // Map marginsType to margins in microns
+    const marginsTypeMap: Record<string, { top: number; bottom: number; left: number; right: number }> = {
+      default: { top: 10000, bottom: 10000, left: 10000, right: 10000 },
+      none: { top: 0, bottom: 0, left: 0, right: 0 },
+      minimum: { top: 5000, bottom: 5000, left: 5000, right: 5000 },
+    };
+
+    const marginsType = typeof rawOptions.marginsType === 'string' ? rawOptions.marginsType : 'default';
+    const margins = marginsTypeMap[marginsType] || marginsTypeMap.default;
+
+    const previewOptions = {
+      printBackground: rawOptions.printBackground === true,
+      landscape: rawOptions.landscape === true,
+      pageSize: pageDimensions,
+      margins,
+    };
+
+    try {
+      const data = await target.printToPDF(previewOptions);
+      const filePath = path.join(app.getPath('temp'), `mira-print-preview-${uuidv4()}.pdf`);
+      await fs.writeFile(filePath, data);
+      schedulePrintPreviewCleanup(filePath);
+      return pathToFileURL(filePath).toString();
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('print-preview-release', async (_event, payload: unknown) => {
+    const candidate =
+      typeof payload === 'object' && payload !== null
+        ? (payload as { url?: unknown })
+        : null;
+    const rawUrl = typeof candidate?.url === 'string' ? candidate.url.trim() : '';
+    if (!rawUrl) return false;
+
+    let filePath = '';
+    try {
+      filePath = fileURLToPath(rawUrl);
+    } catch {
+      return false;
+    }
+
+    if (!printPreviewTempFiles.has(filePath)) return false;
+
+    const timer = printPreviewCleanupTimers.get(filePath);
+    if (timer) {
+      clearTimeout(timer);
+      printPreviewCleanupTimers.delete(filePath);
+    }
+    printPreviewTempFiles.delete(filePath);
+
+    try {
+      await fs.unlink(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('print-preview-printers', async (event) => {
+    const hostWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!hostWindow || hostWindow.isDestroyed()) return [];
+    const contents = hostWindow.webContents as unknown as {
+      getPrinters?: () => unknown;
+      getPrintersAsync?: () => Promise<unknown>;
+    };
+
+    try {
+      if (typeof contents.getPrintersAsync === 'function') {
+        return await contents.getPrintersAsync();
+      }
+      if (typeof contents.getPrinters === 'function') {
+        return contents.getPrinters();
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('webview-print', async (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return { ok: false, error: 'Invalid payload.' };
+
+    const candidate = payload as {
+      webContentsId?: unknown;
+      options?: unknown;
+    };
+    const webContentsId =
+      typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+        ? Math.floor(candidate.webContentsId)
+        : -1;
+    if (webContentsId <= 0) return { ok: false, error: 'Invalid webContentsId.' };
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return { ok: false, error: 'WebContents not found.' };
+
+    const host = target.hostWebContents;
+    if (!host || host.id !== event.sender.id) return { ok: false, error: 'Invalid host.' };
+
+    const rawOptions =
+      typeof candidate.options === 'object' && candidate.options !== null
+        ? (candidate.options as Record<string, unknown>)
+        : {};
+    const printOptions = {
+      silent: rawOptions.silent === true,
+      printBackground: rawOptions.printBackground === true,
+      landscape: rawOptions.landscape === true,
+      deviceName: typeof rawOptions.deviceName === 'string' ? rawOptions.deviceName : undefined,
+    };
+
+    try {
+      const result = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        target.print(printOptions, (success, failureReason) => {
+          if (success) {
+            resolve({ ok: true });
+          } else {
+            resolve({ ok: false, error: failureReason || 'Print failed.' });
+          }
+        });
+      });
+      return result;
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Print failed.',
+      };
+    }
+  });
+
   ipcMain.handle('webview-context-action', async (event, payload: unknown) => {
     if (typeof payload !== 'object' || !payload) return false;
 
@@ -4035,6 +4223,18 @@ app.on('before-quit', () => {
     clearTimeout(timer);
   }
   pendingClosedWindowCleanupTimers.clear();
+  for (const timer of printPreviewCleanupTimers.values()) {
+    clearTimeout(timer);
+  }
+  printPreviewCleanupTimers.clear();
+  for (const filePath of printPreviewTempFiles) {
+    try {
+      unlinkSync(filePath);
+    } catch {
+      // Ignore cleanup failures (file could still be open).
+    }
+  }
+  printPreviewTempFiles.clear();
   if (sessionPersistTimer) {
     clearTimeout(sessionPersistTimer);
     sessionPersistTimer = null;

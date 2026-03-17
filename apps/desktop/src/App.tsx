@@ -8,6 +8,7 @@ import FindBar from './components/FindBar';
 import TopBar from './components/TopBar';
 import RestoreTabsPrompt from './components/RestoreTabsPrompt';
 import UpdatePrompt, { type UpdateCheckPayload } from './components/UpdatePrompt';
+import PrintPreview from './components/PrintPreview';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import DownloadProvider from './features/downloads/DownloadProvider';
 import { electron } from './electronBridge';
@@ -216,6 +217,11 @@ function Browser() {
     setActive,
     toggleDevTools,
     printPage,
+    printPreview,
+    closePrintPreview,
+    printPreviewSettings,
+    updatePrintPreviewSettings,
+    printPreviewPrint,
     savePage,
     openFile,
     openViewSource,
@@ -382,6 +388,16 @@ function Browser() {
         open={!!pendingUpdate && !restorePromptOpen}
         update={pendingUpdate}
         onLater={() => setPendingUpdate(null)}
+      />
+      <PrintPreview
+        open={printPreview.status !== 'idle'}
+        status={printPreview.status}
+        title={printPreview.title}
+        previewUrl={printPreview.url}
+        settings={printPreviewSettings}
+        onSettingsChange={updatePrintPreviewSettings}
+        onPrint={printPreviewPrint}
+        onClose={closePrintPreview}
       />
       {showPerfOverlay && <PerfOverlay />}
     </div>

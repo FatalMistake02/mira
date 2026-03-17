@@ -27,6 +27,21 @@ type FindInPageMatchState = {
   matches: number;
 };
 
+type PrintPreviewState = {
+  status: 'idle' | 'loading' | 'ready';
+  url?: string;
+  title?: string;
+};
+
+type PrintPreviewSettings = {
+  landscape: boolean;
+  printBackground: boolean;
+  deviceName: string;
+  useSystemDialog: boolean;
+  pageSize?: 'A4' | 'A3' | 'A5' | 'Legal' | 'Letter' | 'Tabloid';
+  marginsType?: 'default' | 'none' | 'minimum';
+};
+
 type WebviewElement = {
   reload: () => void;
   reloadIgnoringCache?: () => void;
@@ -99,6 +114,11 @@ type TabsContextType = {
   toggleDevTools: () => void;
   updateTabMetadata: (id: string, metadata: { title?: string; favicon?: string | null }) => void;
   printPage: () => void;
+  printPreview: PrintPreviewState;
+  closePrintPreview: () => void;
+  printPreviewSettings: PrintPreviewSettings;
+  updatePrintPreviewSettings: (settings: Partial<PrintPreviewSettings>) => void;
+  printPreviewPrint: () => Promise<{ ok: boolean; error?: string }>;
   savePage: () => void;
   openFile: () => void;
   openViewSource: () => void;
@@ -291,6 +311,19 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const ipcOpenTabActivateTimerRef = useRef<number | null>(null);
   const ipcOpenTabNavigateTimerRef = useRef<number | null>(null);
   const zoomFactorByTabRef = useRef<Record<string, number>>({});
+  const [printPreview, setPrintPreview] = useState<PrintPreviewState>({ status: 'idle' });
+  const printPreviewRequestIdRef = useRef(0);
+  const printPreviewUrlRef = useRef<string | null>(null);
+  const printPreviewSourceRef = useRef<{ webContentsId: number; title: string } | null>(null);
+  const [printPreviewSettings, setPrintPreviewSettings] = useState<PrintPreviewSettings>({
+    landscape: false,
+    printBackground: true,
+    deviceName: '',
+    useSystemDialog: false,
+    pageSize: 'A4',
+    marginsType: 'default',
+  });
+  const printPreviewSettingsRef = useRef(printPreviewSettings);
   const activeFindInPageMatches = findInPageMatchesByTab[activeId] ?? {
     activeMatchOrdinal: 0,
     matches: 0,
@@ -1114,6 +1147,10 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   }, [tabs, activeId]);
 
   useEffect(() => {
+    printPreviewSettingsRef.current = printPreviewSettings;
+  }, [printPreviewSettings]);
+
+  useEffect(() => {
     if (!tabs.length) {
       const replacement = createInitialTab(getBrowserSettings().newTabPage);
       setTabs([replacement]);
@@ -1311,6 +1348,122 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       wv.openDevTools();
     }
   };
+
+  const releasePrintPreviewUrl = useCallback((url: string | null) => {
+    if (!url) return;
+    electron?.ipcRenderer?.invoke('print-preview-release', { url }).catch(() => undefined);
+  }, []);
+
+  const closePrintPreview = useCallback(() => {
+    printPreviewRequestIdRef.current += 1;
+    const currentUrl = printPreviewUrlRef.current;
+    if (currentUrl) {
+      releasePrintPreviewUrl(currentUrl);
+      printPreviewUrlRef.current = null;
+    }
+    printPreviewSourceRef.current = null;
+    setPrintPreview({ status: 'idle' });
+  }, [releasePrintPreviewUrl]);
+
+  const generatePrintPreview = useCallback(
+    async (source: { webContentsId: number; title: string }, settings: PrintPreviewSettings) => {
+      const ipc = electron?.ipcRenderer;
+      if (!ipc) return null;
+
+      printPreviewRequestIdRef.current += 1;
+      const requestId = printPreviewRequestIdRef.current;
+      if (printPreviewUrlRef.current) {
+        releasePrintPreviewUrl(printPreviewUrlRef.current);
+        printPreviewUrlRef.current = null;
+      }
+      setPrintPreview({ status: 'loading', title: source.title });
+
+      const previewUrl = await ipc
+        .invoke<string | null>('webview-print-preview', {
+          webContentsId: source.webContentsId,
+          options: {
+            landscape: settings.landscape,
+            printBackground: settings.printBackground,
+            pageSize: settings.pageSize,
+            marginsType: settings.marginsType,
+          },
+        })
+        .catch(() => null);
+      if (requestId !== printPreviewRequestIdRef.current) {
+        if (typeof previewUrl === 'string' && previewUrl.trim()) {
+          releasePrintPreviewUrl(previewUrl);
+        }
+        return null;
+      }
+      if (typeof previewUrl === 'string' && previewUrl.trim()) {
+        printPreviewUrlRef.current = previewUrl;
+        setPrintPreview({ status: 'ready', title: source.title, url: previewUrl });
+        return previewUrl;
+      }
+      setPrintPreview({ status: 'idle' });
+      return null;
+    },
+    [releasePrintPreviewUrl],
+  );
+
+  const updatePrintPreviewSettings = useCallback(
+    (nextSettings: Partial<PrintPreviewSettings>) => {
+      const current = printPreviewSettingsRef.current;
+      const merged: PrintPreviewSettings = {
+        ...current,
+        ...nextSettings,
+      };
+      printPreviewSettingsRef.current = merged;
+      setPrintPreviewSettings(merged);
+
+      const shouldRegenerate =
+        (nextSettings.landscape !== undefined && nextSettings.landscape !== current.landscape)
+        || (nextSettings.printBackground !== undefined
+          && nextSettings.printBackground !== current.printBackground)
+        || (nextSettings.pageSize !== undefined && nextSettings.pageSize !== current.pageSize)
+        || (nextSettings.marginsType !== undefined && nextSettings.marginsType !== current.marginsType);
+      const source = printPreviewSourceRef.current;
+      if (shouldRegenerate && source) {
+        void generatePrintPreview(source, merged);
+      }
+    },
+    [generatePrintPreview],
+  );
+
+  const printPreviewPrint = useCallback(async () => {
+    const ipc = electron?.ipcRenderer;
+    const source = printPreviewSourceRef.current;
+    if (!ipc || !source) {
+      return { ok: false, error: 'No active print target.' };
+    }
+
+    const settings = printPreviewSettingsRef.current;
+    const options = {
+      printBackground: settings.printBackground,
+      landscape: settings.landscape,
+      deviceName: settings.deviceName || undefined,
+      silent: settings.useSystemDialog ? false : !!settings.deviceName,
+    };
+
+    const response = await ipc
+      .invoke<{ ok: boolean; error?: string }>('webview-print', {
+        webContentsId: source.webContentsId,
+        options,
+      })
+      .catch(() => ({ ok: false, error: 'Print failed.' }));
+
+    if (!response.ok && options.silent) {
+      return ipc
+        .invoke<{ ok: boolean; error?: string }>('webview-print', {
+          webContentsId: source.webContentsId,
+          options: { ...options, silent: false },
+        })
+        .catch(() => ({ ok: false, error: response.error || 'Print failed.' }));
+    }
+
+    return response;
+  }, []);
+
   const printPage = useCallback(() => {
     const activeTab = tabs.find((tab) => tab.id === activeId);
     if (activeTab?.url.startsWith('mira://')) {
@@ -1319,10 +1472,50 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
 
     const wv = webviewMap.current[activeId];
-    if (!wv || typeof wv.print !== 'function') return;
+    if (!wv) return;
 
-    wv.print({ printBackground: true });
-  }, [tabs, activeId]);
+    const fallbackPrint = () => {
+      if (typeof wv.print === 'function') {
+        const settings = printPreviewSettingsRef.current;
+        const options = {
+          printBackground: settings.printBackground,
+          landscape: settings.landscape,
+          deviceName: settings.deviceName || undefined,
+          silent: settings.useSystemDialog ? false : !!settings.deviceName,
+        };
+        wv.print(options, (success) => {
+          if (!success && options.silent) {
+            wv.print({ ...options, silent: false });
+          }
+        });
+      }
+    };
+
+    const ipc = electron?.ipcRenderer;
+    if (!ipc || typeof wv.getWebContentsId !== 'function') {
+      fallbackPrint();
+      return;
+    }
+
+    const webContentsId = wv.getWebContentsId();
+    if (typeof webContentsId !== 'number' || !Number.isFinite(webContentsId)) {
+      fallbackPrint();
+      return;
+    }
+
+    void (async () => {
+      const previewTitle = activeTab?.title?.trim() || activeTab?.url?.trim() || 'Print Preview';
+      printPreviewSourceRef.current = { webContentsId, title: previewTitle };
+      const settings = printPreviewSettingsRef.current;
+      const previewUrl = await generatePrintPreview(
+        { webContentsId, title: previewTitle },
+        settings,
+      );
+      if (!previewUrl) {
+        fallbackPrint();
+      }
+    })();
+  }, [tabs, activeId, generatePrintPreview]);
 
   const savePage = useCallback(() => {
     const activeTab = tabs.find((tab) => tab.id === activeId);
@@ -1700,6 +1893,11 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         toggleDevTools,
         updateTabMetadata,
         printPage,
+        printPreview,
+        closePrintPreview,
+        printPreviewSettings,
+        updatePrintPreviewSettings,
+        printPreviewPrint,
         savePage,
         openFile,
         openViewSource,
