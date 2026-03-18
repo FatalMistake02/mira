@@ -187,6 +187,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
       <div
         style={{
           flex: 1,
+          height: '100%',
           minWidth: 0,
           display: 'flex',
           alignItems: 'stretch',
@@ -197,6 +198,7 @@ export default function TopBar({ children }: { children?: React.ReactNode }) {
         <div
           style={{
             WebkitAppRegion: 'drag',
+            height: '100%',
             minWidth: 0,
             display: 'flex',
             maxWidth: '100%',

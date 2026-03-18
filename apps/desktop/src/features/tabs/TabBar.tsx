@@ -15,6 +15,7 @@ const TAB_TARGET_WIDTH = 'var(--layoutTabTargetWidth, 220px)';
 const TAB_MIN_WIDTH = 'var(--layoutTabMinWidth, 100px)';
 const TAB_STRIP_GAP = 'var(--layoutTabGap, 6px)';
 const TAB_ROW_HEIGHT = 'var(--layoutTabHeight, 30px)';
+const TAB_ACTIVE_ROW_HEIGHT = 'calc(var(--layoutTabHeight, 30px) + 3px)';
 const TAB_SWAP_TRIGGER_RATIO = 0.1;
 const TAB_SWAP_MIN_POINTER_DELTA_PX = 10;
 const TAB_SWAP_COOLDOWN_MS = 70;
@@ -115,10 +116,15 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     tabs.map((tab, index) => ({ tab, phase: 'stable', lastKnownIndex: index })),
   );
   const renderedTabsRef = useRef<RenderedTabState[]>(renderedTabs);
+  const tabsRef = useRef(tabs);
 
   useEffect(() => {
     renderedTabsRef.current = renderedTabs;
   }, [renderedTabs]);
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   useEffect(() => {
     dragOffsetXRef.current = dragOffsetX;
@@ -408,6 +414,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     if (!draggingTabId) return;
 
     const onMouseMove = (event: MouseEvent) => {
+      const currentTabs = tabsRef.current;
       const draggedEl = tabElementRefs.current[draggingTabId];
       if (!draggedEl) return;
       const draggedRect = draggedEl.getBoundingClientRect();
@@ -429,7 +436,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         dragMovedRef.current = true;
       }
 
-      const currentIndex = tabs.findIndex((tab) => tab.id === draggingTabId);
+      const currentIndex = currentTabs.findIndex((tab) => tab.id === draggingTabId);
       if (currentIndex === -1) return;
       const now = Date.now();
       if (now - lastSwapAtRef.current < TAB_SWAP_COOLDOWN_MS) return;
@@ -438,7 +445,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         ? desiredPrimary + draggedRect.height / 2
         : desiredPrimary + draggedRect.width / 2;
       if (currentIndex > 0) {
-        const prevTab = tabs[currentIndex - 1];
+        const prevTab = currentTabs[currentIndex - 1];
         const prevEl = prevTab ? tabElementRefs.current[prevTab.id] : null;
         if (prevEl) {
           const prevRect = prevEl.getBoundingClientRect();
@@ -466,8 +473,8 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         }
       }
 
-      if (currentIndex < tabs.length - 1) {
-        const nextTab = tabs[currentIndex + 1];
+      if (currentIndex < currentTabs.length - 1) {
+        const nextTab = currentTabs[currentIndex + 1];
         const nextEl = nextTab ? tabElementRefs.current[nextTab.id] : null;
         if (nextEl) {
           const nextRect = nextEl.getBoundingClientRect();
@@ -586,7 +593,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         flexDirection: isVertical ? 'column' : 'row',
         gap: TAB_STRIP_GAP,
         padding: 0,
-        alignItems: isVertical ? 'stretch' : 'center',
+        alignItems: isVertical ? 'stretch' : 'flex-end',
         minWidth: 0,
         flex: 1,
         width: '100%',
@@ -610,7 +617,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
             gap: TAB_STRIP_GAP,
             overflowX: isVertical ? 'hidden' : 'auto',
             overflowY: isVertical ? 'auto' : 'hidden',
-            alignItems: isVertical ? 'stretch' : 'center',
+            alignItems: isVertical ? 'stretch' : 'flex-end',
             WebkitAppRegion: 'drag',
             padding: isVertical ? 6 : 0,
           }}
@@ -676,7 +683,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                 }}
                 className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
                 style={{
-                  height: TAB_ROW_HEIGHT,
+                  height: tab.id === activeId ? TAB_ACTIVE_ROW_HEIGHT : TAB_ROW_HEIGHT,
                   cursor: 'default',
                   WebkitAppRegion: 'no-drag',
                   borderRadius:

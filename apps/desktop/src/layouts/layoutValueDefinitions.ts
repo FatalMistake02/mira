@@ -115,7 +115,7 @@ export const LAYOUT_VALUE_DEFINITIONS: LayoutValueDefinition[] = [
     key: 'layoutTabHeight',
     label: 'Tab Height',
     kind: 'length',
-    defaultValue: '30px',
+    defaultValue: '34px',
   },
   {
     key: 'layoutTabGap',
