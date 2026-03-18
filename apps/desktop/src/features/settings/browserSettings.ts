@@ -5,6 +5,7 @@ export type TabSleepUnit = 'seconds' | 'minutes' | 'hours';
 export type TabSleepMode = 'freeze' | 'discard';
 export type DevToolsOpenMode = 'side' | 'window';
 export type StartupRestoreBehavior = 'ask' | 'windows' | 'tabs' | 'fresh';
+export type TabStripPosition = 'top' | 'left' | 'right';
 
 export type AutoUpdateMode =
   | 'off'
@@ -74,6 +75,7 @@ export type BrowserSettings = {
   autoUpdateOnLaunch: AutoUpdateMode;
   runOnStartup: boolean;
   startupRestoreBehavior: StartupRestoreBehavior;
+  tabStripPosition: TabStripPosition;
   searchEngine: SearchEngine;
   searchEngineShortcutsEnabled: boolean;
   searchEngineShortcutPrefix: string;
@@ -102,6 +104,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   autoUpdateOnLaunch: 'off',
   runOnStartup: false,
   startupRestoreBehavior: 'ask',
+  tabStripPosition: 'top',
   searchEngine: 'google',
   searchEngineShortcutsEnabled: false,
   searchEngineShortcutPrefix: DEFAULT_SEARCH_ENGINE_SHORTCUT_PREFIX,
@@ -287,6 +290,14 @@ function normalizeStartupRestoreBehavior(value: unknown): StartupRestoreBehavior
   return DEFAULT_BROWSER_SETTINGS.startupRestoreBehavior;
 }
 
+function normalizeTabStripPosition(value: unknown): TabStripPosition {
+  if (value === 'top' || value === 'left' || value === 'right') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_SETTINGS.tabStripPosition;
+}
+
 function normalizeSearchEngine(value: unknown): SearchEngine {
   if (
     value === 'google' ||
@@ -421,6 +432,7 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
     autoUpdateOnLaunch: normalizeAutoUpdateOnLaunch(candidate.autoUpdateOnLaunch),
     runOnStartup: normalizeRunOnStartup(candidate.runOnStartup),
     startupRestoreBehavior: normalizeStartupRestoreBehavior(candidate.startupRestoreBehavior),
+    tabStripPosition: normalizeTabStripPosition(candidate.tabStripPosition),
     searchEngine: normalizeSearchEngine(candidate.searchEngine),
     searchEngineShortcutsEnabled: normalizeSearchEngineShortcutsEnabled(
       candidate.searchEngineShortcutsEnabled,

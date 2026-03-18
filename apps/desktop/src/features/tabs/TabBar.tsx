@@ -5,7 +5,11 @@ import type { Tab } from './types';
 import miraLogo from '../../assets/mira_logo.png';
 import ContextMenu, { type ContextMenuEntry } from '../../components/ContextMenu';
 import { electron } from '../../electronBridge';
-import { BROWSER_SETTINGS_CHANGED_EVENT, getBrowserSettings } from '../settings/browserSettings';
+import {
+  BROWSER_SETTINGS_CHANGED_EVENT,
+  getBrowserSettings,
+  type TabStripPosition,
+} from '../settings/browserSettings';
 
 const TAB_TARGET_WIDTH = 'var(--layoutTabTargetWidth, 220px)';
 const TAB_MIN_WIDTH = 'var(--layoutTabMinWidth, 100px)';
@@ -57,7 +61,7 @@ function getDisplayFavicon(url: string, favicon?: string): string | undefined {
   }
 }
 
-export default function TabBar() {
+export default function TabBar({ orientation = 'horizontal' }: { orientation?: 'horizontal' | 'vertical' }) {
   const {
     tabs,
     activeId,
@@ -76,6 +80,7 @@ export default function TabBar() {
   );
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dragOffsetX, setDragOffsetX] = useState(0);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [nativeContextMenusEnabled, setNativeContextMenusEnabled] = useState(
@@ -83,6 +88,9 @@ export default function TabBar() {
   );
   const [animationsEnabled, setAnimationsEnabled] = useState(
     () => getBrowserSettings().animationsEnabled,
+  );
+  const [tabStripPosition, setTabStripPosition] = useState<TabStripPosition>(
+    () => getBrowserSettings().tabStripPosition ?? 'top',
   );
   const isMacOS = electron?.isMacOS ?? false;
   const primaryShortcutLabel = isMacOS ? 'Cmd' : 'Ctrl';
@@ -93,8 +101,11 @@ export default function TabBar() {
   const enterTimerByTabIdRef = useRef<Record<string, number>>({});
   const exitTimerByTabIdRef = useRef<Record<string, number>>({});
   const dragPointerToLeftRef = useRef(0);
+  const dragPointerToTopRef = useRef(0);
   const dragOffsetXRef = useRef(0);
+  const dragOffsetYRef = useRef(0);
   const lastSwapClientXRef = useRef<number | null>(null);
+  const lastSwapClientYRef = useRef<number | null>(null);
   const lastSwapAtRef = useRef(0);
   const dragMovedRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -112,6 +123,10 @@ export default function TabBar() {
   useEffect(() => {
     dragOffsetXRef.current = dragOffsetX;
   }, [dragOffsetX]);
+
+  useEffect(() => {
+    dragOffsetYRef.current = dragOffsetY;
+  }, [dragOffsetY]);
 
   useEffect(() => {
     return () => {
@@ -226,6 +241,7 @@ export default function TabBar() {
       const settings = getBrowserSettings();
       setNativeContextMenusEnabled(settings.nativeTextFieldContextMenu);
       setAnimationsEnabled(settings.animationsEnabled);
+      setTabStripPosition(settings.tabStripPosition ?? 'top');
     };
     syncSettings();
     window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
@@ -261,7 +277,12 @@ export default function TabBar() {
 
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollLeft = el.scrollWidth;
+    const isVertical = orientation === 'vertical';
+    if (isVertical) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollLeft = el.scrollWidth;
+    }
   }, [tabs.length]);
 
   useEffect(() => {
@@ -390,10 +411,19 @@ export default function TabBar() {
       const draggedEl = tabElementRefs.current[draggingTabId];
       if (!draggedEl) return;
       const draggedRect = draggedEl.getBoundingClientRect();
-      const desiredLeft = event.clientX - dragPointerToLeftRef.current;
-      const untransformedLeft = draggedRect.left - dragOffsetXRef.current;
-      const nextOffset = desiredLeft - untransformedLeft;
-      setDragOffsetX(nextOffset);
+      const isVertical = orientation === 'vertical';
+      const desiredPrimary = isVertical
+        ? event.clientY - dragPointerToTopRef.current
+        : event.clientX - dragPointerToLeftRef.current;
+      const currentPrimary = isVertical
+        ? draggedRect.top - dragOffsetYRef.current
+        : draggedRect.left - dragOffsetXRef.current;
+      const nextOffset = desiredPrimary - currentPrimary;
+      if (isVertical) {
+        setDragOffsetY(nextOffset);
+      } else {
+        setDragOffsetX(nextOffset);
+      }
 
       if (Math.abs(nextOffset) > 2) {
         dragMovedRef.current = true;
@@ -404,19 +434,32 @@ export default function TabBar() {
       const now = Date.now();
       if (now - lastSwapAtRef.current < TAB_SWAP_COOLDOWN_MS) return;
 
-      const draggedCenterX = desiredLeft + draggedRect.width / 2;
+      const draggedCenterPrimary = isVertical
+        ? desiredPrimary + draggedRect.height / 2
+        : desiredPrimary + draggedRect.width / 2;
       if (currentIndex > 0) {
         const prevTab = tabs[currentIndex - 1];
         const prevEl = prevTab ? tabElementRefs.current[prevTab.id] : null;
         if (prevEl) {
           const prevRect = prevEl.getBoundingClientRect();
-          const prevTrigger = prevRect.left + prevRect.width * (1 - TAB_SWAP_TRIGGER_RATIO);
+          const prevTrigger = isVertical
+            ? prevRect.top + prevRect.height * (1 - TAB_SWAP_TRIGGER_RATIO)
+            : prevRect.left + prevRect.width * (1 - TAB_SWAP_TRIGGER_RATIO);
           const canSwap =
-            lastSwapClientXRef.current === null ||
-            Math.abs(event.clientX - lastSwapClientXRef.current) >= TAB_SWAP_MIN_POINTER_DELTA_PX;
-          if (draggedCenterX < prevTrigger && canSwap) {
+            (isVertical ? lastSwapClientYRef.current : lastSwapClientXRef.current) === null ||
+            Math.abs(
+              (isVertical ? event.clientY : event.clientX) -
+                (isVertical
+                  ? (lastSwapClientYRef.current ?? 0)
+                  : (lastSwapClientXRef.current ?? 0)),
+            ) >= TAB_SWAP_MIN_POINTER_DELTA_PX;
+          if (draggedCenterPrimary < prevTrigger && canSwap) {
             moveTabToIndex(draggingTabId, currentIndex - 1);
-            lastSwapClientXRef.current = event.clientX;
+            if (isVertical) {
+              lastSwapClientYRef.current = event.clientY;
+            } else {
+              lastSwapClientXRef.current = event.clientX;
+            }
             lastSwapAtRef.current = now;
             return;
           }
@@ -428,13 +471,24 @@ export default function TabBar() {
         const nextEl = nextTab ? tabElementRefs.current[nextTab.id] : null;
         if (nextEl) {
           const nextRect = nextEl.getBoundingClientRect();
-          const nextTrigger = nextRect.left + nextRect.width * TAB_SWAP_TRIGGER_RATIO;
+          const nextTrigger = isVertical
+            ? nextRect.top + nextRect.height * TAB_SWAP_TRIGGER_RATIO
+            : nextRect.left + nextRect.width * TAB_SWAP_TRIGGER_RATIO;
           const canSwap =
-            lastSwapClientXRef.current === null ||
-            Math.abs(event.clientX - lastSwapClientXRef.current) >= TAB_SWAP_MIN_POINTER_DELTA_PX;
-          if (draggedCenterX > nextTrigger && canSwap) {
+            (isVertical ? lastSwapClientYRef.current : lastSwapClientXRef.current) === null ||
+            Math.abs(
+              (isVertical ? event.clientY : event.clientX) -
+                (isVertical
+                  ? (lastSwapClientYRef.current ?? 0)
+                  : (lastSwapClientXRef.current ?? 0)),
+            ) >= TAB_SWAP_MIN_POINTER_DELTA_PX;
+          if (draggedCenterPrimary > nextTrigger && canSwap) {
             moveTabToIndex(draggingTabId, currentIndex + 1);
-            lastSwapClientXRef.current = event.clientX;
+            if (isVertical) {
+              lastSwapClientYRef.current = event.clientY;
+            } else {
+              lastSwapClientXRef.current = event.clientX;
+            }
             lastSwapAtRef.current = now;
             return;
           }
@@ -447,8 +501,11 @@ export default function TabBar() {
       releasedDragTabIdRef.current = draggingTabId;
       setDraggingTabId(null);
       setDragOffsetX(0);
+      setDragOffsetY(0);
       dragOffsetXRef.current = 0;
+      dragOffsetYRef.current = 0;
       lastSwapClientXRef.current = null;
+      lastSwapClientYRef.current = null;
       lastSwapAtRef.current = 0;
       dragMovedRef.current = false;
       if (moved) {
@@ -467,11 +524,12 @@ export default function TabBar() {
       window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('blur', onMouseUp);
     };
-  }, [draggingTabId, moveTabToIndex, tabs]);
+  }, [draggingTabId, moveTabToIndex, tabs, orientation]);
 
   useLayoutEffect(() => {
     const nextRects: Record<string, DOMRect> = {};
     const releasedDragTabId = releasedDragTabIdRef.current;
+    const isVertical = orientation === 'vertical';
     for (const item of renderedTabs) {
       const tabId = item.tab.id;
       const el = tabElementRefs.current[tabId];
@@ -490,8 +548,8 @@ export default function TabBar() {
       nextRects[tabId] = nextRect;
       if (!prevRect) continue;
       if (tabId === releasedDragTabId) continue;
-      const deltaX = prevRect.left - nextRect.left;
-      if (Math.abs(deltaX) < 2) continue;
+      const delta = isVertical ? prevRect.top - nextRect.top : prevRect.left - nextRect.left;
+      if (Math.abs(delta) < 2) continue;
       if (!animationsEnabled) continue;
 
       // Prevent direction glitches by dropping any previous in-flight transform animations.
@@ -499,27 +557,40 @@ export default function TabBar() {
         animation.cancel();
       }
 
-      el.animate([{ transform: `translateX(${deltaX}px)` }, { transform: 'translateX(0px)' }], {
-        duration: TAB_REORDER_ANIMATION_MS,
-        easing: TAB_REORDER_EASING,
-      });
+      el.animate(
+        [
+          { transform: isVertical ? `translateY(${delta}px)` : `translateX(${delta}px)` },
+          { transform: isVertical ? 'translateY(0px)' : 'translateX(0px)' },
+        ],
+        {
+          duration: TAB_REORDER_ANIMATION_MS,
+          easing: TAB_REORDER_EASING,
+        },
+      );
     }
     previousRectsRef.current = nextRects;
     if (releasedDragTabId) {
       releasedDragTabIdRef.current = null;
     }
-  }, [renderedTabs, draggingTabId, animationsEnabled]);
+  }, [renderedTabs, draggingTabId, animationsEnabled, orientation]);
+
+  const isVertical = orientation === 'vertical';
+  const isRightSidebar = isVertical && tabStripPosition === 'right';
+  const tabRadius = 'var(--layoutTabRadius, 8px)';
+  const borderWidth = 'var(--layoutBorderWidth, 1px)';
 
   return (
     <div
       style={{
         display: 'flex',
+        flexDirection: isVertical ? 'column' : 'row',
         gap: TAB_STRIP_GAP,
         padding: 0,
-        alignItems: 'center',
+        alignItems: isVertical ? 'stretch' : 'center',
         minWidth: 0,
         flex: 1,
         width: '100%',
+        height: isVertical ? '100%' : undefined,
         WebkitAppRegion: 'drag',
       }}
     >
@@ -535,11 +606,13 @@ export default function TabBar() {
           className="tab-strip-scroll"
           style={{
             display: 'flex',
+            flexDirection: isVertical ? 'column' : 'row',
             gap: TAB_STRIP_GAP,
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            alignItems: 'center',
+            overflowX: isVertical ? 'hidden' : 'auto',
+            overflowY: isVertical ? 'auto' : 'hidden',
+            alignItems: isVertical ? 'stretch' : 'center',
             WebkitAppRegion: 'drag',
+            padding: isVertical ? 6 : 0,
           }}
         >
           {renderedTabs.map(({ tab, phase }) => {
@@ -564,6 +637,7 @@ export default function TabBar() {
                 }}
                 onMouseDown={(event) => {
                   if (isExiting) return;
+                  if (isVertical) return;
                   if (event.button !== 0) return;
                   const targetEl = tabElementRefs.current[tab.id];
                   if (targetEl) {
@@ -607,22 +681,36 @@ export default function TabBar() {
                   WebkitAppRegion: 'no-drag',
                   borderRadius:
                     tab.id === activeId
-                      ? 'var(--layoutTabRadius, 8px) var(--layoutTabRadius, 8px) 0 0'
-                      : 'var(--layoutTabRadius, 8px)',
+                      ? isVertical
+                        ? isRightSidebar
+                          ? `0 ${tabRadius} ${tabRadius} 0`
+                          : `${tabRadius} 0 0 ${tabRadius}`
+                        : `${tabRadius} ${tabRadius} 0 0`
+                      : tabRadius,
                   display: 'flex',
                   gap: 6,
                   alignItems: 'center',
                   whiteSpace: 'nowrap',
-                  flex: `1 1 ${TAB_TARGET_WIDTH}`,
-                  minWidth: isCollapsed ? 0 : TAB_MIN_WIDTH,
-                  maxWidth: isCollapsed ? 0 : TAB_TARGET_WIDTH,
+                  flex: isVertical ? '0 0 auto' : `1 1 ${TAB_TARGET_WIDTH}`,
+                  minWidth: isVertical ? 0 : isCollapsed ? 0 : TAB_MIN_WIDTH,
+                  maxWidth: isVertical ? '100%' : isCollapsed ? 0 : TAB_TARGET_WIDTH,
                   overflow: 'hidden',
                   padding: isCollapsed ? '0' : '0 10px',
                   position: 'relative',
                   marginBottom:
-                    tab.id === activeId
-                      ? 'calc(-1 * var(--layoutBorderWidth, 1px))'
-                      : 'var(--layoutBorderWidth, 1px)',
+                    !isVertical && tab.id === activeId
+                      ? `calc(-1 * ${borderWidth})`
+                      : !isVertical
+                        ? borderWidth
+                        : 0,
+                  marginRight:
+                    tab.id === activeId && isVertical && !isRightSidebar
+                      ? `calc(-1 * ${borderWidth})`
+                      : 0,
+                  marginLeft:
+                    tab.id === activeId && isVertical && isRightSidebar
+                      ? `calc(-1 * ${borderWidth})`
+                      : 0,
                   background:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
                   opacity: isCollapsed
@@ -630,9 +718,22 @@ export default function TabBar() {
                     : draggingTabId === tab.id
                       ? 'var(--tabDragOpacity, 1)'
                       : 1,
-                  transform: draggingTabId === tab.id ? `translateX(${dragOffsetX}px)` : undefined,
+                  transform:
+                    draggingTabId === tab.id
+                      ? isVertical
+                        ? `translateY(${dragOffsetY}px)`
+                        : `translateX(${dragOffsetX}px)`
+                      : undefined,
                   borderBottomColor:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
+                  borderLeftColor:
+                    tab.id === activeId && isVertical && isRightSidebar
+                      ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                      : undefined,
+                  borderRightColor:
+                    tab.id === activeId && isVertical && !isRightSidebar
+                      ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                      : undefined,
                   pointerEvents: isExiting ? 'none' : 'auto',
                   transition:
                     !animationsEnabled || draggingTabId === tab.id
@@ -716,9 +817,13 @@ export default function TabBar() {
             className="theme-btn theme-btn-nav nav-icon-btn tab-new-tab-btn"
             style={{
               height: TAB_ROW_HEIGHT,
-              width: 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
-              minWidth: 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
-              marginTop: 1,
+              width: isVertical
+                ? '100%'
+                : 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
+              minWidth: isVertical
+                ? 0
+                : 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
+              marginTop: isVertical ? 0 : 1,
               flexShrink: 0,
               WebkitAppRegion: 'no-drag',
             }}
@@ -726,16 +831,20 @@ export default function TabBar() {
             <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
           </button>
         </div>
-        <div
-          aria-hidden={true}
-          className="tab-strip-fade-left"
-          style={{ opacity: canScrollLeft ? 1 : 0 }}
-        />
-        <div
-          aria-hidden={true}
-          className="tab-strip-fade-right"
-          style={{ opacity: canScrollRight ? 1 : 0 }}
-        />
+        {!isVertical && (
+          <>
+            <div
+              aria-hidden={true}
+              className="tab-strip-fade-left"
+              style={{ opacity: canScrollLeft ? 1 : 0 }}
+            />
+            <div
+              aria-hidden={true}
+              className="tab-strip-fade-right"
+              style={{ opacity: canScrollRight ? 1 : 0 }}
+            />
+          </>
+        )}
       </div>
 
       <ContextMenu

@@ -15,6 +15,7 @@ import {
   type SearchEngineShortcutChars,
   type StartupRestoreBehavior,
   type TabSleepMode,
+  type TabStripPosition,
 } from '../features/settings/browserSettings';
 import { applyTheme } from '../features/themes/applyTheme';
 import {
@@ -186,6 +187,9 @@ export default function Settings() {
   const [startupRestoreBehavior, setStartupRestoreBehavior] = useState<StartupRestoreBehavior>(
     () => initialSettings.startupRestoreBehavior,
   );
+  const [tabStripPosition, setTabStripPosition] = useState<TabStripPosition>(
+    () => initialSettings.tabStripPosition ?? DEFAULT_BROWSER_SETTINGS.tabStripPosition,
+  );
   const [showPerfOverlay, setShowPerfOverlay] = useState(() => initialSettings.showPerfOverlay);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
@@ -330,6 +334,7 @@ export default function Settings() {
         runOnStartup,
         startupRestoreBehavior,
         showPerfOverlay,
+        tabStripPosition,
       });
       setSaveStatus('saved');
 
@@ -367,6 +372,7 @@ export default function Settings() {
     runOnStartup,
     startupRestoreBehavior,
     showPerfOverlay,
+    tabStripPosition,
   ]);
 
   useEffect(() => {
@@ -1318,6 +1324,36 @@ export default function Settings() {
                   >
                     Open Layout Creator
                   </button>
+                </div>
+              </section>
+
+              <section className="theme-panel settings-card">
+                <div className="settings-card-header">
+                  <h2 className="settings-card-title">Tab strip</h2>
+                </div>
+                <div className="settings-setting-row">
+                  <label htmlFor="tab-strip-position" className="settings-setting-meta">
+                    <span className="settings-setting-label">Tab strip position</span>
+                    <span className="settings-setting-description">
+                      Choose where tabs appear around the page content.
+                    </span>
+                  </label>
+                  <select
+                    id="tab-strip-position"
+                    value={tabStripPosition}
+                    onChange={(e) => {
+                      const next = e.currentTarget.value as TabStripPosition;
+                      if (next === 'top' || next === 'left' || next === 'right') {
+                        setTabStripPosition(next);
+                        setSaveStatus('saving');
+                      }
+                    }}
+                    className="theme-input settings-select-input settings-select-limit settings-setting-control"
+                  >
+                    <option value="top">Top (default)</option>
+                    <option value="left">Left (vertical)</option>
+                    <option value="right">Right (vertical)</option>
+                  </select>
                 </div>
               </section>
 

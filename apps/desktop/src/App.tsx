@@ -16,6 +16,7 @@ import {
   BROWSER_SETTINGS_CHANGED_EVENT,
   getBrowserSettings,
   type AutoUpdateMode,
+  type TabStripPosition,
 } from './features/settings/browserSettings';
 import { applyTheme } from './features/themes/applyTheme';
 import { getThemeById } from './features/themes/themeLoader';
@@ -197,6 +198,10 @@ function Browser() {
     const settings = getBrowserSettings();
     return settings.dev && settings.showPerfOverlay;
   });
+  const [tabStripPosition, setTabStripPosition] = useState<TabStripPosition>(() => {
+    const settings = getBrowserSettings();
+    return settings.tabStripPosition ?? 'top';
+  });
   const {
     tabs,
     newTab,
@@ -281,6 +286,7 @@ function Browser() {
       applyTheme(getThemeById(settings.themeId));
       applyLayout(getLayoutById(settings.layoutId));
       setShowPerfOverlay(settings.dev && settings.showPerfOverlay);
+      setTabStripPosition(settings.tabStripPosition ?? 'top');
       if (!electron?.ipcRenderer) return;
 
       const rootStyles = getComputedStyle(document.documentElement);
@@ -369,14 +375,65 @@ function Browser() {
     previousTabIdsRef.current = currentTabIds;
   }, [tabs, activeId]);
 
+  const isVerticalTabs = tabStripPosition === 'left' || tabStripPosition === 'right';
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', width: '100vw' }}>
-      <TopBar>
-        <TabBar />
-      </TopBar>
-      <AddressBar inputRef={addressInputRef} />
-      <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
-      <TabView />
+      <TopBar>{!isVerticalTabs && <TabBar orientation="horizontal" />}</TopBar>
+
+      {isVerticalTabs ? (
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: tabStripPosition === 'left' ? 'row' : 'row-reverse',
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              width: 240,
+              minWidth: 160,
+              maxWidth: 360,
+              borderRight:
+                tabStripPosition === 'left'
+                  ? '1px solid var(--surfaceBorder, var(--tabBorder))'
+                  : undefined,
+              borderLeft:
+                tabStripPosition === 'right'
+                  ? '1px solid var(--surfaceBorder, var(--tabBorder))'
+                  : undefined,
+              background: 'var(--surfaceBg, var(--tabBg))',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <TabBar orientation="vertical" />
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <AddressBar inputRef={addressInputRef} />
+            <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
+            <TabView />
+          </div>
+        </div>
+      ) : (
+        <>
+          <AddressBar inputRef={addressInputRef} />
+          <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
+          <TabView />
+        </>
+      )}
+
       <RestoreTabsPrompt />
       <UpdatePrompt
         open={!!pendingUpdate && !restorePromptOpen}
