@@ -671,13 +671,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const duplicateTab = useCallback(
     (id: string) => {
       if (!id) return;
-      const tabToDuplicate = tabs.find((tab) => tab.id === id);
+      const tabToDuplicate = tabsRef.current.find((tab) => tab.id === id);
       if (!tabToDuplicate) return;
 
       const sourceUrl = tabToDuplicate.history[tabToDuplicate.historyIndex] ?? tabToDuplicate.url;
       newTabToRight(id, sourceUrl);
     },
-    [tabs, newTabToRight],
+    [newTabToRight],
   );
 
   const openHistory = () => {

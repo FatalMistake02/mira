@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Fix new tabs opening from links
+- Fixed duplicate tab
 
 ## v0.11.1 - 2026-03-20
 
