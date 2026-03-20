@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
 import type { Tab } from './types';
@@ -585,7 +585,12 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
 
   return (
     <div
-      className={draggingTabId ? 'tab-bar-dragging' : ''}
+      className={[
+        draggingTabId ? 'tab-bar-dragging' : '',
+        animationsEnabled ? 'tab-animations-enabled' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={{
         display: 'flex',
         flexDirection: isVertical ? 'column' : 'row',
@@ -598,7 +603,9 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         height: isVertical ? '100%' : undefined,
         WebkitAppRegion: 'drag',
         userSelect: draggingTabId ? 'none' : 'auto', // Prevent text selection during drag
-      }}
+        ['--tabEnterExitMs' as '--tabEnterExitMs']: `${TAB_ENTER_EXIT_DURATION_MS}ms`,
+        ['--tabOpacityMs' as '--tabOpacityMs']: `${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms`,
+      } as CSSProperties}
     >
       <div
         style={{
@@ -694,7 +701,9 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                   }
                   setTabMenuState({ tabId: tab.id, x: event.clientX, y: event.clientY });
                 }}
-                className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
+                className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}${
+                  draggingTabId === tab.id ? ' tab-is-dragging' : ''
+                }`}
                 style={{
                   height: TAB_ROW_HEIGHT,
                   cursor: 'default',
@@ -750,10 +759,6 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                       ? 'var(--surfaceBgHover, var(--tabBgHover))'
                       : undefined,
                   pointerEvents: isExiting || (draggingTabId && tab.id !== draggingTabId) ? 'none' : 'auto',
-                  transition:
-                    !animationsEnabled || draggingTabId === tab.id
-                      ? 'none'
-                      : `min-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), max-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), padding ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), opacity ${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms ease`,
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
                   boxShadow:
                     draggingTabId === tab.id
