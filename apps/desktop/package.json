@@ -27,6 +27,11 @@
     "productName": "Mira",
     "icon": "assets/mira_icon.png",
     "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "FatalMistake02",
+      "repo": "mira"
+    },
     "directories": {
       "output": "release"
     },
@@ -64,7 +69,10 @@
       "target": [
         "portable",
         "nsis"
-      ]
+      ],
+      "publish": {
+        "provider": "github"
+      }
     },
     "nsis": {
       "artifactName": "${productName}-${version}-win-setup.${ext}",
@@ -94,7 +102,10 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "publish": {
+        "provider": "github"
+      }
     },
     "linux": {
       "artifactName": "${productName}-${version}-linux.${ext}",
@@ -129,10 +140,14 @@
           "mimeType": "application/xhtml+xml"
         }
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "publish": {
+        "provider": "github"
+      }
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "lucide-react": "^0.564.0",

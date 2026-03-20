@@ -196,7 +196,9 @@ jobs:
         with:
           draft: true
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
-          files: apps/desktop/release/*.exe
+          files: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.exe.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -237,6 +239,7 @@ jobs:
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
           files: |
             apps/desktop/release/*.dmg
+            apps/desktop/release/*.dmg.blockmap
             apps/desktop/release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -278,7 +281,10 @@ jobs:
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
           files: |
             apps/desktop/release/*.AppImage
+            apps/desktop/release/*.AppImage.blockmap
             apps/desktop/release/*.deb
+            apps/desktop/release/*.deb.blockmap
             apps/desktop/release/*.rpm
+            apps/desktop/release/*.rpm.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

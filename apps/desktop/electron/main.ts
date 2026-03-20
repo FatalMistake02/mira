@@ -15,6 +15,7 @@ import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'elec
 import { appendFileSync, promises as fs, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import UpdateManager from './updateManager.js';
 
 // Store active downloads by ID
 const downloadMap = new Map<string, DownloadItem>();
@@ -27,6 +28,9 @@ const isWindows = process.platform === 'win32';
 const ENABLE_APP_DEBUG_LOGS = true; // Set to false for shipping builds.
 const incomingBrowserUrlQueue: string[] = [];
 const APP_STATE_FILE = 'app-state.json';
+
+// Store UpdateManager instances per window
+const updateManagers = new Map<number, UpdateManager>();
 
 interface HistoryEntry {
   id: string;
@@ -2375,6 +2379,86 @@ function setupUpdateHandlers() {
     },
   );
 
+  // New blockmap-based update handlers
+  ipcMain.handle('updates-check-blockmap', async (event, options: { includePrerelease?: boolean } | undefined) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return { ok: false, error: 'Window not found' };
+    
+    const updateManager = updateManagers.get(window.id);
+    if (!updateManager) return { ok: false, error: 'Update manager not found' };
+    
+    try {
+      await updateManager.checkForUpdates(options?.includePrerelease === true);
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to check for updates',
+      };
+    }
+  });
+
+  ipcMain.handle('updates-download-blockmap', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return { ok: false, error: 'Window not found' };
+    
+    const updateManager = updateManagers.get(window.id);
+    if (!updateManager) return { ok: false, error: 'Update manager not found' };
+    
+    try {
+      await updateManager.downloadUpdate();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to download update',
+      };
+    }
+  });
+
+  ipcMain.handle('updates-install-blockmap', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return { ok: false, error: 'Window not found' };
+    
+    const updateManager = updateManagers.get(window.id);
+    if (!updateManager) return { ok: false, error: 'Update manager not found' };
+    
+    try {
+      updateManager.installUpdate();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to install update',
+      };
+    }
+  });
+
+  ipcMain.handle('updates-get-info', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return { ok: false, error: 'Window not found' };
+    
+    const updateManager = updateManagers.get(window.id);
+    if (!updateManager) return { ok: false, error: 'Update manager not found' };
+    
+    const updateInfo = updateManager.getUpdateInfo();
+    if (!updateInfo) {
+      return { ok: false, error: 'No update info available' };
+    }
+
+    const info = updateInfo as any;
+    return {
+      ok: true,
+      data: {
+        hasDifferentialUpdate: updateManager.hasDifferentialUpdate(),
+        differentialSavings: updateManager.getDifferentialSavings(),
+        version: info.version,
+        releaseName: info.releaseName,
+        releaseNotes: info.releaseNotes,
+      },
+    };
+  });
+
   app.on('before-quit', async () => {
     if (hasAttemptedCloseAutoUpdate) return;
     if (
@@ -3685,10 +3769,20 @@ function createWindow(
   }
 
   loadRendererShell(win);
+  
+  // Initialize UpdateManager for this window
+  const updateManager = new UpdateManager(win);
+  updateManagers.set(win.id, updateManager);
+  
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) {
       win.show();
     }
+  });
+  
+  // Clean up UpdateManager when window is closed
+  win.on('closed', () => {
+    updateManagers.delete(win.id);
   });
 
   if (restoreSnapshot) {
