@@ -6,7 +6,7 @@
 - [ ] Fix auto update
 - [x] Fix target="_blank" links
 - [ ] Fix all other issues
-- [ ] Change context menu for vertical tabs
+- [x] Change context menu for vertical tabs
  
 ## v1.1.0
 - [ ] Ad blocker blocks Youtube videos

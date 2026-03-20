@@ -8,6 +8,7 @@
 - Fix tab animations
 - Work on vertical tabs
 - Devtools for correct tab
+- Update context menu for vertical tabs
 
 ## v0.10.0 - 2026-03-16
 

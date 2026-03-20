@@ -280,7 +280,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     } else {
       el.scrollLeft = el.scrollWidth;
     }
-  }, [tabs.length]);
+  }, [tabs.length, orientation]);
 
   useEffect(() => {
     if (!tabMenuState) return;
@@ -299,11 +299,12 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     const tabIndex = tabs.findIndex((tab) => tab.id === tabMenuState.tabId);
     const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
     const hasOtherTabs = tabs.length > 1;
+    const isVertical = orientation === 'vertical';
 
     return [
       {
         type: 'item',
-        label: 'New Tab to Right',
+        label: isVertical ? 'New Tab Below' : 'New Tab to Right',
         onSelect: () => newTabToRight(tabMenuState.tabId),
       },
       { type: 'separator' },
@@ -333,7 +334,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       },
       {
         type: 'item',
-        label: 'Close to Right',
+        label: isVertical ? 'Close Below' : 'Close to Right',
         disabled: !hasTabsToRight,
         onSelect: () => closeTabsToRight(tabMenuState.tabId),
       },
@@ -341,6 +342,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   }, [
     tabMenuState,
     tabs,
+    orientation,
     newTabToRight,
     reloadTab,
     duplicateTab,
@@ -399,7 +401,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
 
     ipc.on('tab-native-context-command', onNativeContextCommand);
     return () => ipc.off('tab-native-context-command', onNativeContextCommand);
-  }, [newTabToRight, reloadTab, duplicateTab, closeTab, closeOtherTabs, closeTabsToRight]);
+  }, [newTabToRight, reloadTab, duplicateTab, closeTab, closeOtherTabs, closeTabsToRight, orientation]);
 
   useEffect(() => {
     if (!draggingTabId) return;
@@ -676,6 +678,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                     const tabIndex = tabs.findIndex((entry) => entry.id === tab.id);
                     const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
                     const hasOtherTabs = tabs.length > 1;
+                    const isVertical = orientation === 'vertical';
                     setTabMenuState(null);
                     void electron.ipcRenderer
                       .invoke('tab-show-native-context-menu', {
@@ -684,6 +687,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                         y: event.clientY,
                         hasTabsToRight,
                         hasOtherTabs,
+                        isVertical,
                       })
                       .catch(() => undefined);
                     return;

@@ -2675,12 +2675,14 @@ function setupWindowControlsHandlers() {
       y?: unknown;
       hasTabsToRight?: unknown;
       hasOtherTabs?: unknown;
+      isVertical?: unknown;
     };
     const tabId = typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
     if (!tabId) return false;
 
     const hasTabsToRight = candidate.hasTabsToRight === true;
     const hasOtherTabs = candidate.hasOtherTabs === true;
+    const isVertical = candidate.isVertical === true;
     const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
       ? Math.max(0, Math.floor(candidate.x))
       : null;
@@ -2697,7 +2699,7 @@ function setupWindowControlsHandlers() {
 
     const template: MenuItemConstructorOptions[] = [
       {
-        label: 'New Tab to Right',
+        label: isVertical ? 'New Tab Below' : 'New Tab to Right',
         click: () => sendCommand('new-tab-to-right'),
       },
       { type: 'separator' },
@@ -2722,7 +2724,7 @@ function setupWindowControlsHandlers() {
         click: () => sendCommand('close-others'),
       },
       {
-        label: 'Close to Right',
+        label: isVertical ? 'Close Below' : 'Close to Right',
         enabled: hasTabsToRight,
         click: () => sendCommand('close-to-right'),
       },
