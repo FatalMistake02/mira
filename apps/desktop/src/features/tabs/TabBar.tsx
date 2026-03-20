@@ -537,6 +537,10 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       const delta = isVertical ? prevRect.top - nextRect.top : prevRect.left - nextRect.left;
       if (Math.abs(delta) < 2) continue;
       if (!animationsEnabled) continue;
+      
+      // Only animate if this looks like a deliberate reorder, not random position changes
+      const isDeliberateReorder = Math.abs(delta) > 10 && Math.abs(delta) < 200;
+      if (!isDeliberateReorder) continue;
 
       // Prevent direction glitches by dropping any previous in-flight transform animations.
       for (const animation of el.getAnimations()) {
