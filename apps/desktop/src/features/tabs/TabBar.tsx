@@ -79,8 +79,8 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     null,
   );
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
-  const [dragOffsetX, setDragOffsetX] = useState(0);
-  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const [draggedTabPosition, setDraggedTabPosition] = useState<{ x: number; y: number } | null>(null);
+  const [originalTabPosition, setOriginalTabPosition] = useState<{ x: number; y: number } | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [nativeContextMenusEnabled, setNativeContextMenusEnabled] = useState(
@@ -102,8 +102,6 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   const exitTimerByTabIdRef = useRef<Record<string, number>>({});
   const dragPointerToLeftRef = useRef(0);
   const dragPointerToTopRef = useRef(0);
-  const dragOffsetXRef = useRef(0);
-  const dragOffsetYRef = useRef(0);
   const lastSwapClientXRef = useRef<number | null>(null);
   const lastSwapClientYRef = useRef<number | null>(null);
   const lastSwapAtRef = useRef(0);
@@ -124,14 +122,6 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
-
-  useEffect(() => {
-    dragOffsetXRef.current = dragOffsetX;
-  }, [dragOffsetX]);
-
-  useEffect(() => {
-    dragOffsetYRef.current = dragOffsetY;
-  }, [dragOffsetY]);
 
   useEffect(() => {
     return () => {
@@ -414,25 +404,18 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
 
     const onMouseMove = (event: MouseEvent) => {
       const currentTabs = tabsRef.current;
-      const draggedEl = tabElementRefs.current[draggingTabId];
-      if (!draggedEl) return;
-      const draggedRect = draggedEl.getBoundingClientRect();
+      if (!draggingTabId) return;
+      
       const isVertical = orientation === 'vertical';
-      const desiredPrimary = isVertical
-        ? event.clientY - dragPointerToTopRef.current
-        : event.clientX - dragPointerToLeftRef.current;
-      const currentPrimary = isVertical
-        ? draggedRect.top - dragOffsetYRef.current
-        : draggedRect.left - dragOffsetXRef.current;
-      const nextOffset = desiredPrimary - currentPrimary;
-      if (isVertical) {
-        setDragOffsetY(nextOffset);
-      } else {
-        setDragOffsetX(nextOffset);
-      }
-
-      if (Math.abs(nextOffset) > 2) {
+      
+      // Only update position when actually dragging (after threshold)
+      if (Math.abs(event.movementX) > 2 || Math.abs(event.movementY) > 2) {
         dragMovedRef.current = true;
+        if (!isVertical) {
+          setDraggedTabPosition({ x: event.clientX, y: 0 }); // Lock Y position to 0
+        } else {
+          setDraggedTabPosition({ x: event.clientX, y: event.clientY });
+        }
       }
 
       const currentIndex = currentTabs.findIndex((tab) => tab.id === draggingTabId);
@@ -440,9 +423,8 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       const now = Date.now();
       if (now - lastSwapAtRef.current < TAB_SWAP_COOLDOWN_MS) return;
 
-      const draggedCenterPrimary = isVertical
-        ? desiredPrimary + draggedRect.height / 2
-        : desiredPrimary + draggedRect.width / 2;
+      // Use the mouse position for swap detection (revert to working approach)
+      const draggedCenterPrimary = isVertical ? event.clientY : event.clientX;
       if (currentIndex > 0) {
         const prevTab = currentTabs[currentIndex - 1];
         const prevEl = prevTab ? tabElementRefs.current[prevTab.id] : null;
@@ -506,10 +488,8 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       const moved = dragMovedRef.current;
       releasedDragTabIdRef.current = draggingTabId;
       setDraggingTabId(null);
-      setDragOffsetX(0);
-      setDragOffsetY(0);
-      dragOffsetXRef.current = 0;
-      dragOffsetYRef.current = 0;
+      setDraggedTabPosition(null);
+      setOriginalTabPosition(null);
       lastSwapClientXRef.current = null;
       lastSwapClientYRef.current = null;
       lastSwapAtRef.current = 0;
@@ -587,6 +567,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
 
   return (
     <div
+      className={draggingTabId ? 'tab-bar-dragging' : ''}
       style={{
         display: 'flex',
         flexDirection: isVertical ? 'column' : 'row',
@@ -598,6 +579,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         width: '100%',
         height: isVertical ? '100%' : undefined,
         WebkitAppRegion: 'drag',
+        pointerEvents: draggingTabId ? 'none' : 'auto',
       }}
     >
       <div
@@ -649,15 +631,19 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                   if (targetEl) {
                     const rect = targetEl.getBoundingClientRect();
                     dragPointerToLeftRef.current = event.clientX - rect.left;
+                    dragPointerToTopRef.current = event.clientY - rect.top;
+                    setOriginalTabPosition({ x: rect.left, y: rect.top });
                   } else {
                     dragPointerToLeftRef.current = 0;
+                    dragPointerToTopRef.current = 0;
+                    setOriginalTabPosition({ x: event.clientX, y: event.clientY });
                   }
                   lastSwapClientXRef.current = null;
+                  lastSwapClientYRef.current = null;
                   lastSwapAtRef.current = 0;
                   dragMovedRef.current = false;
-                  setDragOffsetX(0);
-                  dragOffsetXRef.current = 0;
                   setDraggingTabId(tab.id);
+                  // Don't set position yet - wait for mouse movement
                 }}
                 onContextMenu={(event) => {
                   if (isExiting) return;
@@ -716,14 +702,12 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
                   opacity: isCollapsed
                     ? 0
-                    : draggingTabId === tab.id
-                      ? 'var(--tabDragOpacity, 1)'
+                    : draggingTabId === tab.id && draggedTabPosition
+                      ? 0  // Completely hide when overlay is visible (actual dragging)
                       : 1,
                   transform:
-                    draggingTabId === tab.id
-                      ? isVertical
-                        ? `translateY(${dragOffsetY}px)`
-                        : `translateX(${dragOffsetX}px)`
+                    draggingTabId === tab.id && draggedTabPosition
+                      ? `translate(${draggedTabPosition.x - dragPointerToLeftRef.current}px, ${draggedTabPosition.y - dragPointerToTopRef.current}px)`
                       : undefined,
                   borderBottomColor:
                     tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
@@ -735,7 +719,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                     tab.id === activeId && isVertical && !isRightSidebar
                       ? 'var(--surfaceBgHover, var(--tabBgHover))'
                       : undefined,
-                  pointerEvents: isExiting ? 'none' : 'auto',
+                  pointerEvents: isExiting || (draggingTabId && tab.id !== draggingTabId) ? 'none' : 'auto',
                   transition:
                     !animationsEnabled || draggingTabId === tab.id
                       ? 'none'
@@ -855,6 +839,90 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         onClose={closeTabMenu}
         minWidth={196}
       />
+      
+      {/* Dragged tab overlay */}
+      {draggingTabId && draggedTabPosition && (() => {
+        const draggedTab = tabs.find(tab => tab.id === draggingTabId);
+        if (!draggedTab) return null;
+        const displayFavicon = getDisplayFavicon(draggedTab.url, draggedTab.favicon);
+        const displayTitle = getDisplayTitle(draggedTab.url, draggedTab.title);
+        const isInternalTab = draggedTab.url.startsWith('mira://');
+        const faviconSize = isInternalTab ? 22 : 16;
+        
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              left: draggedTabPosition.x - dragPointerToLeftRef.current,
+              top: !isVertical && originalTabPosition ? originalTabPosition.y : draggedTabPosition.y - dragPointerToTopRef.current,
+              zIndex: 1000,
+              pointerEvents: 'none',
+              opacity: 'var(--tabDragOpacity, 1)',
+              boxShadow: 'var(--tabDragShadow, 0 6px 18px rgba(0, 0, 0, 0.28))',
+            }}
+          >
+            <div
+              className={`theme-tab ${draggedTab.id === activeId ? 'theme-tab-selected' : ''}`}
+              style={{
+                height: TAB_ROW_HEIGHT,
+                borderRadius: 'var(--layoutTabRadius, 8px)',
+                display: 'flex',
+                gap: 6,
+                alignItems: 'center',
+                whiteSpace: 'nowrap',
+                width: 'var(--layoutTabTargetWidth, 220px)',
+                minWidth: 'var(--layoutTabMinWidth, 100px)',
+                overflow: 'hidden',
+                padding: '0 10px',
+                background: draggedTab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
+              }}
+            >
+              {displayFavicon ? (
+                <img
+                  src={displayFavicon}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: faviconSize,
+                    height: faviconSize,
+                    borderRadius: 3,
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <span
+                  aria-hidden={true}
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 3,
+                    display: 'inline-block',
+                    background: 'var(--tabPlaceholderBg, var(--surfaceBorder, var(--tabBorder)))',
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <span
+                title={displayTitle}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {displayTitle}
+              </span>
+              {draggedTab.isSleeping ? (
+                <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
+                  zz
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
