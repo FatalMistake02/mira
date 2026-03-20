@@ -1795,6 +1795,11 @@ function setupDownloadHandlers() {
   ipcMain.handle('download-open', async (_, savePath: string) => {
     await shell.showItemInFolder(savePath);
   });
+
+  // Open file directly from renderer
+  ipcMain.handle('download-open-file', async (_, savePath: string) => {
+    await shell.openPath(savePath);
+  });
 }
 
 function setupWebviewTabOpenHandler() {

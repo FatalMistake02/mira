@@ -172,6 +172,43 @@ export default function DownloadButton() {
     };
   }, [visibilityMode, show, downloads.length, pendingCount]);
 
+  useEffect(() => {
+    if (!show) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      const popupElement = document.querySelector('[data-download-popup]');
+      const buttonElement = document.querySelector('[data-download-button]');
+      
+      // Close if click is outside popup and button
+      if (popupElement && !popupElement.contains(target) && 
+          buttonElement && !buttonElement.contains(target)) {
+        setShow(false);
+      }
+    };
+
+    const handleWindowBlur = () => {
+      setShow(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShow(false);
+      }
+    };
+
+    // Use capture phase to catch clicks before they reach the webview
+    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('blur', handleWindowBlur);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [show]);
+
   const ringVisible = indicatorPhase !== 'idle';
   const ringOpacity = indicatorPhase === 'fading' ? 0 : 1;
   const isIndeterminate = indicatorPhase === 'active' && ringProgress === null;
@@ -186,6 +223,7 @@ export default function DownloadButton() {
   return (
     <div style={{ position: 'relative' }}>
       <button
+        data-download-button
         onClick={() => setShow((prev) => !prev)}
         title="Downloads"
         className="theme-btn theme-btn-download"

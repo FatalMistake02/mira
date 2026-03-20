@@ -86,6 +86,7 @@ const DownloadContext = createContext<{
   cancel: (id: string) => void;
   clear: () => void;
   openFolder: (path: string) => void;
+  openFile: (path: string) => void;
 } | null>(null);
 
 /**
@@ -164,8 +165,12 @@ export default function DownloadProvider({ children }: { children: React.ReactNo
     electron?.ipcRenderer?.invoke('download-open', savePath);
   };
 
+  const openFile = (savePath: string) => {
+    electron?.ipcRenderer?.invoke('download-open-file', savePath);
+  };
+
   return (
-    <DownloadContext.Provider value={{ downloads, cancel, clear, openFolder }}>
+    <DownloadContext.Provider value={{ downloads, cancel, clear, openFolder, openFile }}>
       {children}
     </DownloadContext.Provider>
   );
