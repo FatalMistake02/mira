@@ -15,7 +15,6 @@ const TAB_TARGET_WIDTH = 'var(--layoutTabTargetWidth, 220px)';
 const TAB_MIN_WIDTH = 'var(--layoutTabMinWidth, 100px)';
 const TAB_STRIP_GAP = 'var(--layoutTabGap, 6px)';
 const TAB_ROW_HEIGHT = 'var(--layoutTabHeight, 30px)';
-const TAB_ACTIVE_ROW_HEIGHT = 'calc(var(--layoutTabHeight, 30px) + 3px)';
 const TAB_SWAP_TRIGGER_RATIO = 0.1;
 const TAB_SWAP_MIN_POINTER_DELTA_PX = 10;
 const TAB_SWAP_COOLDOWN_MS = 70;
@@ -593,7 +592,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         flexDirection: isVertical ? 'column' : 'row',
         gap: TAB_STRIP_GAP,
         padding: 0,
-        alignItems: isVertical ? 'stretch' : 'flex-end',
+        alignItems: isVertical ? 'stretch' : 'center',
         minWidth: 0,
         flex: 1,
         width: '100%',
@@ -617,7 +616,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
             gap: TAB_STRIP_GAP,
             overflowX: isVertical ? 'hidden' : 'auto',
             overflowY: isVertical ? 'auto' : 'hidden',
-            alignItems: isVertical ? 'stretch' : 'flex-end',
+            alignItems: isVertical ? 'stretch' : 'center',
             WebkitAppRegion: 'drag',
             padding: isVertical ? 6 : 0,
           }}
@@ -683,7 +682,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                 }}
                 className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
                 style={{
-                  height: tab.id === activeId ? TAB_ACTIVE_ROW_HEIGHT : TAB_ROW_HEIGHT,
+                  height: TAB_ROW_HEIGHT,
                   cursor: 'default',
                   WebkitAppRegion: 'no-drag',
                   borderRadius:
@@ -704,12 +703,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                   overflow: 'hidden',
                   padding: isCollapsed ? '0' : '0 10px',
                   position: 'relative',
-                  marginBottom:
-                    !isVertical && tab.id === activeId
-                      ? `calc(-1 * ${borderWidth})`
-                      : !isVertical
-                        ? borderWidth
-                        : 0,
+                  marginBottom: 0,
                   marginRight:
                     tab.id === activeId && isVertical && !isRightSidebar
                       ? `calc(-1 * ${borderWidth})`
