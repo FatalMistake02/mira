@@ -320,7 +320,7 @@ export default function TabView() {
     updateTabMetadata,
     registerWebview,
     updateFindInPageMatches,
-    newTab,
+    newTabToRight,
     goBack,
     goForward,
     reload,
@@ -522,10 +522,11 @@ export default function TabView() {
       if (!canOpenInNewTab(normalized)) return;
       closePageMenu();
       window.setTimeout(() => {
-        newTab(normalized, { activate: true, activateDelayMs: 120 });
+        // Use the active tab as the source for opening the new tab to the right
+        newTabToRight(activeId, normalized);
       }, 0);
     },
-    [closePageMenu, newTab],
+    [closePageMenu, newTabToRight, activeId],
   );
 
   useEffect(() => {
@@ -1138,7 +1139,7 @@ export default function TabView() {
                         }
                       } else {
                         // Open in new tab (default for target="_blank")
-                        newTab(url, { activate: true });
+                        newTabToRight(tab.id, url);
                       }
                     };
 

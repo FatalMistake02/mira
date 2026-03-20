@@ -126,7 +126,6 @@ const MAX_RECENTLY_CLOSED_TABS = 25;
 const REOPEN_CLOSED_TAB_DEDUPE_WINDOW_MS = 400;
 const REOPEN_CLOSED_TAB_ACTIVATE_DELAY_MS = 120;
 const IPC_OPEN_TAB_ACTIVATE_DELAY_MS = 110;
-const IPC_OPEN_TAB_NAVIGATE_DELAY_MS = 50;
 const ZOOM_STEP = 0.1;
 const MIN_ZOOM_FACTOR = 0.25;
 const MAX_ZOOM_FACTOR = 5;
@@ -1599,39 +1598,41 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         ipcOpenTabNavigateTimerRef.current = null;
       }
 
-      const defaultNewTabUrl = getBrowserSettings().newTabPage;
       const nowForTab = Date.now();
       const stagedTabId = crypto.randomUUID();
       const stagedTab: Tab = {
         id: stagedTabId,
-        url: defaultNewTabUrl,
-        title: defaultNewTabUrl.startsWith('mira://')
-          ? miraUrlToName(defaultNewTabUrl)
-          : defaultNewTabUrl,
-        favicon: defaultNewTabUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
-        history: [defaultNewTabUrl],
+        url: normalized,
+        title: normalized.startsWith('mira://')
+          ? miraUrlToName(normalized)
+          : normalized,
+        favicon: normalized.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+        history: [normalized],
         historyIndex: 0,
         reloadToken: 0,
         isSleeping: false,
         lastActiveAt: nowForTab,
       };
-      setTabs((currentTabs) =>
-        currentTabs
-          .map((tab) =>
-            tab.id === activeIdRef.current ? { ...tab, lastActiveAt: nowForTab } : tab,
-          )
-          .concat(stagedTab),
-      );
+      setTabs((currentTabs) => {
+        const activeTabIndex = currentTabs.findIndex((tab) => tab.id === activeIdRef.current);
+        const updatedTabs = currentTabs.map((tab) =>
+          tab.id === activeIdRef.current ? { ...tab, lastActiveAt: nowForTab } : tab,
+        );
+        
+        // Insert the new tab next to the active tab, or at the end if active tab not found
+        if (activeTabIndex >= 0) {
+          updatedTabs.splice(activeTabIndex + 1, 0, stagedTab);
+        } else {
+          updatedTabs.push(stagedTab);
+        }
+        
+        return updatedTabs;
+      });
 
       ipcOpenTabActivateTimerRef.current = window.setTimeout(() => {
         ipcOpenTabActivateTimerRef.current = null;
         if (!tabsRef.current.some((tab) => tab.id === stagedTabId)) return;
         setActiveId(stagedTabId);
-
-        ipcOpenTabNavigateTimerRef.current = window.setTimeout(() => {
-          ipcOpenTabNavigateTimerRef.current = null;
-          navigateRef.current(normalized, stagedTabId);
-        }, IPC_OPEN_TAB_NAVIGATE_DELAY_MS);
       }, IPC_OPEN_TAB_ACTIVATE_DELAY_MS);
     };
 

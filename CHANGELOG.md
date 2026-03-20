@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix new tabs opening from links
+
 ## v0.11.1 - 2026-03-20
 
 - Progress on fixing updates
