@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.11.1 - 2026-03-20
+
 - Progress on fixing updates
 - Default browser on Windows now works
 - Fix tab dragging
