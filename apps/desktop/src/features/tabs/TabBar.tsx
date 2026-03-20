@@ -530,6 +530,18 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     const nextRects: Record<string, DOMRect> = {};
     const releasedDragTabId = releasedDragTabIdRef.current;
     const isVertical = orientation === 'vertical';
+
+    if (animationsEnabled) {
+      for (const item of renderedTabs) {
+        const el = tabElementRefs.current[item.tab.id];
+        if (!el) continue;
+        // Ensure measurements use layout positions, not in-flight transforms.
+        for (const animation of el.getAnimations()) {
+          animation.cancel();
+        }
+      }
+    }
+
     for (const item of renderedTabs) {
       const tabId = item.tab.id;
       const el = tabElementRefs.current[tabId];
