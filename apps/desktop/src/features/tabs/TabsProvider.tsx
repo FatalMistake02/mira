@@ -475,7 +475,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         if (cancelled) return;
 
         if (windowRestore && windowRestore.tabs.length > 0) {
-          applyRestoredSnapshot(windowRestore, { stageOnNewTab: true });
+          applyRestoredSnapshot(windowRestore);
           return;
         }
 
@@ -497,7 +497,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
               .invoke<SessionSnapshot | null>('session-accept-restore', mode)
               .catch(() => null);
             if (cancelled || !snapshot) return;
-            applyRestoredSnapshot(snapshot, { stageOnNewTab: true });
+            applyRestoredSnapshot(snapshot, {
+              stageOnNewTab: mode === 'tabs',
+            });
           }
         }
       } finally {
@@ -516,7 +518,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
   const restorePreviousSession = (mode: SessionRestoreMode) => {
     const applyManualRestoreSnapshot = (snapshot: SessionSnapshot) => {
-      applyRestoredSnapshot(snapshot, { stageOnNewTab: true });
+      applyRestoredSnapshot(snapshot, { stageOnNewTab: mode === 'tabs' });
       persistSession(snapshot.tabs, snapshot.activeId);
     };
 
