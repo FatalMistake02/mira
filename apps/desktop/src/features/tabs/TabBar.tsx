@@ -634,8 +634,8 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         height: isVertical ? '100%' : undefined,
         WebkitAppRegion: 'drag',
         userSelect: draggingTabId ? 'none' : 'auto', // Prevent text selection during drag
-        ['--tabEnterExitMs' as '--tabEnterExitMs']: `${TAB_ENTER_EXIT_DURATION_MS}ms`,
-        ['--tabOpacityMs' as '--tabOpacityMs']: `${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms`,
+        ['--tabEnterExitMs' as string]: `${TAB_ENTER_EXIT_DURATION_MS}ms`,
+        ['--tabOpacityMs' as string]: `${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms`,
       } as CSSProperties}
     >
       <div
