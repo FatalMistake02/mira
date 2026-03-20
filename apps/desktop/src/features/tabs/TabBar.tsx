@@ -22,6 +22,7 @@ const TAB_APPEAR_SETTLE_MS = 24;
 const TAB_ENTER_EXIT_DURATION_MS = 180;
 const TAB_REORDER_ANIMATION_MS = 170;
 const TAB_REORDER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const ORIENTATION_CHANGE_SETTLE_MS = 200;
 
 type RenderedTabState = {
   tab: Tab;
@@ -109,6 +110,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   const suppressClickRef = useRef(false);
   const releasedDragTabIdRef = useRef<string | null>(null);
   const lastNativeTabCommandRef = useRef<{ signature: string; at: number } | null>(null);
+  const orientationSettleUntilRef = useRef(0);
   const [renderedTabs, setRenderedTabs] = useState<RenderedTabState[]>(() =>
     tabs.map((tab, index) => ({ tab, phase: 'stable', lastKnownIndex: index })),
   );
@@ -411,10 +413,10 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       // Only update position when actually dragging (after threshold)
       if (Math.abs(event.movementX) > 2 || Math.abs(event.movementY) > 2) {
         dragMovedRef.current = true;
-        if (!isVertical) {
-          setDraggedTabPosition({ x: event.clientX, y: 0 }); // Lock Y position to 0
+        if (isVertical) {
+          setDraggedTabPosition({ x: 0, y: event.clientY }); // Lock X position to 0 for vertical tabs
         } else {
-          setDraggedTabPosition({ x: event.clientX, y: event.clientY });
+          setDraggedTabPosition({ x: event.clientX, y: 0 }); // Lock Y position to 0 for horizontal tabs
         }
       }
 
@@ -512,6 +514,16 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     };
   }, [draggingTabId, moveTabToIndex, tabs, orientation]);
 
+  // Add a small delay when orientation changes to ensure proper cleanup
+  useEffect(() => {
+    // Reset any drag state when orientation changes
+    setDraggingTabId(null);
+    setDraggedTabPosition(null);
+    setOriginalTabPosition(null);
+    // Set the settle time to prevent rapid setActive calls during remount
+    orientationSettleUntilRef.current = Date.now() + ORIENTATION_CHANGE_SETTLE_MS;
+  }, [orientation]);
+
   useLayoutEffect(() => {
     const nextRects: Record<string, DOMRect> = {};
     const releasedDragTabId = releasedDragTabIdRef.current;
@@ -583,7 +595,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         width: '100%',
         height: isVertical ? '100%' : undefined,
         WebkitAppRegion: 'drag',
-        pointerEvents: draggingTabId ? 'none' : 'auto',
+        userSelect: draggingTabId ? 'none' : 'auto', // Prevent text selection during drag
       }}
     >
       <div
@@ -625,12 +637,20 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                 onClick={() => {
                   if (isExiting) return;
                   if (suppressClickRef.current) return;
-                  setActive(tab.id);
+                  const now = Date.now();
+                  const settleUntil = orientationSettleUntilRef.current;
+                  if (settleUntil > now) {
+                    window.setTimeout(() => {
+                      setActive(tab.id);
+                    }, settleUntil - now);
+                  } else {
+                    setActive(tab.id);
+                  }
                 }}
                 onMouseDown={(event) => {
                   if (isExiting) return;
-                  if (isVertical) return;
                   if (event.button !== 0) return;
+                  // Allow vertical tabs to be dragged too
                   const targetEl = tabElementRefs.current[tab.id];
                   if (targetEl) {
                     const rect = targetEl.getBoundingClientRect();
@@ -714,7 +734,9 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                       ? `translate(${draggedTabPosition.x - dragPointerToLeftRef.current}px, ${draggedTabPosition.y - dragPointerToTopRef.current}px)`
                       : undefined,
                   borderBottomColor:
-                    tab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
+                    tab.id === activeId && !isVertical
+                      ? 'var(--surfaceBgHover, var(--tabBgHover))'
+                      : undefined,
                   borderLeftColor:
                     tab.id === activeId && isVertical && isRightSidebar
                       ? 'var(--surfaceBgHover, var(--tabBgHover))'
@@ -806,14 +828,23 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
             className="theme-btn theme-btn-nav nav-icon-btn tab-new-tab-btn"
             style={{
               height: TAB_ROW_HEIGHT,
+              flex: isVertical
+                ? '0 0 auto'
+                : 'none',
               width: isVertical
                 ? '100%'
                 : 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
               minWidth: isVertical
                 ? 0
                 : 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
+              maxWidth: isVertical
+                ? '100%'
+                : 'calc(var(--layoutNavButtonHeight, 30px) + 3px)',
               marginTop: isVertical ? 0 : 1,
               flexShrink: 0,
+              borderRadius: isVertical
+                ? 'var(--layoutTabRadius, 8px)'
+                : undefined,
               WebkitAppRegion: 'no-drag',
             }}
           >
@@ -857,7 +888,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
           <div
             style={{
               position: 'fixed',
-              left: draggedTabPosition.x - dragPointerToLeftRef.current,
+              left: isVertical ? originalTabPosition?.x ?? 0 : draggedTabPosition.x - dragPointerToLeftRef.current,
               top: !isVertical && originalTabPosition ? originalTabPosition.y : draggedTabPosition.y - dragPointerToTopRef.current,
               zIndex: 1000,
               pointerEvents: 'none',
