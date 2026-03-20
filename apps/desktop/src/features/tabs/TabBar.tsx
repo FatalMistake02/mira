@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useTabs } from './TabsProvider';
 import type { Tab } from './types';
@@ -411,14 +411,30 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       if (!draggingTabId) return;
       
       const isVertical = orientation === 'vertical';
+      const draggedEl = tabElementRefs.current[draggingTabId];
+      const containerRect = scrollRef.current?.getBoundingClientRect();
+      const draggedRect = draggedEl?.getBoundingClientRect();
+      const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
       
       // Only update position when actually dragging (after threshold)
       if (Math.abs(event.movementX) > 2 || Math.abs(event.movementY) > 2) {
         dragMovedRef.current = true;
         if (isVertical) {
-          setDraggedTabPosition({ x: 0, y: event.clientY }); // Lock X position to 0 for vertical tabs
+          let nextY = event.clientY;
+          if (containerRect && draggedRect) {
+            const minY = containerRect.top + dragPointerToTopRef.current;
+            const maxY = containerRect.bottom - (draggedRect.height - dragPointerToTopRef.current);
+            nextY = clamp(nextY, minY, maxY);
+          }
+          setDraggedTabPosition({ x: 0, y: nextY }); // Lock X position to 0 for vertical tabs
         } else {
-          setDraggedTabPosition({ x: event.clientX, y: 0 }); // Lock Y position to 0 for horizontal tabs
+          let nextX = event.clientX;
+          if (containerRect && draggedRect) {
+            const minX = containerRect.left + dragPointerToLeftRef.current;
+            const maxX = containerRect.right - (draggedRect.width - dragPointerToLeftRef.current);
+            nextX = clamp(nextX, minX, maxX);
+          }
+          setDraggedTabPosition({ x: nextX, y: 0 }); // Lock Y position to 0 for horizontal tabs
         }
       }
 
@@ -530,6 +546,18 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     const nextRects: Record<string, DOMRect> = {};
     const releasedDragTabId = releasedDragTabIdRef.current;
     const isVertical = orientation === 'vertical';
+
+    if (animationsEnabled) {
+      for (const item of renderedTabs) {
+        const el = tabElementRefs.current[item.tab.id];
+        if (!el) continue;
+        // Ensure measurements use layout positions, not in-flight transforms.
+        for (const animation of el.getAnimations()) {
+          animation.cancel();
+        }
+      }
+    }
+
     for (const item of renderedTabs) {
       const tabId = item.tab.id;
       const el = tabElementRefs.current[tabId];
@@ -551,9 +579,12 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       const delta = isVertical ? prevRect.top - nextRect.top : prevRect.left - nextRect.left;
       if (Math.abs(delta) < 2) continue;
       if (!animationsEnabled) continue;
-      
-      // Only animate if this looks like a deliberate reorder, not random position changes
-      const isDeliberateReorder = Math.abs(delta) > 10 && Math.abs(delta) < 200;
+
+      const deltaAbs = Math.abs(delta);
+      // Loosen thresholds while dragging so surrounding tabs animate during swaps.
+      const isDeliberateReorder = draggingTabId
+        ? deltaAbs > 4 && deltaAbs < 600
+        : deltaAbs > 10 && deltaAbs < 200;
       if (!isDeliberateReorder) continue;
 
       // Prevent direction glitches by dropping any previous in-flight transform animations.
@@ -585,7 +616,12 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
 
   return (
     <div
-      className={draggingTabId ? 'tab-bar-dragging' : ''}
+      className={[
+        draggingTabId ? 'tab-bar-dragging' : '',
+        animationsEnabled ? 'tab-animations-enabled' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={{
         display: 'flex',
         flexDirection: isVertical ? 'column' : 'row',
@@ -598,7 +634,9 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         height: isVertical ? '100%' : undefined,
         WebkitAppRegion: 'drag',
         userSelect: draggingTabId ? 'none' : 'auto', // Prevent text selection during drag
-      }}
+        ['--tabEnterExitMs' as string]: `${TAB_ENTER_EXIT_DURATION_MS}ms`,
+        ['--tabOpacityMs' as string]: `${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms`,
+      } as CSSProperties}
     >
       <div
         style={{
@@ -694,7 +732,9 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                   }
                   setTabMenuState({ tabId: tab.id, x: event.clientX, y: event.clientY });
                 }}
-                className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}`}
+                className={`theme-tab ${tab.id === activeId ? 'theme-tab-selected' : ''}${
+                  draggingTabId === tab.id ? ' tab-is-dragging' : ''
+                }`}
                 style={{
                   height: TAB_ROW_HEIGHT,
                   cursor: 'default',
@@ -750,10 +790,6 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                       ? 'var(--surfaceBgHover, var(--tabBgHover))'
                       : undefined,
                   pointerEvents: isExiting || (draggingTabId && tab.id !== draggingTabId) ? 'none' : 'auto',
-                  transition:
-                    !animationsEnabled || draggingTabId === tab.id
-                      ? 'none'
-                      : `min-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), max-width ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), padding ${TAB_ENTER_EXIT_DURATION_MS}ms cubic-bezier(0.2, 0, 0.2, 1), opacity ${Math.floor(TAB_ENTER_EXIT_DURATION_MS * 0.7)}ms ease`,
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
                   boxShadow:
                     draggingTabId === tab.id
