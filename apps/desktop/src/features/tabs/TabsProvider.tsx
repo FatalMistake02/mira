@@ -1116,6 +1116,22 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     tabsRef.current = tabs;
     activeIdRef.current = activeId;
+    
+    // Notify main process of active webContents for dev tools
+    const ipc = electron?.ipcRenderer;
+    if (ipc && activeId) {
+      const wv = webviewMap.current[activeId];
+      if (wv && typeof wv.getWebContentsId === 'function') {
+        try {
+          const webContentsId = wv.getWebContentsId();
+          if (typeof webContentsId === 'number' && Number.isFinite(webContentsId)) {
+            void ipc.invoke('tab-set-active-webcontents', webContentsId).catch(() => undefined);
+          }
+        } catch {
+          // Ignore errors from getWebContentsId
+        }
+      }
+    }
   }, [tabs, activeId]);
 
   useEffect(() => {

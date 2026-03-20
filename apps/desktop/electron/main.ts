@@ -106,6 +106,7 @@ const RENDERER_RECOVERY_COOLDOWN_MS = 3000;
 const recentRendererRecoveryByWindow = new Map<number, number>();
 const pendingInitialUrlByWindowId = new Map<number, string>();
 const SHORTCUT_DEVTOOLS_SUPPRESS_MS = 500;
+const activeWebContentsByWindow = new Map<number, WebContents>();
 const suppressHostDevToolsUntilByWindowId = new Map<number, number>();
 const windowSessionCache = new Map<number, WindowSessionSnapshot>();
 const bootRestoreByWindowId = new Map<number, WindowSessionSnapshot>();
@@ -2440,6 +2441,21 @@ function shouldSuppressHostDevTools(win: BrowserWindow): boolean {
 }
 
 function toggleFocusedBrowserDevTools(): boolean {
+  const focusedWindow = BrowserWindow.getFocusedWindow();
+  if (!focusedWindow || focusedWindow.isDestroyed()) return false;
+  
+  // Get the active webContents for this window from our tracking
+  const activeWebContents = activeWebContentsByWindow.get(focusedWindow.id);
+  if (activeWebContents && !activeWebContents.isDestroyed()) {
+    if (activeWebContents.isDevToolsOpened()) {
+      activeWebContents.closeDevTools();
+    } else {
+      activeWebContents.openDevTools();
+    }
+    return true;
+  }
+  
+  // Fallback to getFocusedWebContents if no tracked active webview
   const focused = electronWebContents.getFocusedWebContents();
   if (!focused || focused.isDestroyed()) return false;
   if (!focused.hostWebContents) return false;
@@ -2619,6 +2635,34 @@ function setupWindowControlsHandlers() {
     if (!normalizedUrl) return false;
     if (event.sender.isDestroyed()) return false;
     event.sender.send('open-url-in-new-tab', normalizedUrl);
+    return true;
+  });
+
+  ipcMain.handle('tab-set-active-webcontents', (event, webContentsId: unknown) => {
+    const hostWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+    
+    const id = typeof webContentsId === 'number' && Number.isFinite(webContentsId) 
+      ? Math.floor(webContentsId) 
+      : -1;
+    if (id <= 0) {
+      activeWebContentsByWindow.delete(hostWindow.id);
+      return false;
+    }
+    
+    const target = electronWebContents.fromId(id);
+    if (!target || target.isDestroyed()) {
+      activeWebContentsByWindow.delete(hostWindow.id);
+      return false;
+    }
+    
+    // Verify this webContents belongs to the same window
+    const targetHost = target.hostWebContents;
+    if (!targetHost || targetHost.id !== event.sender.id) {
+      return false;
+    }
+    
+    activeWebContentsByWindow.set(hostWindow.id, target);
     return true;
   });
 
