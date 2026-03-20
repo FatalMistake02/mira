@@ -411,14 +411,30 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       if (!draggingTabId) return;
       
       const isVertical = orientation === 'vertical';
+      const draggedEl = tabElementRefs.current[draggingTabId];
+      const containerRect = scrollRef.current?.getBoundingClientRect();
+      const draggedRect = draggedEl?.getBoundingClientRect();
+      const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
       
       // Only update position when actually dragging (after threshold)
       if (Math.abs(event.movementX) > 2 || Math.abs(event.movementY) > 2) {
         dragMovedRef.current = true;
         if (isVertical) {
-          setDraggedTabPosition({ x: 0, y: event.clientY }); // Lock X position to 0 for vertical tabs
+          let nextY = event.clientY;
+          if (containerRect && draggedRect) {
+            const minY = containerRect.top + dragPointerToTopRef.current;
+            const maxY = containerRect.bottom - (draggedRect.height - dragPointerToTopRef.current);
+            nextY = clamp(nextY, minY, maxY);
+          }
+          setDraggedTabPosition({ x: 0, y: nextY }); // Lock X position to 0 for vertical tabs
         } else {
-          setDraggedTabPosition({ x: event.clientX, y: 0 }); // Lock Y position to 0 for horizontal tabs
+          let nextX = event.clientX;
+          if (containerRect && draggedRect) {
+            const minX = containerRect.left + dragPointerToLeftRef.current;
+            const maxX = containerRect.right - (draggedRect.width - dragPointerToLeftRef.current);
+            nextX = clamp(nextX, minX, maxX);
+          }
+          setDraggedTabPosition({ x: nextX, y: 0 }); // Lock Y position to 0 for horizontal tabs
         }
       }
 
