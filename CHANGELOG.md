@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.12.0 - 2026-03-21
+
 - Fix new tabs opening from links
 - Fixed duplicate tab
 - Update downloads pop-up
