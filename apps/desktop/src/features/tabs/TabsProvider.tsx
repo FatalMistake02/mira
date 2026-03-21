@@ -56,9 +56,6 @@ type SessionRestoreState = {
 };
 
 type SessionRestoreMode = 'tabs' | 'windows';
-type ApplyRestoredSnapshotOptions = {
-  stageOnNewTab?: boolean;
-};
 
 type TabsContextType = {
   tabs: Tab[];
@@ -295,7 +292,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     matches: 0,
   };
   const applyRestoredSnapshot = useCallback(
-    (snapshot: SessionSnapshot, options?: ApplyRestoredSnapshotOptions) => {
+    (snapshot: SessionSnapshot) => {
       if (!snapshot.tabs.length) return;
 
       const now = Date.now();
@@ -303,14 +300,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         tab.id === snapshot.activeId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
       );
 
-      if (options?.stageOnNewTab) {
-        const stagingTab = createInitialTab(getBrowserSettings().newTabPage);
-        setTabs([stagingTab, ...restoredTabs]);
-        setActiveId(stagingTab.id);
-      } else {
-        setTabs(restoredTabs);
-        setActiveId(snapshot.activeId);
-      }
+      setTabs(restoredTabs);
+      setActiveId(snapshot.activeId);
 
       setPendingSession(null);
       setRestoreTabCountState(0);
@@ -435,7 +426,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         } else if (restoreBehavior === 'fresh') {
           localStorage.removeItem(SESSION_STORAGE_KEY);
         } else {
-          applyRestoredSnapshot(snapshot, { stageOnNewTab: true });
+          applyRestoredSnapshot(snapshot);
         }
       }
       hydratedRef.current = true;
@@ -497,9 +488,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
               .invoke<SessionSnapshot | null>('session-accept-restore', mode)
               .catch(() => null);
             if (cancelled || !snapshot) return;
-            applyRestoredSnapshot(snapshot, {
-              stageOnNewTab: mode === 'tabs',
-            });
+            applyRestoredSnapshot(snapshot);
           }
         }
       } finally {
@@ -518,7 +507,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
   const restorePreviousSession = (mode: SessionRestoreMode) => {
     const applyManualRestoreSnapshot = (snapshot: SessionSnapshot) => {
-      applyRestoredSnapshot(snapshot, { stageOnNewTab: mode === 'tabs' });
+      applyRestoredSnapshot(snapshot);
       persistSession(snapshot.tabs, snapshot.activeId);
     };
 
