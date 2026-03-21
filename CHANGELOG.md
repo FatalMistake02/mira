@@ -9,6 +9,7 @@
 - Update downloads pop-up
 - Restoring goes to last active tab instead of new tab
 - Add bookmarks
+- Add updates page
 
 ## v0.11.1 - 2026-03-20
 
