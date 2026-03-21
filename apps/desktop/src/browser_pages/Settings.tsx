@@ -1670,6 +1670,30 @@ export default function Settings() {
                     }}
                   />
                 </label>
+                <div className="settings-setting-row">
+                  <div className="settings-setting-meta">
+                    <span className="settings-setting-label">Open App Console</span>
+                    <span className="settings-setting-description">
+                      Open the browser's developer console for debugging and inspection.
+                    </span>
+                  </div>
+                  <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Open main browser developer tools
+                        if (electron?.ipcRenderer) {
+                          electron.ipcRenderer.invoke('window-toggle-devtools').catch(() => {
+                            console.log('Failed to open main window dev tools. Use Ctrl+Alt+Shift+J');
+                          });
+                        }
+                      }}
+                      className="theme-btn theme-btn-nav settings-btn-pad"
+                    >
+                      Open Main Console
+                    </button>
+                  </div>
+                </div>
               </section>
 
               <section className="theme-panel settings-card">

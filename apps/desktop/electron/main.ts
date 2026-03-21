@@ -3280,6 +3280,12 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('window-toggle-devtools', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return false;
+    return toggleWindowDevTools(win);
+  });
+
   ipcMain.handle('dialog-open-file-url', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, {

@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useTabs } from './TabsProvider';
 import { BROWSER_SETTINGS_CHANGED_EVENT, getBrowserSettings } from '../settings/browserSettings';
 import { getThemeById } from '../themes/themeLoader';
@@ -357,6 +357,7 @@ export default function TabView() {
         .filter((tab): tab is (typeof tabs)[number] => !!tab),
     [renderOrderTabIds, tabsById],
   );
+  const webviewMap = useRef<Record<string, WebviewElement>>({});
 
   useEffect(() => {
     const syncSettings = () => {
@@ -379,6 +380,126 @@ export default function TabView() {
       applyRawFileDarkModeStyle(node as unknown as WebviewElement, shouldApplyRawFileDarkMode);
     });
   }, [rawFileDarkModeEnabled, themeMode]);
+
+  // Handle login completion messages from login tabs
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      console.log('Received message:', event.data);
+      
+      if (event.data?.type === 'login-completed' && event.data?.originalTabId) {
+        const originalTabId = event.data.originalTabId;
+        const returnUrl = event.data.returnUrl;
+        
+        console.log('Login completion message received:', { originalTabId, returnUrl });
+        
+        // Check if the original tab still exists
+        const originalTab = tabs.find(tab => tab.id === originalTabId);
+        if (originalTab) {
+          console.log('Switching back to original tab:', originalTabId);
+          // Switch back to the original tab
+          navigate(returnUrl || originalTab.url, originalTabId);
+        } else {
+          console.log('Original tab not found:', originalTabId);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [tabs, navigate]);
+
+  // Global handler for external link clicks to catch login flows
+  useEffect(() => {
+    const handleExternalLinkClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const link = target.closest('a[href]');
+      
+      if (link && link.getAttribute('href')) {
+        const href = link.getAttribute('href')!;
+        const isExternal = href.startsWith('http') && !href.includes(window.location.origin);
+        const isLikelyLogin = /login|signin|oauth|auth|sso|account|consent/i.test(href) || 
+                             /google\.com|github\.com|facebook\.com|microsoft\.com|apple\.com/i.test(href);
+        
+        console.log('External link clicked:', { href, isExternal, isLikelyLogin });
+        
+        if (isExternal && isLikelyLogin) {
+          event.preventDefault();
+          event.stopPropagation();
+          
+          // Open as new tab with login tracking
+          const newTabId = newTabToRight(activeId, href);
+          console.log('Opened login tab:', { newTabId, href });
+          
+          // Set up monitoring for login completion
+          setTimeout(() => {
+            const webview = webviewMap.current[newTabId] || null;
+            if (webview && typeof webview.executeJavaScript === 'function') {
+              // Wait for webview to be ready before injecting script
+              webview.addEventListener('dom-ready', () => {
+                // Monitor navigation events to detect login completion
+                const loginMonitorScript = `
+                  (function() {
+                    let originalTabId = '${activeId}';
+                    let hasReturned = false;
+                    
+                    // Check if current URL suggests login completion
+                    function checkForLoginCompletion() {
+                      const currentUrl = window.location.href;
+                      console.log('Checking for login completion at:', currentUrl);
+                      
+                      // More comprehensive patterns for login completion
+                      const hasTokenOrCode = /#access_token=|#code=|/callback|/auth/callback|state=/.test(currentUrl);
+                      const isNotLoginFlow = !/login|signin|oauth|auth|sso|consent|account/i.test(currentUrl);
+                      const isBackToOriginal = currentUrl.includes(window.location.origin);
+                      
+                      // Google OAuth often redirects back to the app with tokens
+                      const isOAuthComplete = hasTokenOrCode && (isNotLoginFlow || isBackToOriginal);
+                      
+                      console.log('Login completion check:', {
+                        hasTokenOrCode,
+                        isNotLoginFlow,
+                        isBackToOriginal,
+                        isOAuthComplete,
+                        hasReturned
+                      });
+                      
+                      if (isOAuthComplete && !hasReturned) {
+                        hasReturned = true;
+                        console.log('Login completed, returning to original tab:', originalTabId);
+                        // Send message to parent to return to original tab
+                        window.parent.postMessage({
+                          type: 'login-completed',
+                          originalTabId: originalTabId,
+                          returnUrl: currentUrl
+                        }, '*');
+                      }
+                    }
+                    
+                    // Monitor URL changes
+                    let lastUrl = window.location.href;
+                    setInterval(() => {
+                      if (window.location.href !== lastUrl) {
+                        lastUrl = window.location.href;
+                        checkForLoginCompletion();
+                      }
+                    }, 1000);
+                    
+                    // Initial check
+                    checkForLoginCompletion();
+                  })();
+                `;
+                
+                webview.executeJavaScript(loginMonitorScript).catch(() => undefined);
+              });
+            }
+          }, 2000); // Wait 2 seconds for tab to fully load
+        }
+      }
+    };
+
+    document.addEventListener('click', handleExternalLinkClick, true);
+    return () => document.removeEventListener('click', handleExternalLinkClick, true);
+  }, [activeId, navigate, newTabToRight]);
 
   const shouldApplyRawFileDarkMode = rawFileDarkModeEnabled && themeMode === 'dark';
 
@@ -1120,6 +1241,8 @@ export default function TabView() {
                       const disposition =
                         typeof ev.disposition === 'string' ? ev.disposition.toLowerCase() : '';
 
+                      console.log('newWindowHandler called:', { url, disposition });
+
                       if (!url) {
                         e.preventDefault();
                         return;
@@ -1139,7 +1262,83 @@ export default function TabView() {
                         }
                       } else {
                         // Open in new tab (default for target="_blank")
-                        newTabToRight(tab.id, url);
+                        // Track if this might be a login tab by checking common login patterns
+                        const isLikelyLoginTab = /login|signin|oauth|auth|sso|account|consent/i.test(url) || 
+                                                 /google\.com|github\.com|facebook\.com|microsoft\.com|apple\.com/i.test(url) ||
+                                                 /accounts\.google\.com/i.test(url);
+                        
+                        // Debug logging to help identify issues
+                        if (isLikelyLoginTab) {
+                          console.log('Login tab detected:', url);
+                        } else {
+                          console.log('URL not detected as login tab:', url);
+                        }
+                        
+                        const newTabId = newTabToRight(tab.id, url);
+                        
+                        // If this appears to be a login tab, set up navigation monitoring to return to original tab
+                        if (isLikelyLoginTab && newTabId) {
+                          // Store the original tab ID for potential return after login
+                          setTimeout(() => {
+                            const webview = webviewMap.current[newTabId];
+                            if (webview && typeof webview.executeJavaScript === 'function') {
+                              // Monitor navigation events to detect login completion
+                              const loginMonitorScript = `
+                                (function() {
+                                  let originalTabId = '${tab.id}';
+                                  let hasReturned = false;
+                                  
+                                  // Check if current URL suggests login completion
+                                  function checkForLoginCompletion() {
+                                    const currentUrl = window.location.href;
+                                    console.log('Checking for login completion at:', currentUrl);
+                                    
+                                    // More comprehensive patterns for login completion
+                                    const hasTokenOrCode = /#access_token=|#code=|/callback|/auth/callback|state=/.test(currentUrl);
+                                    const isNotLoginFlow = !/login|signin|oauth|auth|sso|consent|account/i.test(currentUrl);
+                                    const isBackToOriginal = currentUrl.includes(window.location.origin);
+                                    
+                                    // Google OAuth often redirects back to the app with tokens
+                                    const isOAuthComplete = hasTokenOrCode && (isNotLoginFlow || isBackToOriginal);
+                                    
+                                    console.log('Login completion check:', {
+                                      hasTokenOrCode,
+                                      isNotLoginFlow,
+                                      isBackToOriginal,
+                                      isOAuthComplete,
+                                      hasReturned
+                                    });
+                                    
+                                    if (isOAuthComplete && !hasReturned) {
+                                      hasReturned = true;
+                                      console.log('Login completed, returning to original tab:', originalTabId);
+                                      // Send message to parent to return to original tab
+                                      window.parent.postMessage({
+                                        type: 'login-completed',
+                                        originalTabId: originalTabId,
+                                        returnUrl: currentUrl
+                                      }, '*');
+                                    }
+                                  }
+                                  
+                                  // Monitor URL changes
+                                  let lastUrl = window.location.href;
+                                  setInterval(() => {
+                                    if (window.location.href !== lastUrl) {
+                                      lastUrl = window.location.href;
+                                      checkForLoginCompletion();
+                                    }
+                                  }, 1000);
+                                  
+                                  // Initial check
+                                  checkForLoginCompletion();
+                                })();
+                              `;
+                              
+                              webview.executeJavaScript(loginMonitorScript).catch(() => undefined);
+                            }
+                          }, 2000); // Wait 2 seconds for tab to fully load
+                        }
                       }
                     };
 
