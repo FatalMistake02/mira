@@ -4,12 +4,14 @@ import TabsProvider from './features/tabs/TabsProvider';
 import TabBar from './features/tabs/TabBar';
 import TabView from './features/tabs/TabView';
 import AddressBar from './components/AddressBar';
+import BookmarksBar from './components/BookmarksBar';
 import FindBar from './components/FindBar';
 import TopBar from './components/TopBar';
 import RestoreTabsPrompt from './components/RestoreTabsPrompt';
 import UpdatePrompt, { type UpdateCheckPayload } from './components/UpdatePrompt';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import DownloadProvider from './features/downloads/DownloadProvider';
+import { BookmarksProvider } from './features/bookmarks/BookmarksProvider';
 import { electron } from './electronBridge';
 import Onboarding from './browser_pages/Onboarding';
 import {
@@ -193,6 +195,7 @@ function Browser() {
   const didCheckLaunchUpdateRef = useRef(false);
   const [findBarOpen, setFindBarOpen] = useState(false);
   const [findBarFocusToken, setFindBarFocusToken] = useState(0);
+  const [showBookmarksBar, setShowBookmarksBar] = useState(() => getBrowserSettings().showBookmarksBar);
   const [pendingUpdate, setPendingUpdate] = useState<UpdateCheckPayload | null>(null);
   const [showPerfOverlay, setShowPerfOverlay] = useState(() => {
     const settings = getBrowserSettings();
@@ -208,6 +211,10 @@ function Browser() {
     reopenLastClosedTab,
     openHistory,
     openDownloads,
+    openBookmarks,
+    toggleBookmarksBar,
+    bookmarkCurrentPage,
+    bookmarkAllTabs,
     closeWindow,
     closeTab,
     moveActiveTabBy,
@@ -252,6 +259,10 @@ function Browser() {
     reopenLastClosedTab,
     openHistory,
     openDownloads,
+    openBookmarks,
+    toggleBookmarksBar,
+    bookmarkCurrentPage,
+    bookmarkAllTabs,
     openNewWindow,
     closeWindow,
     closeTab,
@@ -287,6 +298,7 @@ function Browser() {
       applyLayout(getLayoutById(settings.layoutId));
       setShowPerfOverlay(settings.dev && settings.showPerfOverlay);
       setTabStripPosition(settings.tabStripPosition ?? 'top');
+      setShowBookmarksBar(settings.showBookmarksBar);
       if (!electron?.ipcRenderer) return;
 
       const rootStyles = getComputedStyle(document.documentElement);
@@ -422,6 +434,7 @@ function Browser() {
             }}
           >
             <AddressBar inputRef={addressInputRef} />
+            {showBookmarksBar && <BookmarksBar />}
             <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
             <TabView />
           </div>
@@ -429,6 +442,7 @@ function Browser() {
       ) : (
         <>
           <AddressBar inputRef={addressInputRef} />
+          {showBookmarksBar && <BookmarksBar />}
           <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
           <TabView />
         </>
@@ -452,10 +466,12 @@ export default function App() {
   }
 
   return (
-    <TabsProvider>
-      <DownloadProvider>
-        <Browser />
-      </DownloadProvider>
-    </TabsProvider>
+    <BookmarksProvider>
+      <TabsProvider>
+        <DownloadProvider>
+          <Browser />
+        </DownloadProvider>
+      </TabsProvider>
+    </BookmarksProvider>
   );
 }

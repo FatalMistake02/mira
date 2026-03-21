@@ -82,6 +82,8 @@ export type BrowserSettings = {
   searchEngineShortcutChars: SearchEngineShortcutChars;
   showPerfOverlay: boolean;
   dev: boolean;
+  showBookmarkButton: boolean;
+  showBookmarksBar: boolean;
 };
 
 export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
@@ -111,6 +113,8 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   searchEngineShortcutChars: DEFAULT_SEARCH_ENGINE_SHORTCUT_CHARS,
   showPerfOverlay: false,
   dev: true,
+  showBookmarkButton: true,
+  showBookmarksBar: false,
 };
 
 const BROWSER_SETTINGS_STORAGE_KEY = 'mira.settings.browser.v1';
@@ -383,6 +387,22 @@ function normalizeShowPerfOverlay(value: unknown): boolean {
   return value;
 }
 
+function normalizeShowBookmarkButton(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.showBookmarkButton;
+  }
+
+  return value;
+}
+
+function normalizeShowBookmarksBar(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    return DEFAULT_BROWSER_SETTINGS.showBookmarksBar;
+  }
+
+  return value;
+}
+
 function normalizeDevSetting(value: unknown): boolean {
   // Only force-disable this in explicit release builds.
   if (FORCE_DISABLE_DEV_SETTING) {
@@ -444,6 +464,8 @@ export function normalizeBrowserSettings(value: unknown): BrowserSettings {
       candidate.searchEngineShortcutChars,
     ),
     showPerfOverlay: normalizeShowPerfOverlay(candidate.showPerfOverlay),
+    showBookmarkButton: normalizeShowBookmarkButton(candidate.showBookmarkButton),
+    showBookmarksBar: normalizeShowBookmarksBar(candidate.showBookmarksBar),
     dev: normalizeDevSetting(candidate.dev ?? candidate.hiddenDevSettingEnabled),
   };
 }

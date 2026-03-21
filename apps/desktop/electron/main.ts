@@ -2747,6 +2747,74 @@ function setupWindowControlsHandlers() {
     }
   });
 
+  ipcMain.handle('bookmark-show-native-context-menu', (event, payload: unknown) => {
+    if (typeof payload !== 'object' || !payload) return false;
+
+    const candidate = payload as {
+      bookmarkId?: unknown;
+      x?: unknown;
+      y?: unknown;
+      hasUrl?: unknown;
+      isFolder?: unknown;
+    };
+    const bookmarkId = typeof candidate.bookmarkId === 'string' ? candidate.bookmarkId.trim() : '';
+    if (!bookmarkId) return false;
+
+    const hasUrl = candidate.hasUrl === true;
+    const isFolder = candidate.isFolder === true;
+    const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
+      ? Math.max(0, Math.floor(candidate.x))
+      : null;
+    const y = typeof candidate.y === 'number' && Number.isFinite(candidate.y)
+      ? Math.max(0, Math.floor(candidate.y))
+      : null;
+
+    const hostWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!hostWindow || hostWindow.isDestroyed()) return false;
+
+    const sendCommand = (command: string, data?: any) => {
+      hostWindow.webContents.send('bookmark-native-context-command', { command, bookmarkId, data });
+    };
+
+    const template: MenuItemConstructorOptions[] = [];
+
+    if (hasUrl) {
+      template.push(
+        {
+          label: 'Open',
+          click: () => sendCommand('open'),
+        },
+        {
+          label: 'Open in New Tab',
+          click: () => sendCommand('open-in-new-tab'),
+        },
+        {
+          label: 'Open in New Window',
+          click: () => sendCommand('open-in-new-window'),
+        },
+        { type: 'separator' }
+      );
+    }
+
+    template.push(
+      {
+        label: 'Delete',
+        click: () => sendCommand('delete'),
+      }
+    );
+
+    const menu = Menu.buildFromTemplate(template);
+    try {
+      menu.popup({
+        window: hostWindow,
+        ...(x !== null && y !== null ? { x, y } : {}),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle('webview-open-devtools', (event, payload: unknown) => {
     if (typeof payload !== 'object' || !payload) return false;
 

@@ -191,6 +191,8 @@ export default function Settings() {
     () => initialSettings.tabStripPosition ?? DEFAULT_BROWSER_SETTINGS.tabStripPosition,
   );
   const [showPerfOverlay, setShowPerfOverlay] = useState(() => initialSettings.showPerfOverlay);
+  const [showBookmarkButton, setShowBookmarkButton] = useState(() => initialSettings.showBookmarkButton);
+  const [showBookmarksBar, setShowBookmarksBar] = useState(() => initialSettings.showBookmarksBar);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -335,6 +337,8 @@ export default function Settings() {
         startupRestoreBehavior,
         showPerfOverlay,
         tabStripPosition,
+        showBookmarkButton,
+        showBookmarksBar,
       });
       setSaveStatus('saved');
 
@@ -373,6 +377,8 @@ export default function Settings() {
     startupRestoreBehavior,
     showPerfOverlay,
     tabStripPosition,
+    showBookmarkButton,
+    showBookmarksBar,
   ]);
 
   useEffect(() => {
@@ -1301,6 +1307,42 @@ export default function Settings() {
                       </div>
                     )}
                   </div>
+                </div>
+                <div className="settings-setting-row">
+                  <label htmlFor="show-bookmark-button" className="settings-setting-meta">
+                    <span className="settings-setting-label">Show bookmark button</span>
+                    <span className="settings-setting-description">
+                      Display a bookmark button in the address bar for quick access.
+                    </span>
+                  </label>
+                  <input
+                    id="show-bookmark-button"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={showBookmarkButton}
+                    onChange={(e) => {
+                      setShowBookmarkButton(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </div>
+                <div className="settings-setting-row">
+                  <label htmlFor="show-bookmarks-bar" className="settings-setting-meta">
+                    <span className="settings-setting-label">Show bookmarks bar</span>
+                    <span className="settings-setting-description">
+                      Display a bookmarks bar below the address bar for quick access to saved bookmarks.
+                    </span>
+                  </label>
+                  <input
+                    id="show-bookmarks-bar"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={showBookmarksBar}
+                    onChange={(e) => {
+                      setShowBookmarksBar(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
                 </div>
                 <div className="settings-actions-row">
                   <button

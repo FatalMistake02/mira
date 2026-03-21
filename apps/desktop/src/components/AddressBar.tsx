@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Bookmark,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -13,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
+import { useBookmarks } from '../features/bookmarks/BookmarksProvider';
 import DownloadButton from './DownloadButton';
 import {
   BROWSER_SETTINGS_CHANGED_EVENT,
@@ -59,14 +61,22 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     newTab,
     openHistory,
     openDownloads,
+    openBookmarks,
+    toggleBookmarksBar,
+    bookmarkCurrentPage,
+    bookmarkAllTabs,
     setActive,
     printPage,
   } = useTabs();
+  const { addBookmark, bookmarks, deleteBookmark } = useBookmarks();
   const [input, setInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(
     () => getBrowserSettings().animationsEnabled,
+  );
+  const [showBookmarkButton, setShowBookmarkButton] = useState(
+    () => getBrowserSettings().showBookmarkButton,
   );
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuCloseTimerRef = useRef<number | null>(null);
@@ -198,6 +208,41 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   const canGoBack = activeTab && activeTab.historyIndex > 0;
   const canGoForward = activeTab && activeTab.historyIndex < activeTab.history.length - 1;
 
+  // Check if current page is already bookmarked
+  const isCurrentPageBookmarked = activeTab ? 
+    bookmarks.some(bookmark => 
+      bookmark.type === 'bookmark' && bookmark.url === activeTab.url
+    ) : false;
+
+  const getCurrentPageBookmark = () => {
+    if (!activeTab) return null;
+    return bookmarks.find(bookmark => 
+      bookmark.type === 'bookmark' && bookmark.url === activeTab.url
+    ) || null;
+  };
+
+  const handleBookmarkCurrentPage = () => {
+    if (!activeTab || !activeTab.url) return;
+    
+    // Don't allow bookmarking error pages
+    if (activeTab.url.startsWith('mira://errors/')) return;
+    
+    if (isCurrentPageBookmarked) {
+      // Remove the bookmark
+      const currentBookmark = getCurrentPageBookmark();
+      if (currentBookmark) {
+        deleteBookmark(currentBookmark.id);
+      }
+      return;
+    }
+
+    addBookmark({
+      title: activeTab.title || activeTab.url,
+      type: 'bookmark',
+      url: activeTab.url,
+    });
+  };
+
   const newTabPage = getBrowserSettings().newTabPage;
   const primaryModifierLabel = electron?.isMacOS ? 'Cmd' : 'Ctrl';
   const openNewWindow = () => {
@@ -218,6 +263,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   useEffect(() => {
     const syncSettings = () => {
       setAnimationsEnabled(getBrowserSettings().animationsEnabled);
+      setShowBookmarkButton(getBrowserSettings().showBookmarkButton);
     };
     syncSettings();
     window.addEventListener(BROWSER_SETTINGS_CHANGED_EVENT, syncSettings);
@@ -284,6 +330,13 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       shortcut: `${primaryModifierLabel}+J`,
       icon: Download,
       onSelect: openDownloads,
+    },
+    {
+      id: 'bookmarks',
+      label: 'Bookmarks',
+      shortcut: `${primaryModifierLabel}+Shift+O`,
+      icon: Bookmark,
+      onSelect: openBookmarks,
     },
     {
       id: 'print',
@@ -372,39 +425,73 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
         <ReloadIcon />
       </button>
 
-      <input
-        ref={inputRef}
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onContextMenu={(e) => {
-          const settings = getBrowserSettings();
-          if (!settings.nativeTextFieldContextMenu) return;
-          const ipc = electron?.ipcRenderer;
-          if (!ipc) return;
+      <div style={{ position: 'relative', flex: 1 }}>
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onContextMenu={(e) => {
+            const settings = getBrowserSettings();
+            if (!settings.nativeTextFieldContextMenu) return;
+            const ipc = electron?.ipcRenderer;
+            if (!ipc) return;
 
-          e.preventDefault();
-          e.currentTarget.focus();
-          void ipc
-            .invoke('renderer-show-native-text-context-menu', {
-              x: e.clientX,
-              y: e.clientY,
-            })
-            .catch(() => undefined);
-        }}
-        onKeyDown={(e) => {
-          if (e.key !== 'Enter') return;
-          go();
-          e.currentTarget.blur();
-        }}
-        placeholder="Enter URL"
-        className="theme-input"
-        style={{
-          flex: 1,
-          padding: '6px 10px',
-          minHeight: 'var(--layoutNavButtonHeight, 30px)',
-          fontSize: 16,
-        }}
-      />
+            e.preventDefault();
+            e.currentTarget.focus();
+            void ipc
+              .invoke('renderer-show-native-text-context-menu', {
+                x: e.clientX,
+                y: e.clientY,
+              })
+              .catch(() => undefined);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            go();
+            e.currentTarget.blur();
+          }}
+          placeholder="Enter URL"
+          className="theme-input"
+          style={{
+            width: '100%',
+            padding: '6px 10px',
+            minHeight: 'var(--layoutNavButtonHeight, 30px)',
+            fontSize: 16,
+            paddingRight: showBookmarkButton ? '40px' : '10px',
+          }}
+        />
+        {showBookmarkButton && (
+          <button
+            onClick={handleBookmarkCurrentPage}
+            disabled={!activeTab || !activeTab.url || activeTab.url.startsWith('mira://errors/')}
+            title={isCurrentPageBookmarked ? "Remove bookmark" : "Bookmark this page"}
+            className="theme-btn theme-btn-nav"
+            style={{
+              position: 'absolute',
+              right: '6px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              padding: '4px',
+              height: '24px',
+              width: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: isCurrentPageBookmarked ? 'var(--accent)' : 'inherit',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: '4px',
+            }}
+          >
+            <Bookmark 
+              size={14} 
+              strokeWidth={isCurrentPageBookmarked ? 2.5 : 1.9} 
+              fill={isCurrentPageBookmarked ? 'currentColor' : 'none'}
+              aria-hidden="true" 
+            />
+          </button>
+        )}
+      </div>
 
       <DownloadButton />
 

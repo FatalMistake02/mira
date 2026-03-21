@@ -1,14 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import type { Tab } from './types';
-import { addHistoryEntry, updateHistoryEntryTitle } from '../history/clientHistory';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { electron } from '../../electronBridge';
-import miraLogo from '../../assets/mira_logo.png';
-import {
+import { 
+  getBrowserSettings, 
+  saveBrowserSettings, 
   BROWSER_SETTINGS_CHANGED_EVENT,
-  getBrowserSettings,
   getTabSleepAfterMs,
   type StartupRestoreBehavior,
 } from '../settings/browserSettings';
+import { addHistoryEntry, updateHistoryEntryTitle } from '../history/clientHistory';
+import { useBookmarks } from '../bookmarks/BookmarksProvider';
+import miraLogo from '../../assets/mira_logo.png';
+import { type Tab } from './types';
 import {
   captureTabState,
   restoreTabState,
@@ -77,6 +79,10 @@ type TabsContextType = {
   reopenLastClosedTab: () => void;
   openHistory: () => void;
   openDownloads: () => void;
+  openBookmarks: () => void;
+  toggleBookmarksBar: () => void;
+  bookmarkCurrentPage: () => void;
+  bookmarkAllTabs: () => void;
   closeWindow: () => void;
   closeTab: (id: string) => void;
   closeOtherTabs: (id: string) => void;
@@ -263,6 +269,7 @@ function isDefaultSnapshot(snapshot: SessionSnapshot, defaultTabUrl: string): bo
  * Provides tab lifecycle state and browser-like tab actions to the app tree.
  */
 export default function TabsProvider({ children }: { children: React.ReactNode }) {
+  const { addBookmark, deleteBookmark, bookmarks } = useBookmarks();
   const initialTabUrlRef = useRef(getBrowserSettings().newTabPage);
   const initialTabRef = useRef<Tab>(createInitialTab(initialTabUrlRef.current));
   const [tabs, setTabs] = useState<Tab[]>([initialTabRef.current]);
@@ -711,6 +718,89 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
 
     newTab('mira://downloads');
+  };
+
+  const openBookmarks = () => {
+    const existingBookmarksTab = tabs.find(
+      (tab) => tab.url.trim().toLowerCase() === 'mira://bookmarks',
+    );
+    if (existingBookmarksTab) {
+      setActive(existingBookmarksTab.id);
+      return;
+    }
+
+    const activeTab = tabs.find((tab) => tab.id === activeId);
+    const newTabUrl = getBrowserSettings().newTabPage;
+    const isNewTab = !!activeTab && isNewTabUrl(activeTab.url, newTabUrl);
+    if (isNewTab && activeTab) {
+      navigate('mira://bookmarks', activeTab.id);
+      return;
+    }
+
+    newTab('mira://bookmarks');
+  };
+
+  const toggleBookmarksBar = () => {
+    const currentSettings = getBrowserSettings();
+    const newSettings = {
+      ...currentSettings,
+      showBookmarksBar: !currentSettings.showBookmarksBar,
+    };
+    saveBrowserSettings(newSettings);
+  };
+
+  // Helper functions for bookmark operations - now using BookmarksProvider context
+  const bookmarkCurrentPage = () => {
+    const activeTab = tabs.find(tab => tab.id === activeId);
+    if (!activeTab || !activeTab.url) {
+      return;
+    }
+    
+    // Don't allow bookmarking error pages
+    if (activeTab.url.startsWith('mira://errors/')) {
+      return;
+    }
+    
+    // Check if already bookmarked using the context's bookmarks
+    const isBookmarked = bookmarks.some((bookmark) => 
+      bookmark.type === 'bookmark' && bookmark.url === activeTab.url
+    );
+    
+    if (isBookmarked) {
+      // Remove bookmark
+      const existingBookmark = bookmarks.find((bookmark) => 
+        bookmark.type === 'bookmark' && bookmark.url === activeTab.url
+      );
+      if (existingBookmark) {
+        deleteBookmark(existingBookmark.id);
+      }
+    } else {
+      // Add bookmark using context method
+      addBookmark({
+        title: activeTab.title || activeTab.url,
+        type: 'bookmark',
+        url: activeTab.url,
+      });
+    }
+  };
+
+  const bookmarkAllTabs = () => {
+    tabs.forEach(tab => {
+      if (tab.url && !tab.url.startsWith('mira://errors/')) {
+        // Check if already bookmarked
+        const isBookmarked = bookmarks.some((bookmark) => 
+          bookmark.type === 'bookmark' && bookmark.url === tab.url
+        );
+        
+        if (!isBookmarked) {
+          addBookmark({
+            title: tab.title || tab.url,
+            type: 'bookmark',
+            url: tab.url,
+          });
+        }
+      }
+    });
   };
 
   const closeWindow = useCallback(() => {
@@ -1760,6 +1850,10 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         reopenLastClosedTab,
         openHistory,
         openDownloads,
+        openBookmarks,
+        toggleBookmarksBar,
+        bookmarkCurrentPage,
+        bookmarkAllTabs,
         closeWindow,
         closeTab,
         closeOtherTabs,

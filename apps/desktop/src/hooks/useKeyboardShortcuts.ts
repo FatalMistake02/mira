@@ -9,6 +9,10 @@ interface UseKeyboardShortcutsProps {
   reopenLastClosedTab: () => void;
   openHistory: () => void;
   openDownloads: () => void;
+  openBookmarks: () => void;
+  toggleBookmarksBar: () => void;
+  bookmarkCurrentPage: () => void;
+  bookmarkAllTabs: () => void;
   openNewWindow: () => void;
   closeWindow: () => void;
   closeTab: (id: string) => void;
@@ -41,6 +45,8 @@ interface IpcShortcutState {
   closeTab: UseKeyboardShortcutsProps['closeTab'];
   openHistory: UseKeyboardShortcutsProps['openHistory'];
   openDownloads: UseKeyboardShortcutsProps['openDownloads'];
+  openBookmarks: UseKeyboardShortcutsProps['openBookmarks'];
+  toggleBookmarksBar: UseKeyboardShortcutsProps['toggleBookmarksBar'];
   openNewWindow: UseKeyboardShortcutsProps['openNewWindow'];
   closeWindow: UseKeyboardShortcutsProps['closeWindow'];
   moveActiveTabBy: UseKeyboardShortcutsProps['moveActiveTabBy'];
@@ -78,6 +84,10 @@ export function useKeyboardShortcuts({
   reopenLastClosedTab,
   openHistory,
   openDownloads,
+  openBookmarks,
+  toggleBookmarksBar,
+  bookmarkCurrentPage,
+  bookmarkAllTabs,
   openNewWindow,
   closeWindow,
   closeTab,
@@ -138,6 +148,8 @@ export function useKeyboardShortcuts({
     closeTab,
     openHistory,
     openDownloads,
+    openBookmarks,
+    toggleBookmarksBar,
     openNewWindow,
     closeWindow,
     moveActiveTabBy,
@@ -386,6 +398,36 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      if (isPrimaryModifier && e.shiftKey && key === 'o') {
+        e.preventDefault();
+        e.stopPropagation();
+        openBookmarks();
+        return;
+      }
+
+      if (isPrimaryModifier && !e.shiftKey && key === 'd') {
+        console.log('Ctrl+D pressed - bookmarking current page');
+        e.preventDefault();
+        e.stopPropagation();
+        bookmarkCurrentPage();
+        return;
+      }
+
+      if (isPrimaryModifier && e.shiftKey && key === 'd') {
+        console.log('Ctrl+Shift+D pressed - bookmarking all tabs');
+        e.preventDefault();
+        e.stopPropagation();
+        bookmarkAllTabs();
+        return;
+      }
+
+      if (isPrimaryModifier && e.shiftKey && key === 'b') {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleBookmarksBar();
+        return;
+      }
+
       if (isPrimaryModifier && !e.shiftKey && key === 'u') {
         e.preventDefault();
         e.stopPropagation();
@@ -488,6 +530,10 @@ export function useKeyboardShortcuts({
     reopenLastClosedTab,
     openHistory,
     openDownloads,
+    openBookmarks,
+    toggleBookmarksBar,
+    bookmarkCurrentPage,
+    bookmarkAllTabs,
     openNewWindow,
     closeWindow,
     closeTab,
@@ -584,6 +630,11 @@ export function useKeyboardShortcuts({
       if (action === 'open-downloads') {
         if (shouldSkipRapidAction('open-downloads')) return;
         state.openDownloads();
+        return;
+      }
+      if (action === 'open-bookmarks') {
+        if (shouldSkipRapidAction('open-bookmarks')) return;
+        state.openBookmarks();
         return;
       }
       if (action === 'go-back') {

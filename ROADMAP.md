@@ -7,10 +7,12 @@
 - [x] Fix target="_blank" links
 - [ ] Fix all other issues
 - [x] Change context menu for vertical tabs
- 
+- [ ] Fix bookmarks context menu
+- [ ] Bookmarks menu and folders
+  
 ## v1.1.0
 - [ ] Ad blocker blocks Youtube videos
-- [ ] Bookmarks and favorites
+- [x] Bookmarks and favorites
       Bookmark page: Ctrl+D
       Bookmark all tabs: Ctrl+Shift+D
       Show/hide bookmarks bar: Ctrl+Shift+B
