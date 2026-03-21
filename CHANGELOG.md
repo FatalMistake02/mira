@@ -4,6 +4,7 @@
 
 - Add view button to update prompt
 - Fix context menu open in new tab 
+- Fix context menu open in new window
 
 ## v0.13.0 - 2026-03-21
 

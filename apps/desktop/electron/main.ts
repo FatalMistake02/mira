@@ -3875,6 +3875,28 @@ function createWindow(
   const normalizedInitialUrl = initialUrl?.trim();
   if (normalizedInitialUrl) {
     pendingInitialUrlByWindowId.set(win.id, normalizedInitialUrl);
+
+    const deliverInitialUrlToRenderer = () => {
+      if (win.isDestroyed()) return;
+      try {
+        win.webContents.send('open-url-in-current-tab', normalizedInitialUrl);
+      } catch {
+        // Ignore send failures during teardown.
+      }
+    };
+
+    // Bootstrap also consumes pendingInitialUrl via window-consume-initial-url; duplicate navigation
+    // to the same URL is a no-op. This IPC runs after load so React has registered ipc listeners,
+    // which fixes "new window" flows where bootstrap ordering misses the URL.
+    const scheduleDeliverInitialUrl = () => {
+      setTimeout(deliverInitialUrlToRenderer, 150);
+    };
+
+    if (win.webContents.isLoading()) {
+      win.webContents.once('did-finish-load', scheduleDeliverInitialUrl);
+    } else {
+      scheduleDeliverInitialUrl();
+    }
   } else {
     pendingInitialUrlByWindowId.delete(win.id);
   }
