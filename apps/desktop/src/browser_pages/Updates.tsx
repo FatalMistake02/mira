@@ -23,6 +23,8 @@ export default function Updates() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
+  const [releaseNotes, setReleaseNotes] = useState<string | null>(null);
+  const [isFetchingNotes, setIsFetchingNotes] = useState(false);
 
   useEffect(() => {
     if (!electron?.ipcRenderer) return;
@@ -59,6 +61,20 @@ export default function Updates() {
       const result = response.data;
       setUpdateCheckResult(result);
       setUpdateStatus(result.hasUpdate ? 'update-available' : 'up-to-date');
+
+      if (result.hasUpdate && result.downloadUrl) {
+        // Parse owner/repo from download URL: https://github.com/owner/repo/releases/download/tag/asset
+        const match = result.downloadUrl.match(/github\.com\/([^/]+\/[^/]+)\/releases\/download\/([^/]+)\//);
+        if (match) {
+          const [, ownerRepo, tag] = match;
+          setIsFetchingNotes(true);
+          fetch(`https://api.github.com/repos/${ownerRepo}/releases/tags/${tag}`)
+            .then((r) => r.json())
+            .then((data) => setReleaseNotes(data.body || null))
+            .catch(() => setReleaseNotes(null))
+            .finally(() => setIsFetchingNotes(false));
+        }
+      }
     } catch {
       setUpdateStatus('failed');
     } finally {
@@ -112,10 +128,10 @@ export default function Updates() {
           margin: '0 0 6px 0',
           letterSpacing: '-0.3px',
         }}>
-          Updates
+          Software Updates
         </h1>
         <p style={{ margin: 0, color: 'var(--text2)', fontSize: '14px' }}>
-          Keep Mira updated for the latest features and fixes.
+          Keep your app up to date with the latest features and fixes.
         </p>
       </div>
 
@@ -336,22 +352,12 @@ export default function Updates() {
             lineHeight: '1.7',
             color: 'var(--text2)',
             background: 'var(--surfaceBg)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
           }}>
-            {/* Placeholder changelog — replace with real data from API if available */}
-            <ul style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <li>Performance improvements and stability fixes</li>
-              <li>Enhanced security across update mechanisms</li>
-              <li>UI refinements and accessibility improvements</li>
-              <li>Bug fixes reported since the last release</li>
-            </ul>
-            <p style={{
-              margin: '16px 0 0 0',
-              fontSize: '12px',
-              fontStyle: 'italic',
-              color: 'color-mix(in srgb, var(--text2) 60%, transparent)',
-            }}>
-              For the full changelog, view the release on GitHub.
-            </p>
+            {isFetchingNotes
+              ? 'Loading release notes…'
+              : releaseNotes || 'No release notes available.'}
           </div>
         </div>
       )}
