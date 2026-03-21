@@ -650,7 +650,13 @@ function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
   try {
     const parsed = new URL(trimmed);
     const protocol = parsed.protocol.toLowerCase();
-    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'file:' && protocol !== 'about:') {
+    if (
+      protocol !== 'http:' &&
+      protocol !== 'https:' &&
+      protocol !== 'file:' &&
+      protocol !== 'about:' &&
+      protocol !== 'mira:'
+    ) {
       return null;
     }
     return parsed.toString();
@@ -2076,7 +2082,9 @@ function setupWebviewTabOpenHandler() {
     });
 
     contents.setWindowOpenHandler(({ url }) => {
-      const host = contents.hostWebContents;
+      const host =
+        contents.hostWebContents
+        ?? (contents.getType() === 'window' ? contents : null);
       if (!host) return { action: 'deny' };
       const normalized = (url ?? '').trim();
       if (!normalized || normalized === 'about:blank') {
@@ -2448,7 +2456,7 @@ function shouldSuppressHostDevTools(win: BrowserWindow): boolean {
 function toggleFocusedBrowserDevTools(): boolean {
   const focusedWindow = BrowserWindow.getFocusedWindow();
   if (!focusedWindow || focusedWindow.isDestroyed()) return false;
-  
+
   // Get the active webContents for this window from our tracking
   const activeWebContents = activeWebContentsByWindow.get(focusedWindow.id);
   if (activeWebContents && !activeWebContents.isDestroyed()) {
@@ -2459,7 +2467,7 @@ function toggleFocusedBrowserDevTools(): boolean {
     }
     return true;
   }
-  
+
   // Fallback to getFocusedWebContents if no tracked active webview
   const focused = electronWebContents.getFocusedWebContents();
   if (!focused || focused.isDestroyed()) return false;
@@ -2646,27 +2654,27 @@ function setupWindowControlsHandlers() {
   ipcMain.handle('tab-set-active-webcontents', (event, webContentsId: unknown) => {
     const hostWindow = BrowserWindow.fromWebContents(event.sender);
     if (!hostWindow || hostWindow.isDestroyed()) return false;
-    
-    const id = typeof webContentsId === 'number' && Number.isFinite(webContentsId) 
-      ? Math.floor(webContentsId) 
+
+    const id = typeof webContentsId === 'number' && Number.isFinite(webContentsId)
+      ? Math.floor(webContentsId)
       : -1;
     if (id <= 0) {
       activeWebContentsByWindow.delete(hostWindow.id);
       return false;
     }
-    
+
     const target = electronWebContents.fromId(id);
     if (!target || target.isDestroyed()) {
       activeWebContentsByWindow.delete(hostWindow.id);
       return false;
     }
-    
+
     // Verify this webContents belongs to the same window
     const targetHost = target.hostWebContents;
     if (!targetHost || targetHost.id !== event.sender.id) {
       return false;
     }
-    
+
     activeWebContentsByWindow.set(hostWindow.id, target);
     return true;
   });
@@ -4036,6 +4044,9 @@ app.whenReady().then(async () => {
     userData: getSafeUserDataPath(),
     pid: process.pid,
   });
+
+  // Best-effort registration for the custom mira:// protocol so OS deep links open in Mira.
+  setAsDefaultForProtocol('mira');
 
   await loadHistory().catch(() => undefined);
   await loadCachedAdBlockHosts().catch(() => undefined);
