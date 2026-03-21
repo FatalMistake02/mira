@@ -1,0 +1,96 @@
+name: Update Electron
+on:
+  schedule:
+    # Run every night at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-electron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get current Electron version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(npm list electron --workspace apps/desktop --depth=0 | grep electron | awk '{print $2}')
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Current Electron version: $CURRENT_VERSION"
+
+      - name: Get latest Electron version
+        id: latest_version
+        run: |
+          LATEST_VERSION=$(npm view electron version)
+          echo "latest_version=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Latest Electron version: $LATEST_VERSION"
+
+      - name: Check if update is needed
+        id: check_update
+        run: |
+          CURRENT="${{ steps.current_version.outputs.current_version }}"
+          LATEST="${{ steps.latest_version.outputs.latest_version }}"
+          
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "update_needed=false" >> "$GITHUB_OUTPUT"
+            echo "Electron is up to date"
+          else
+            echo "update_needed=true" >> "$GITHUB_OUTPUT"
+            echo "Electron update available: $CURRENT -> $LATEST"
+          fi
+
+      - name: Update Electron
+        if: steps.check_update.outputs.update_needed == 'true'
+        run: |
+          npm update electron --workspace apps/desktop
+          npm install --workspace apps/desktop
+
+      - name: Create Pull Request
+        if: steps.check_update.outputs.update_needed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update Electron from ${{ steps.current_version.outputs.current_version }} to ${{ steps.latest_version.outputs.latest_version }}"
+          title: "chore: update Electron to v${{ steps.latest_version.outputs.latest_version }}"
+          body: |
+            ## Electron Update Available
+            
+            This PR updates Electron from `${{ steps.current_version.outputs.current_version }}` to `${{ steps.latest_version.outputs.latest_version }}`.
+            
+            ### Changes
+            - Updated Electron dependency in `apps/desktop/package.json`
+            - Updated `package-lock.json` with new Electron version
+            
+            ### Testing
+            Please test the following:
+            - [ ] Application builds successfully
+            - [ ] All Electron APIs work correctly
+            - [ ] No breaking changes in Electron release notes
+            
+            ### Release Notes
+            Check the [Electron release notes](https://releases.electronjs.org/release/v${{ steps.latest_version.outputs.latest_version }}) for detailed changes.
+            
+            ---
+            
+            🤖 This PR was created automatically by the nightly Electron update workflow.
+          branch: chore/update-electron-${{ steps.latest_version.outputs.latest_version }}
+          delete-branch: true
+          labels: |
+            dependencies
+            electron
+            automated
