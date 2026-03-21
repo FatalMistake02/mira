@@ -597,7 +597,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         return 'Theme Creator';
       default:
         // return a capitalized version of the url
-        return sanitized.charAt(0).toUpperCase() + sanitized.slice(1);
+        return sanitized.charAt(0).toUpperCase() + sanitized.split("#")[0].slice(1);
     }
   }
 
@@ -825,7 +825,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       delete activeFindRequestIdByTabRef.current[id];
       delete zoomFactorByTabRef.current[id];
       clearFindInPageMatchesForTab(id);
-      
+
       // Clean up frozen state when tab is closed
       setTabs((currentTabs) =>
         currentTabs.map((tab) =>
@@ -1213,7 +1213,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     tabsRef.current = tabs;
     activeIdRef.current = activeId;
-    
+
     // Notify main process of active webContents for dev tools
     const ipc = electron?.ipcRenderer;
     if (ipc && activeId) {
@@ -1631,7 +1631,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
               suspendJavaScript(webview);
               pauseAnimations(webview);
               throttleTimers(webview);
-              
+
               // Capture state asynchronously
               captureTabState(webview).then((frozenState) => {
                 if (frozenState) {
@@ -1645,7 +1645,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
                 // Ignore capture errors, tab still freezes without state
               });
             }
-            
+
             return { ...tab, isSleeping: true };
           }
 
@@ -1704,7 +1704,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           }
         }
       });
-      
+
       // Clear sleep timer
       if (tabSleepTimerRef.current !== null) {
         window.clearTimeout(tabSleepTimerRef.current);
@@ -1770,14 +1770,14 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         const updatedTabs = currentTabs.map((tab) =>
           tab.id === activeIdRef.current ? { ...tab, lastActiveAt: nowForTab } : tab,
         );
-        
+
         // Insert the new tab next to the active tab, or at the end if active tab not found
         if (activeTabIndex >= 0) {
           updatedTabs.splice(activeTabIndex + 1, 0, stagedTab);
         } else {
           updatedTabs.push(stagedTab);
         }
-        
+
         return updatedTabs;
       });
 

@@ -1145,6 +1145,26 @@ export default function TabView() {
   }, true);
 })();`;
                       wv.executeJavaScript(dataLinkScript).catch(() => undefined);
+
+                      const miraVersion = electron?.appVersion ?? null;
+                      if (miraVersion) {
+                        const miraVersionScript = `(() => {
+  try {
+    const version = ${JSON.stringify(miraVersion)};
+    if (!version) return;
+    const value = Object.freeze({ version });
+    Object.defineProperty(window, 'mira', {
+      value,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    });
+  } catch {
+    // Ignore script injection errors.
+  }
+})();`;
+                        wv.executeJavaScript(miraVersionScript).catch(() => undefined);
+                      }
                     };
                     const didPageTitleUpdatedHandler = (e: Event) => {
                       const ev = e as WebviewPageTitleUpdatedEvent;

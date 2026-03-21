@@ -7,6 +7,8 @@ interface RendererIpcBridge {
 interface ElectronBridge {
   platform: string;
   isMacOS: boolean;
+  appVersion?: string | null;
+  getAppVersion?: () => Promise<string>;
   ipcRenderer: RendererIpcBridge;
 }
 
