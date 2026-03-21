@@ -1,0 +1,378 @@
+name: Manual Build
+run-name: Manual Build ${{ github.event.inputs.version_type == 'tag' && github.event.inputs.tag || github.event.inputs.branch }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: "Version to build"
+        required: true
+        type: choice
+        options:
+          - tag
+          - latest
+        default: latest
+      tag:
+        description: "Tag to build (example: v1.2.3) - only used when version_type is 'tag'"
+        required: false
+        type: string
+      branch:
+        description: "Branch to build (example: main, develop) - only used when version_type is 'latest'"
+        required: false
+        type: string
+        default: main
+      target_os:
+        description: "Target operating systems"
+        required: true
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+        default: all
+      
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  prepare-build:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.resolve_ref.outputs.ref }}
+      version: ${{ steps.resolve_ref.outputs.version }}
+      is_tagged: ${{ steps.resolve_ref.outputs.is_tagged }}
+      release_tag: ${{ steps.resolve_ref.outputs.release_tag }}
+      build_windows: ${{ steps.filter_os.outputs.build_windows }}
+      build_macos: ${{ steps.filter_os.outputs.build_macos }}
+      build_linux: ${{ steps.filter_os.outputs.build_linux }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.version_type == 'tag' && github.event.inputs.tag || github.event.inputs.branch }}
+
+      - name: Resolve build reference and version
+        id: resolve_ref
+        shell: bash
+        run: |
+          if [[ "${{ github.event.inputs.version_type }}" == "tag" ]]; then
+            tag="${{ github.event.inputs.tag }}"
+            if [[ -z "$tag" ]]; then
+              echo "Error: Tag input is required when version_type is 'tag'"
+              exit 1
+            fi
+            # Remove refs/tags/ prefix if present
+            tag="${tag#refs/tags/}"
+            # Extract version from tag (remove v/V prefix)
+            version="${tag#v}"
+            version="${version#V}"
+            # Validate semver
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+              echo "Error: Tag '$tag' does not contain a valid semver version"
+              exit 1
+            fi
+            echo "ref=$tag" >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "is_tagged=true" >> "$GITHUB_OUTPUT"
+            echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "Building tagged version: $tag (version $version)"
+          else
+            branch="${{ github.event.inputs.branch }}"
+            if [[ -z "$branch" ]]; then
+              branch="main"
+            fi
+            # Use commit SHA for version in non-tagged builds
+            short_sha="${{ github.sha }}"
+            short_sha="${short_sha:0:7}"
+            echo "ref=$branch" >> "$GITHUB_OUTPUT"
+            echo "version=$short_sha" >> "$GITHUB_OUTPUT"
+            echo "is_tagged=false" >> "$GITHUB_OUTPUT"
+            echo "release_tag=" >> "$GITHUB_OUTPUT"
+            echo "Building latest code from branch: $branch (commit $short_sha)"
+          fi
+
+      - name: Filter target operating systems
+        id: filter_os
+        shell: bash
+        run: |
+          target_os="${{ github.event.inputs.target_os }}"
+          build_windows="false"
+          build_macos="false"
+          build_linux="false"
+          
+          case "$target_os" in
+            "all")
+              build_windows="true"
+              build_macos="true"
+              build_linux="true"
+              ;;
+            "windows")
+              build_windows="true"
+              ;;
+            "macos")
+              build_macos="true"
+              ;;
+            "linux")
+              build_linux="true"
+              ;;
+          esac
+          
+          echo "build_windows=$build_windows" >> "$GITHUB_OUTPUT"
+          echo "build_macos=$build_macos" >> "$GITHUB_OUTPUT"
+          echo "build_linux=$build_linux" >> "$GITHUB_OUTPUT"
+          echo "Target OS: $target_os (windows: $build_windows, macos: $build_macos, linux: $build_linux)"
+
+  build-windows:
+    needs: prepare-build
+    if: needs.prepare-build.outputs.build_windows == 'true'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-build.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows app
+        run: npm run build --workspace apps/desktop -- --publish never
+        env:
+          VITE_DEV: "false"
+
+      - name: Rename Windows artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ needs.prepare-build.outputs.version }}"
+          $isTagged = "${{ needs.prepare-build.outputs.is_tagged }}"
+          $releaseTag = "${{ needs.prepare-build.outputs.release_tag }}"
+          
+          if ($isTagged -eq "true") {
+            $prefix = "Mira-$releaseTag"
+          } else {
+            $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
+            $prefix = "Mira-latest-$timestamp"
+          }
+          
+          $releaseDir = "apps/desktop/release"
+          if (!(Test-Path $releaseDir)) {
+            throw "release directory not found"
+          }
+          
+          $portableFiles = Get-ChildItem -Path $releaseDir -File -Filter *.exe | Where-Object {
+            $_.Name -notmatch "setup"
+          }
+          for ($i = 0; $i -lt $portableFiles.Count; $i++) {
+            $suffix = if ($portableFiles.Count -gt 1) { "-$($i + 1)" } else { "" }
+            $target = Join-Path $releaseDir ("$prefix-win$suffix.exe")
+            Move-Item -Path $portableFiles[$i].FullName -Destination $target -Force
+          }
+          
+          $setupFiles = Get-ChildItem -Path $releaseDir -File -Filter *.exe | Where-Object {
+            $_.Name -match "setup"
+          }
+          for ($i = 0; $i -lt $setupFiles.Count; $i++) {
+            $suffix = if ($setupFiles.Count -gt 1) { "-$($i + 1)" } else { "" }
+            $target = Join-Path $releaseDir ("$prefix-win-setup$suffix.exe")
+            Move-Item -Path $setupFiles[$i].FullName -Destination $target -Force
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-${{ needs.prepare-build.outputs.version }}
+          path: apps/desktop/release/*.exe
+          retention-days: 30
+
+  build-macos:
+    needs: prepare-build
+    if: needs.prepare-build.outputs.build_macos == 'true'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-build.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS app
+        run: npm run build --workspace apps/desktop -- --mac --x64 --arm64 --publish never
+        env:
+          VITE_DEV: "false"
+
+      - name: Rename macOS artifacts
+        shell: bash
+        run: |
+          version="${{ needs.prepare-build.outputs.version }}"
+          is_tagged="${{ needs.prepare-build.outputs.is_tagged }}"
+          release_tag="${{ needs.prepare-build.outputs.release_tag }}"
+          
+          if [[ "$is_tagged" == "true" ]]; then
+            prefix="Mira-$release_tag"
+          else
+            timestamp="$(date -u +'%Y-%m-%d_%H-%M')"
+            prefix="Mira-latest-$timestamp"
+          fi
+          
+          release_dir="apps/desktop/release"
+          if [[ ! -d "$release_dir" ]]; then
+            echo "release directory not found"
+            exit 1
+          fi
+          
+          # Rename DMG files
+          dmg_count="$(find "$release_dir" -maxdepth 1 -type f -name "*.dmg" | wc -l | tr -d ' ')"
+          dmg_index=0
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            dmg_index=$((dmg_index + 1))
+            suffix=""
+            if [[ "$dmg_count" -gt 1 ]]; then
+              suffix="-$dmg_index"
+            fi
+            target="$release_dir/$prefix-mac$suffix.dmg"
+            mv "$file" "$target"
+          done < <(find "$release_dir" -maxdepth 1 -type f -name "*.dmg" | sort)
+          
+          # Rename ZIP files
+          zip_count="$(find "$release_dir" -maxdepth 1 -type f -name "*.zip" | wc -l | tr -d ' ')"
+          zip_index=0
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            zip_index=$((zip_index + 1))
+            suffix=""
+            if [[ "$zip_count" -gt 1 ]]; then
+              suffix="-$zip_index"
+            fi
+            target="$release_dir/$prefix-mac$suffix.zip"
+            mv "$file" "$target"
+          done < <(find "$release_dir" -maxdepth 1 -type f -name "*.zip" | sort)
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-${{ needs.prepare-build.outputs.version }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+          retention-days: 30
+
+  build-linux:
+    needs: prepare-build
+    if: needs.prepare-build.outputs.build_linux == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-build.outputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux app
+        run: npm run build --workspace apps/desktop -- --linux --x64 --publish never
+        env:
+          VITE_DEV: "false"
+
+      - name: Rename Linux artifacts
+        shell: bash
+        run: |
+          version="${{ needs.prepare-build.outputs.version }}"
+          is_tagged="${{ needs.prepare-build.outputs.is_tagged }}"
+          release_tag="${{ needs.prepare-build.outputs.release_tag }}"
+          
+          if [[ "$is_tagged" == "true" ]]; then
+            prefix="Mira-$release_tag"
+          else
+            timestamp="$(date -u +'%Y-%m-%d_%H-%M')"
+            prefix="Mira-latest-$timestamp"
+          fi
+          
+          release_dir="apps/desktop/release"
+          if [[ ! -d "$release_dir" ]]; then
+            echo "release directory not found"
+            exit 1
+          fi
+          
+          # Rename AppImage files
+          for file in "$release_dir"/*.AppImage; do
+            if [[ -f "$file" ]]; then
+              filename=$(basename "$file")
+              target="$release_dir/$prefix-linux-$filename"
+              mv "$file" "$target"
+            fi
+          done
+          
+          # Rename DEB files
+          for file in "$release_dir"/*.deb; do
+            if [[ -f "$file" ]]; then
+              filename=$(basename "$file")
+              target="$release_dir/$prefix-linux-$filename"
+              mv "$file" "$target"
+            fi
+          done
+          
+          # Rename RPM files
+          for file in "$release_dir"/*.rpm; do
+            if [[ -f "$file" ]]; then
+              filename=$(basename "$file")
+              target="$release_dir/$prefix-linux-$filename"
+              mv "$file" "$target"
+            fi
+          done
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build-${{ needs.prepare-build.outputs.version }}
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.rpm
+          retention-days: 30
+
+  summary:
+    needs:
+      - prepare-build
+      - build-windows
+      - build-macos
+      - build-linux
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Summary
+        run: |
+          echo "# Manual Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare-build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Reference:** ${{ needs.prepare-build.outputs.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tagged:** ${{ needs.prepare-build.outputs.is_tagged }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Results:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows: ${{ needs.build-windows.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- macOS: ${{ needs.build-macos.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Linux: ${{ needs.build-linux.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          echo "Download artifacts from the Actions tab for testing." >> $GITHUB_STEP_SUMMARY
