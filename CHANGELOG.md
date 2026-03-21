@@ -6,6 +6,7 @@
 - Fixed duplicate tab
 - Update downloads pop-up
 - Restoring goes to last active tab instead of new tab
+- Add bookmarks
 
 ## v0.11.1 - 2026-03-20
 
