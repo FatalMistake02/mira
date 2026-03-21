@@ -9,6 +9,16 @@ import {
   getTabSleepAfterMs,
   type StartupRestoreBehavior,
 } from '../settings/browserSettings';
+import {
+  captureTabState,
+  restoreTabState,
+  suspendJavaScript,
+  resumeJavaScript,
+  pauseAnimations,
+  resumeAnimations,
+  throttleTimers,
+  restoreTimers,
+} from './tabStateManagement';
 
 const SESSION_STORAGE_KEY = 'mira.session.tabs.v1';
 const IPC_OPEN_TAB_DEDUPE_WINDOW_MS = 500;
@@ -734,6 +744,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       delete activeFindRequestIdByTabRef.current[id];
       delete zoomFactorByTabRef.current[id];
       clearFindInPageMatchesForTab(id);
+      
+      // Clean up frozen state when tab is closed
+      setTabs((currentTabs) =>
+        currentTabs.map((tab) =>
+          tab.id === id ? { ...tab, frozenState: undefined } : tab
+        )
+      );
     },
     [clearFindInPageMatchesForTab],
   );
@@ -1502,7 +1519,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   );
 
   useEffect(() => {
-    const sleepInactiveTabs = () => {
+    const sleepInactiveTabs = async () => {
       const now = Date.now();
       setTabs((currentTabs) => {
         let changed = false;
@@ -1510,7 +1527,15 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           if (tab.id === activeId) {
             if (tab.isSleeping) {
               changed = true;
-              return { ...tab, isSleeping: false, lastActiveAt: now };
+              // Restore tab state when waking up
+              const webview = webviewMap.current[tab.id];
+              if (webview && tab.frozenState) {
+                restoreTabState(webview, tab.frozenState);
+                resumeJavaScript(webview);
+                resumeAnimations(webview);
+                restoreTimers(webview);
+              }
+              return { ...tab, isSleeping: false, lastActiveAt: now, frozenState: undefined };
             }
             return tab;
           }
@@ -1518,6 +1543,28 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           const shouldSleep = now - tab.lastActiveAt >= tabSleepAfterMs;
           if (shouldSleep && !tab.isSleeping) {
             changed = true;
+            // Capture tab state before freezing (async operation)
+            const webview = webviewMap.current[tab.id];
+            if (webview) {
+              // Apply freeze effects immediately
+              suspendJavaScript(webview);
+              pauseAnimations(webview);
+              throttleTimers(webview);
+              
+              // Capture state asynchronously
+              captureTabState(webview).then((frozenState) => {
+                if (frozenState) {
+                  setTabs((currentTabs) =>
+                    currentTabs.map((t) =>
+                      t.id === tab.id ? { ...t, frozenState } : t
+                    )
+                  );
+                }
+              }).catch(() => {
+                // Ignore capture errors, tab still freezes without state
+              });
+            }
+            
             return { ...tab, isSleeping: true };
           }
 
@@ -1560,6 +1607,30 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       }
     };
   }, [tabs, activeId, tabSleepAfterMs]);
+
+  // Cleanup effect for component unmount
+  useEffect(() => {
+    const currentWebviewMap = webviewMap.current;
+    return () => {
+      // Clean up all frozen states and restore any sleeping tabs
+      tabs.forEach((tab) => {
+        if (tab.isSleeping) {
+          const webview = currentWebviewMap[tab.id];
+          if (webview) {
+            resumeJavaScript(webview);
+            resumeAnimations(webview);
+            restoreTimers(webview);
+          }
+        }
+      });
+      
+      // Clear sleep timer
+      if (tabSleepTimerRef.current !== null) {
+        window.clearTimeout(tabSleepTimerRef.current);
+        tabSleepTimerRef.current = null;
+      }
+    };
+  }, [tabs]);
 
   useEffect(() => {
     if (!hydratedRef.current) return;

@@ -91,7 +91,7 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
   animationsEnabled: false,
   nativeTextFieldContextMenu: true,
   layoutId: DEFAULT_LAYOUT_ID,
-  tabSleepValue: 10,
+  tabSleepValue: 3,
   tabSleepUnit: 'minutes',
   tabSleepMode: 'freeze',
   devToolsOpenMode: 'side',
