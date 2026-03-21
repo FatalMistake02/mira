@@ -82,6 +82,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [draggedTabPosition, setDraggedTabPosition] = useState<{ x: number; y: number } | null>(null);
   const [originalTabPosition, setOriginalTabPosition] = useState<{ x: number; y: number } | null>(null);
+  const [draggedTabWidth, setDraggedTabWidth] = useState<number | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [nativeContextMenusEnabled, setNativeContextMenusEnabled] = useState(
@@ -510,6 +511,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       setDraggingTabId(null);
       setDraggedTabPosition(null);
       setOriginalTabPosition(null);
+      setDraggedTabWidth(null);
       lastSwapClientXRef.current = null;
       lastSwapClientYRef.current = null;
       lastSwapAtRef.current = 0;
@@ -538,6 +540,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     setDraggingTabId(null);
     setDraggedTabPosition(null);
     setOriginalTabPosition(null);
+    setDraggedTabWidth(null); // Clear dragged tab width on orientation change
     // Set the settle time to prevent rapid setActive calls during remount
     orientationSettleUntilRef.current = Date.now() + ORIENTATION_CHANGE_SETTLE_MS;
   }, [orientation]);
@@ -697,6 +700,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                     dragPointerToLeftRef.current = event.clientX - rect.left;
                     dragPointerToTopRef.current = event.clientY - rect.top;
                     setOriginalTabPosition({ x: rect.left, y: rect.top });
+                    setDraggedTabWidth(rect.width);
                   } else {
                     dragPointerToLeftRef.current = 0;
                     dragPointerToTopRef.current = 0;
@@ -945,7 +949,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                 gap: 6,
                 alignItems: 'center',
                 whiteSpace: 'nowrap',
-                width: 'var(--layoutTabTargetWidth, 220px)',
+                width: isVertical ? '100%' : draggedTabWidth ?? TAB_TARGET_WIDTH,
                 minWidth: 'var(--layoutTabMinWidth, 100px)',
                 overflow: 'hidden',
                 padding: '0 10px',

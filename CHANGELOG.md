@@ -6,6 +6,7 @@
 - Fix context menu open in new tab 
 - Fix context menu open in new window
 - Bookmark shortcuts work even when webview is focused
+- Tabs keep their width when dragging
 
 ## v0.13.0 - 2026-03-21
 
