@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.13.0 - 2026-03-21
+
 - Add updates page
 
 ## v0.12.0 - 2026-03-21
