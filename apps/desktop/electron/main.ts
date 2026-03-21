@@ -1917,6 +1917,10 @@ function setupWebviewTabOpenHandler() {
         ? Number.parseInt(key, 10)
         : null;
       const isHistoryChord = isPrimaryChord && key === historyKey;
+      const isOpenBookmarksChord = hasPrimaryModifier && input.shift && key === 'o';
+      const isBookmarkPageChord = isPrimaryChord && key === 'd';
+      const isBookmarkAllTabsChord = hasPrimaryModifier && input.shift && key === 'd';
+      const isToggleBookmarksBarChord = hasPrimaryModifier && input.shift && key === 'b';
       const isDownloadsChord = isPrimaryChord && key === 'j';
       const isPrintChord = isPrimaryChord && key === 'p';
       const isReopenClosedTabChord = hasPrimaryModifier && input.shift && key === 't';
@@ -1964,6 +1968,10 @@ function setupWebviewTabOpenHandler() {
         && !isPreviousTabChord
         && tabNumberShortcut === null
         && !isHistoryChord
+        && !isOpenBookmarksChord
+        && !isBookmarkPageChord
+        && !isBookmarkAllTabsChord
+        && !isToggleBookmarksBarChord
         && !isDownloadsChord
         && !isPrintChord
         && !isReopenClosedTabChord
@@ -2050,6 +2058,26 @@ function setupWebviewTabOpenHandler() {
 
       if (isHistoryChord) {
         hostWindow.webContents.send('app-shortcut', 'open-history');
+        return;
+      }
+
+      if (isOpenBookmarksChord) {
+        hostWindow.webContents.send('app-shortcut', 'open-bookmarks');
+        return;
+      }
+
+      if (isBookmarkPageChord) {
+        hostWindow.webContents.send('app-shortcut', 'bookmark-current-page');
+        return;
+      }
+
+      if (isBookmarkAllTabsChord) {
+        hostWindow.webContents.send('app-shortcut', 'bookmark-all-tabs');
+        return;
+      }
+
+      if (isToggleBookmarksBarChord) {
+        hostWindow.webContents.send('app-shortcut', 'toggle-bookmarks-bar');
         return;
       }
 

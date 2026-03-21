@@ -72,6 +72,8 @@ interface IpcShortcutState {
   activeId: UseKeyboardShortcutsProps['activeId'];
   activateRelativeTab: (delta: 1 | -1) => void;
   activateTabByNumber: (number: number) => void;
+  bookmarkCurrentPage: UseKeyboardShortcutsProps['bookmarkCurrentPage'];
+  bookmarkAllTabs: UseKeyboardShortcutsProps['bookmarkAllTabs'];
 }
 
 /**
@@ -175,6 +177,8 @@ export function useKeyboardShortcuts({
     activeId,
     activateRelativeTab,
     activateTabByNumber,
+    bookmarkCurrentPage,
+    bookmarkAllTabs,
   };
 
   useEffect(() => {
@@ -406,7 +410,6 @@ export function useKeyboardShortcuts({
       }
 
       if (isPrimaryModifier && !e.shiftKey && key === 'd') {
-        console.log('Ctrl+D pressed - bookmarking current page');
         e.preventDefault();
         e.stopPropagation();
         bookmarkCurrentPage();
@@ -414,7 +417,6 @@ export function useKeyboardShortcuts({
       }
 
       if (isPrimaryModifier && e.shiftKey && key === 'd') {
-        console.log('Ctrl+Shift+D pressed - bookmarking all tabs');
         e.preventDefault();
         e.stopPropagation();
         bookmarkAllTabs();
@@ -635,6 +637,21 @@ export function useKeyboardShortcuts({
       if (action === 'open-bookmarks') {
         if (shouldSkipRapidAction('open-bookmarks')) return;
         state.openBookmarks();
+        return;
+      }
+      if (action === 'toggle-bookmarks-bar') {
+        if (shouldSkipRapidAction('toggle-bookmarks-bar')) return;
+        state.toggleBookmarksBar();
+        return;
+      }
+      if (action === 'bookmark-current-page') {
+        if (shouldSkipRapidAction('bookmark-current-page')) return;
+        state.bookmarkCurrentPage();
+        return;
+      }
+      if (action === 'bookmark-all-tabs') {
+        if (shouldSkipRapidAction('bookmark-all-tabs')) return;
+        state.bookmarkAllTabs();
         return;
       }
       if (action === 'go-back') {
