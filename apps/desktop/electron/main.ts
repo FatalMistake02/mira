@@ -13,6 +13,7 @@ import { execFileSync } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'electron';
 import { appendFileSync, promises as fs, readFileSync, unlinkSync, writeFileSync } from 'fs';
+import os from 'node:os';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
@@ -396,7 +397,51 @@ function isRestorableSessionTabUrl(url: string): boolean {
 }
 
 function sanitizeUserAgent(userAgent: string): string {
-  return userAgent.replace(/\sElectron\/[^\s)]+/g, '').trim();
+  const withoutElectron = userAgent.replace(/\sElectron\/[^\s)]+/g, '').trim();
+  return withoutElectron.replace(/\sMira\/[^\s)]+/g, '').trim();
+}
+
+function buildMiraUserAgent(userAgent: string): string {
+  const base = sanitizeUserAgent(userAgent);
+  const version = app.getVersion();
+  const token = `Mira/${version}`;
+  if (!base) return token;
+  if (base.includes(token)) return base;
+  return `${base} ${token}`.trim();
+}
+
+function getMiraVersion(): string {
+  return app.getVersion();
+}
+
+function getChromeVersion(): string {
+  return process.versions.chrome ?? '0';
+}
+
+function getChromeMajorVersion(): string {
+  const [major] = getChromeVersion().split('.');
+  return major || '0';
+}
+
+function getChPlatform(): string {
+  if (isMacOS) return 'macOS';
+  if (isWindows) return 'Windows';
+  if (process.platform === 'linux') return 'Linux';
+  return process.platform;
+}
+
+function getChPlatformVersion(): string {
+  return os.release();
+}
+
+function getSecChUaHeader(miraVersion: string): string {
+  const chromeMajor = getChromeMajorVersion();
+  return `"Mira";v="${miraVersion}", "Chromium";v="${chromeMajor}", "Not;A=Brand";v="99"`;
+}
+
+function getSecChUaFullVersionListHeader(miraVersion: string): string {
+  const chromeVersion = getChromeVersion();
+  return `"Mira";v="${miraVersion}", "Chromium";v="${chromeVersion}", "Not;A=Brand";v="99.0.0.0"`;
 }
 
 function sanitizeFileNameFragment(value: string): string {
@@ -1808,11 +1853,46 @@ function setupDownloadHandlers() {
   });
 }
 
+function setupVersionExposure() {
+  const miraVersion = getMiraVersion();
+  process.env.MIRA_VERSION = miraVersion;
+
+  const ses = session.defaultSession;
+  const baseUserAgent = ses.getUserAgent();
+  const miraUserAgent = buildMiraUserAgent(baseUserAgent);
+  if (miraUserAgent !== baseUserAgent) {
+    ses.setUserAgent(miraUserAgent);
+  }
+  app.userAgentFallback = miraUserAgent;
+
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    const url = details.url || '';
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      callback({ requestHeaders: details.requestHeaders });
+      return;
+    }
+
+    const headers = { ...details.requestHeaders };
+    headers['X-Mira-Version'] = miraVersion;
+    headers['Sec-CH-UA'] = getSecChUaHeader(miraVersion);
+    headers['Sec-CH-UA-Full-Version-List'] = getSecChUaFullVersionListHeader(miraVersion);
+    headers['Sec-CH-UA-Platform'] = `"${getChPlatform()}"`;
+    headers['Sec-CH-UA-Platform-Version'] = `"${getChPlatformVersion()}"`;
+    headers['Sec-CH-UA-Mobile'] = '?0';
+
+    callback({ requestHeaders: headers });
+  });
+}
+
+function setupVersionHandlers() {
+  ipcMain.handle('app-get-version', () => getMiraVersion());
+}
+
 function setupWebviewTabOpenHandler() {
   app.on('web-contents-created', (_, contents) => {
     if (contents.getType() !== 'devtools') {
       const currentUserAgent = contents.getUserAgent();
-      const sanitized = sanitizeUserAgent(currentUserAgent);
+      const sanitized = buildMiraUserAgent(currentUserAgent);
       if (sanitized && sanitized !== currentUserAgent) {
         contents.setUserAgent(sanitized);
       }
@@ -4054,6 +4134,8 @@ app.whenReady().then(async () => {
   await loadPersistedAppState().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
+  setupVersionExposure();
+  setupVersionHandlers();
   setupPerformanceHandlers();
   setupSessionHandlers();
   setupUpdateHandlers();
