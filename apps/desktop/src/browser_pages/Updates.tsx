@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Download, ExternalLink, CheckCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { electron } from '../electronBridge';
 import { getBrowserSettings } from '../features/settings/browserSettings';
@@ -24,6 +25,7 @@ export default function Updates() {
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
   const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
   const [releaseNotes, setReleaseNotes] = useState<string | null>(null);
+  const [releaseUrl, setReleaseUrl] = useState<string | null>(null);
   const [isFetchingNotes, setIsFetchingNotes] = useState(false);
 
   useEffect(() => {
@@ -70,7 +72,10 @@ export default function Updates() {
           setIsFetchingNotes(true);
           fetch(`https://api.github.com/repos/${ownerRepo}/releases/tags/${tag}`)
             .then((r) => r.json())
-            .then((data) => setReleaseNotes(data.body || null))
+            .then((data) => {
+              setReleaseNotes(data.body || null);
+              setReleaseUrl(data.html_url || null);
+            })
             .catch(() => setReleaseNotes(null))
             .finally(() => setIsFetchingNotes(false));
         }
@@ -322,9 +327,9 @@ export default function Updates() {
                 </div>
               )}
             </div>
-            {updateCheckResult.downloadUrl && (
+            {releaseUrl && (
               <a
-                href={updateCheckResult.downloadUrl}
+                href={releaseUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -352,12 +357,31 @@ export default function Updates() {
             lineHeight: '1.7',
             color: 'var(--text2)',
             background: 'var(--surfaceBg)',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
           }}>
-            {isFetchingNotes
-              ? 'Loading release notes…'
-              : releaseNotes || 'No release notes available.'}
+            {isFetchingNotes ? (
+              'Loading release notes…'
+            ) : releaseNotes ? (
+              <ReactMarkdown
+                components={{
+                  h1: ({ children }) => <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text1)', margin: '16px 0 8px' }}>{children}</h3>,
+                  h2: ({ children }) => <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text1)', margin: '14px 0 6px' }}>{children}</h4>,
+                  h3: ({ children }) => <h5 style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text1)', margin: '12px 0 4px' }}>{children}</h5>,
+                  p: ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+                  ul: ({ children }) => <ul style={{ margin: '0 0 8px', paddingLeft: '20px' }}>{children}</ul>,
+                  ol: ({ children }) => <ol style={{ margin: '0 0 8px', paddingLeft: '20px' }}>{children}</ol>,
+                  li: ({ children }) => <li style={{ marginBottom: '4px' }}>{children}</li>,
+                  code: ({ children }) => <code style={{ fontSize: '12px', background: 'var(--surfaceBorder)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'monospace' }}>{children}</code>,
+                  pre: ({ children }) => <pre style={{ fontSize: '12px', background: 'var(--surfaceBorder)', padding: '12px', borderRadius: '8px', overflow: 'auto', margin: '8px 0' }}>{children}</pre>,
+                  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>{children}</a>,
+                  strong: ({ children }) => <strong style={{ color: 'var(--text1)', fontWeight: 600 }}>{children}</strong>,
+                  hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--surfaceBorder)', margin: '12px 0' }} />,
+                }}
+              >
+                {releaseNotes}
+              </ReactMarkdown>
+            ) : (
+              'No release notes available.'
+            )}
           </div>
         </div>
       )}
