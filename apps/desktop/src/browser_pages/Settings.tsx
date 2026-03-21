@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import { useDownloads } from '../features/downloads/DownloadProvider';
@@ -133,6 +133,35 @@ const APP_DATA_STORAGE_KEYS = [
   'mira.layouts.custom.v1',
   'mira.session.tabs.v1',
 ];
+
+const parseHashParams = (hash: string) => {
+  const params: Record<string, string> = {};
+  if (!hash) return params;
+  const trimmed = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (!trimmed) return params;
+  const searchParams = new URLSearchParams(trimmed);
+  let hasPairs = false;
+  for (const [key, value] of searchParams.entries()) {
+    hasPairs = true;
+    if (!key) continue;
+    params[key.toLowerCase()] = value;
+  }
+  if (!hasPairs && trimmed) {
+    params.section = trimmed;
+  }
+  return params;
+};
+
+const resolveSectionFromParams = (
+  params: Record<string, string>,
+  available: SettingsSectionId[],
+): SettingsSectionId | null => {
+  const rawSection = params.section ?? '';
+  const normalized = rawSection.trim().toLowerCase();
+  return available.includes(normalized as SettingsSectionId)
+    ? (normalized as SettingsSectionId)
+    : null;
+};
 
 export default function Settings() {
   const AUTO_SAVE_DELAY_MS = 300;
@@ -478,7 +507,7 @@ export default function Settings() {
     setSaveStatus('saving');
   };
 
-  const checkForUpdates = async () => {
+  const checkForUpdates = useCallback(async () => {
     if (!electron?.ipcRenderer) {
       setUpdateStatus('Update checks are only available in the desktop app.');
       return;
@@ -512,7 +541,7 @@ export default function Settings() {
     } finally {
       setIsCheckingUpdates(false);
     }
-  };
+  }, [includePrereleaseUpdates]);
 
   const runUpdateAction = async () => {
     if (!electron?.ipcRenderer || !updateCheckResult || !updateCheckResult.hasUpdate) return;
@@ -738,21 +767,6 @@ export default function Settings() {
     [settingsSectionTabs],
   );
 
-  const resolveSectionFromHash = (
-    hash: string,
-    available: SettingsSectionId[],
-  ): SettingsSectionId | null => {
-    if (!hash) return null;
-    const trimmed = hash.startsWith('#') ? hash.slice(1) : hash;
-    if (!trimmed) return null;
-    const params = new URLSearchParams(trimmed);
-    const rawSection = params.get('section') ?? trimmed;
-    const normalized = rawSection.trim().toLowerCase();
-    return available.includes(normalized as SettingsSectionId)
-      ? (normalized as SettingsSectionId)
-      : null;
-  };
-
   const activeTabUrl = useMemo(
     () => tabs.find((tab) => tab.id === activeId)?.url ?? '',
     [tabs, activeId],
@@ -763,11 +777,13 @@ export default function Settings() {
     const trimmed = activeTabUrl.trim();
     return trimmed.toLowerCase().startsWith('mira://settings');
   }, [activeTabUrl]);
+  const hasTriggeredUpdateCheckRef = useRef(false);
 
   useEffect(() => {
     if (!isSettingsTab) return;
     const hash = activeTabUrl.includes('#') ? activeTabUrl.slice(activeTabUrl.indexOf('#')) : '';
-    const nextSection = resolveSectionFromHash(hash, settingsSectionIds);
+    const params = parseHashParams(hash);
+    const nextSection = resolveSectionFromParams(params, settingsSectionIds);
     if (nextSection) {
       setActiveSection((prev) => {
         if (prev === nextSection) return prev;
@@ -784,6 +800,17 @@ export default function Settings() {
       });
     }
   }, [activeTabUrl, isSettingsTab, settingsSectionIds]);
+
+  useEffect(() => {
+    if (!isSettingsTab || hasTriggeredUpdateCheckRef.current) return;
+    const hash = activeTabUrl.includes('#') ? activeTabUrl.slice(activeTabUrl.indexOf('#')) : '';
+    const params = parseHashParams(hash);
+    const checkUpdatesParam = (params.checkupdates ?? '').toLowerCase();
+    if (checkUpdatesParam === '1' || checkUpdatesParam === 'true' || checkUpdatesParam === 'yes') {
+      hasTriggeredUpdateCheckRef.current = true;
+      void checkForUpdates();
+    }
+  }, [activeTabUrl, checkForUpdates, isSettingsTab]);
 
   useEffect(() => {
     if (!isSettingsTab) return;
