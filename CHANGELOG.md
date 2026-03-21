@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add updates page
+
 ## v0.12.0 - 2026-03-21
 
 - Fix new tabs opening from links
@@ -9,7 +11,6 @@
 - Update downloads pop-up
 - Restoring goes to last active tab instead of new tab
 - Add bookmarks
-- Add updates page
 
 ## v0.11.1 - 2026-03-20
 
