@@ -795,7 +795,6 @@ export default function Settings() {
     if (hash) {
       setActiveSection((prev) => {
         if (prev === 'general') return prev;
-        isSyncingFromUrlRef.current = true;
         return 'general';
       });
     }
