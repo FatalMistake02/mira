@@ -5,6 +5,7 @@
 - Fix new tabs opening from links
 - Fixed duplicate tab
 - Update downloads pop-up
+- Restoring goes to last active tab instead of new tab
 
 ## v0.11.1 - 2026-03-20
 
