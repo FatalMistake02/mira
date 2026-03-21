@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { electron } from '../../electronBridge';
 import { 
   getBrowserSettings, 
@@ -73,7 +73,7 @@ type TabsContextType = {
   tabs: Tab[];
   activeId: string;
   newTab: (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => void;
-  newTabToRight: (id: string, url?: string) => void;
+  newTabToRight: (id: string, url?: string) => string | undefined;
   reloadTab: (id: string) => void;
   duplicateTab: (id: string) => void;
   reopenLastClosedTab: () => void;
@@ -672,6 +672,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       });
 
       setActiveId(newEntry.id);
+      return newEntry.id;
     },
     [activeId],
   );

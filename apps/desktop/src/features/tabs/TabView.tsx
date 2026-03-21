@@ -641,10 +641,11 @@ export default function TabView() {
     (url: string, baseUrl?: string) => {
       const normalized = resolveContextMenuUrl(url, baseUrl);
       if (!canOpenInNewTab(normalized)) return;
-      closePageMenu();
       window.setTimeout(() => {
         // Use the active tab as the source for opening the new tab to the right
         newTabToRight(activeId, normalized);
+        // Close the menu after the tab has been created and activated
+        closePageMenu();
       }, 0);
     },
     [closePageMenu, newTabToRight, activeId],
