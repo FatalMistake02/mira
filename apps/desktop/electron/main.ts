@@ -2966,6 +2966,7 @@ function setupWindowControlsHandlers() {
 
     const candidate = payload as {
       webContentsId?: unknown;
+      tabId?: unknown;
       x?: unknown;
       y?: unknown;
       params?: unknown;
@@ -2976,6 +2977,9 @@ function setupWindowControlsHandlers() {
         ? Math.floor(candidate.webContentsId)
         : -1;
     if (webContentsId <= 0) return false;
+
+    const tabIdFromPayload =
+      typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
 
     const target = electronWebContents.fromId(webContentsId);
     if (!target || target.isDestroyed()) return false;
@@ -3062,6 +3066,7 @@ function setupWindowControlsHandlers() {
       hostWindow.webContents.send('webview-native-context-command', {
         command,
         webContentsId,
+        ...(tabIdFromPayload ? { tabId: tabIdFromPayload } : {}),
         ...extra,
       });
     };

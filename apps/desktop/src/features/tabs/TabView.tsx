@@ -128,6 +128,7 @@ interface PageContextMenuState {
 interface NativeContextCommandPayload {
   command?: unknown;
   webContentsId?: unknown;
+  tabId?: unknown;
   url?: unknown;
   text?: unknown;
   x?: unknown;
@@ -162,6 +163,18 @@ function normalizeComparableUrl(url: string): string {
   } catch {
     return trimmed;
   }
+}
+
+function getTabIdForWebContentsId(webContentsId: number): string | undefined {
+  if (!Number.isFinite(webContentsId) || webContentsId <= 0) return undefined;
+  const webviewNodes = Array.from(document.querySelectorAll('webview')) as WebviewElement[];
+  const matchingWebview = webviewNodes.find((node) => {
+    if (typeof node.getWebContentsId !== 'function') return false;
+    return node.getWebContentsId() === webContentsId;
+  });
+  if (!matchingWebview) return undefined;
+  const tabId = matchingWebview.getAttribute(WEBVIEW_TAB_ID_ATTR)?.trim();
+  return tabId || undefined;
 }
 
 /**
@@ -569,14 +582,7 @@ export default function TabView() {
           : 0;
       if (statusCode < 400) return;
 
-      const webviewNodes = Array.from(document.querySelectorAll('webview')) as WebviewElement[];
-      const matchingWebview = webviewNodes.find((node) => {
-        if (typeof node.getWebContentsId !== 'function') return false;
-        return node.getWebContentsId() === webContentsId;
-      });
-      if (!matchingWebview) return;
-
-      const tabId = matchingWebview.getAttribute(WEBVIEW_TAB_ID_ATTR)?.trim();
+      const tabId = getTabIdForWebContentsId(webContentsId);
       if (!tabId) return;
       const errorUrl = typeof candidate.url === 'string' ? candidate.url.trim() : '';
 
@@ -638,17 +644,14 @@ export default function TabView() {
   );
 
   const openInNewTabFromMenu = useCallback(
-    (url: string, baseUrl?: string) => {
+    (url: string, baseUrl: string | undefined, sourceTabId: string) => {
       const normalized = resolveContextMenuUrl(url, baseUrl);
       if (!canOpenInNewTab(normalized)) return;
-      window.setTimeout(() => {
-        // Use the active tab as the source for opening the new tab to the right
-        newTabToRight(activeId, normalized);
-        // Close the menu after the tab has been created and activated
-        closePageMenu();
-      }, 0);
+      // Same as middle-click newWindowHandler: newTabToRight(tab.id, url)
+      newTabToRight(sourceTabId, normalized);
+      closePageMenu();
     },
-    [closePageMenu, newTabToRight, activeId],
+    [closePageMenu, newTabToRight],
   );
 
   useEffect(() => {
@@ -698,7 +701,14 @@ export default function TabView() {
       };
 
       if (command === 'open-url-in-new-tab') {
-        openInNewTabFromMenu(resolvedUrl, rawBaseUrl || undefined);
+        if (!canOpenInNewTab(resolvedUrl)) return;
+        const tabIdFromPayload =
+          typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
+        const sourceTabId =
+          tabIdFromPayload && tabs.some((t) => t.id === tabIdFromPayload)
+            ? tabIdFromPayload
+            : (webContentsId > 0 ? getTabIdForWebContentsId(webContentsId) : undefined) ?? activeId;
+        newTabToRight(sourceTabId, resolvedUrl);
         return;
       }
 
@@ -797,7 +807,7 @@ export default function TabView() {
 
     ipc.on('webview-native-context-command', onNativeContextCommand);
     return () => ipc.off('webview-native-context-command', onNativeContextCommand);
-  }, [goBack, goForward, openInNewTabFromMenu, printPage, reload, runWebviewContextAction]);
+  }, [activeId, goBack, goForward, newTabToRight, printPage, reload, runWebviewContextAction, tabs]);
 
   const pageMenuEntries = useMemo<ContextMenuEntry[]>(() => {
     if (!pageMenuState) return [];
@@ -868,7 +878,8 @@ export default function TabView() {
       const resolvedSrcUrl = resolveContextMenuUrl(params.srcURL, params.pageURL);
       const canOpenImageInNewTab = canOpenInNewTab(resolvedSrcUrl);
       return [
-        item('Open Image in New Tab', () => openInNewTabFromMenu(resolvedSrcUrl, params.pageURL), {
+        item('Open Image in New Tab', () =>
+          openInNewTabFromMenu(resolvedSrcUrl, params.pageURL, pageMenuState.tabId), {
           disabled: !canOpenImageInNewTab,
         }),
         item(
@@ -897,7 +908,8 @@ export default function TabView() {
       const resolvedLinkUrl = resolveContextMenuUrl(params.linkURL, params.pageURL);
       const canOpenLinkInNewTab = canOpenInNewTab(resolvedLinkUrl);
       return [
-        item('Open in New Tab', () => openInNewTabFromMenu(resolvedLinkUrl, params.pageURL), {
+        item('Open in New Tab', () =>
+          openInNewTabFromMenu(resolvedLinkUrl, params.pageURL, pageMenuState.tabId), {
           disabled: !canOpenLinkInNewTab,
         }),
         item(
@@ -945,7 +957,8 @@ export default function TabView() {
       }),
       item('Print', () => printPage(), { shortcut: `${primaryShortcutLabel}+P` }),
       separator(),
-      item('View Source', () => openInNewTabFromMenu(`view-source:${sourceUrl}`), {
+      item('View Source', () =>
+        openInNewTabFromMenu(`view-source:${sourceUrl}`, undefined, pageMenuState.tabId), {
         disabled: !sourceUrl,
         shortcut: `${primaryShortcutLabel}+U`,
       }),
@@ -1218,6 +1231,7 @@ export default function TabView() {
                           void ipc
                             .invoke('webview-show-native-context-menu', {
                               webContentsId: Math.floor(webContentsId),
+                              tabId: tab.id,
                               x,
                               y,
                               params,
