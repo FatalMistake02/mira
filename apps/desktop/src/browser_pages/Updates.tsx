@@ -133,10 +133,10 @@ export default function Updates() {
           margin: '0 0 6px 0',
           letterSpacing: '-0.3px',
         }}>
-          Software Updates
+          Updates
         </h1>
         <p style={{ margin: 0, color: 'var(--text2)', fontSize: '14px' }}>
-          Keep your app up to date with the latest features and fixes.
+          Keep Mira updated for the latest features and fixes.
         </p>
       </div>
 
@@ -262,7 +262,7 @@ export default function Updates() {
       </div>
 
       {/* Action row */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
         {hasUpdate && (
           <button
             onClick={runUpdateAction}
@@ -270,7 +270,9 @@ export default function Updates() {
             style={{
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: '7px',
+              width: '100%',
               padding: '10px 20px',
               background: '#f59e0b',
               color: '#000',
@@ -291,7 +293,7 @@ export default function Updates() {
                 : 'Install update'}
           </button>
         )}
-
+ 
         {typeof updateStatus === 'string' && !['update-available', 'up-to-date', 'failed', 'installer-launched', ''].includes(updateStatus) && (
           <span style={{ fontSize: '13px', color: 'var(--text2)' }}>{updateStatus}</span>
         )}
