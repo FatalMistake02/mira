@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Add view button to update prompt
-- Fix open in new tab context menu item
+- Fix context menu open in new tab 
 
 ## v0.13.0 - 2026-03-21
 
