@@ -59,6 +59,7 @@ jobs:
         run: |
           npm install electron@${{ steps.latest_version.outputs.latest_version }} --workspace apps/desktop
           npm install --workspace apps/desktop
+          git add apps/desktop/package.json package-lock.json
 
       - name: Create Pull Request
         if: steps.check_update.outputs.update_needed == 'true'
