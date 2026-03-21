@@ -824,7 +824,8 @@ export default function Settings() {
       return;
     }
     const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
-    const nextUrl = `${baseUrl}#section=${activeSection}`;
+    const nextUrl =
+      activeSection === 'general' ? baseUrl : `${baseUrl}#section=${activeSection}`;
     if (activeTabUrl && activeTabUrl !== nextUrl) {
       navigate(nextUrl);
     }
