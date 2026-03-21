@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Eye } from 'lucide-react';
 import { electron } from '../electronBridge';
 
 export type UpdateCheckPayload = {
@@ -16,9 +17,10 @@ type Props = {
   open: boolean;
   update: UpdateCheckPayload | null;
   onLater: () => void;
+  onView?: () => void;
 };
 
-export default function UpdatePrompt({ open, update, onLater }: Props) {
+export default function UpdatePrompt({ open, update, onLater, onView }: Props) {
   const [status, setStatus] = useState('');
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
 
@@ -127,6 +129,17 @@ export default function UpdatePrompt({ open, update, onLater }: Props) {
           >
             Update Later
           </button>
+          {onView && (
+            <button
+              onClick={onView}
+              className="theme-btn theme-btn-nav"
+              style={{ padding: '7px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
+              disabled={isRunningUpdateAction}
+            >
+              <Eye size={14} />
+              View
+            </button>
+          )}
           <button
             onClick={runUpdateAction}
             className="theme-btn theme-btn-go"

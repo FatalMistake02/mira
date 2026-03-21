@@ -236,6 +236,7 @@ function Browser() {
     resetZoom,
     toggleFullScreen,
     scrollPage,
+    navigate,
     activeId,
     restorePromptOpen,
   } = useTabs();
@@ -453,6 +454,10 @@ function Browser() {
         open={!!pendingUpdate && !restorePromptOpen}
         update={pendingUpdate}
         onLater={() => setPendingUpdate(null)}
+        onView={() => {
+          navigate('mira://Updates');
+          setPendingUpdate(null);
+        }}
       />
       {showPerfOverlay && <PerfOverlay />}
     </div>
