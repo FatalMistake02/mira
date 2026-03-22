@@ -144,6 +144,7 @@ export default function BookmarksBar() {
   const previousRectsRef = useRef<Record<string, DOMRect>>({});
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragMovedEnoughRef = useRef(false);
+  const lastNativeBookmarkCommandRef = useRef<{ signature: string; at: number } | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -153,6 +154,12 @@ export default function BookmarksBar() {
   const [nativeContextMenusEnabled, setNativeContextMenusEnabled] = useState(
     () => getBrowserSettings().nativeTextFieldContextMenu,
   );
+
+  // Delete confirmation dialog state
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    bookmark: Bookmark | null;
+  }>({ open: false, bookmark: null });
 
   // Get only top-level bookmarks (not in folders)
   const topLevelBookmarks = bookmarks.filter(bookmark => !bookmark.parentId);
@@ -416,6 +423,15 @@ export default function BookmarksBar() {
       const bookmarkId = typeof candidate.bookmarkId === 'string' ? candidate.bookmarkId.trim() : '';
       if (!command || !bookmarkId) return;
 
+      // Deduplicate rapid commands (same pattern as TabBar.tsx)
+      const dedupeSignature = `${command}|${bookmarkId}`;
+      const now = Date.now();
+      const previous = lastNativeBookmarkCommandRef.current;
+      if (previous && previous.signature === dedupeSignature && now - previous.at < 250) {
+        return;
+      }
+      lastNativeBookmarkCommandRef.current = { signature: dedupeSignature, at: now };
+
       // Find the bookmark
       const bookmark = bookmarks.find(b => b.id === bookmarkId);
       if (!bookmark) return;
@@ -433,13 +449,17 @@ export default function BookmarksBar() {
           break;
         case 'open-in-new-window':
           if (bookmark.type === 'bookmark' && bookmark.url) {
-            // TODO: Implement open in new window
-            console.log('Open in new window:', bookmark.url);
+            const renderer = electron?.ipcRenderer;
+            if (renderer) {
+              void renderer.invoke('window-new-with-url', bookmark.url).catch(() => undefined);
+            } else {
+              window.open(bookmark.url, '_blank', 'noopener,noreferrer');
+            }
           }
           break;
         case 'delete':
-          if (window.confirm(`Delete "${bookmark.title}"?`)) {
-            deleteBookmark(bookmarkId);
+          if (bookmark) {
+            setDeleteDialog({ open: true, bookmark });
           }
           break;
       }
@@ -499,9 +519,7 @@ export default function BookmarksBar() {
       type: 'item',
       label: 'Delete',
       onSelect: () => {
-        if (window.confirm(`Delete "${bookmark.title}"?`)) {
-          deleteBookmark(bookmark.id);
-        }
+        setDeleteDialog({ open: true, bookmark });
       },
     });
 
@@ -605,6 +623,68 @@ export default function BookmarksBar() {
         onClose={closeContextMenu}
         minWidth={150}
       />
+
+      {/* Delete Confirmation Dialog */}
+      {deleteDialog.open && deleteDialog.bookmark && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'color-mix(in srgb, var(--bg) 70%, transparent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+          }}
+          onClick={() => setDeleteDialog({ open: false, bookmark: null })}
+        >
+          <div
+            className="theme-panel"
+            style={{
+              width: 360,
+              maxWidth: 'calc(100vw - 32px)',
+              borderRadius: 10,
+              padding: 16,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 8px 0' }} className="theme-text1">
+              Delete Bookmark?
+            </h3>
+            <p style={{ margin: '0 0 14px 0', fontSize: 13, lineHeight: 1.4 }} className="theme-text2">
+              Are you sure you want to delete "{deleteDialog.bookmark.title}"?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={() => setDeleteDialog({ open: false, bookmark: null })}
+                className="theme-btn theme-btn-nav"
+                style={{ padding: '7px 12px' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (deleteDialog.bookmark) {
+                    deleteBookmark(deleteDialog.bookmark.id);
+                  }
+                  setDeleteDialog({ open: false, bookmark: null });
+                }}
+                className="theme-btn"
+                style={{
+                  padding: '7px 12px',
+                  background: 'var(--windowCloseButtonBgHover, #e81123)',
+                  border: '1px solid var(--windowCloseButtonBgHover, #e81123)',
+                  color: 'var(--windowCloseButtonText, #ffffff)',
+                  borderRadius: 'var(--layoutControlRadius, 6px)',
+                  cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

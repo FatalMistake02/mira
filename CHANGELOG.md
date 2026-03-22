@@ -8,6 +8,7 @@
 - Bookmark shortcuts work even when webview is focused
 - Tabs keep their width when dragging
 - Webview has white background
+- Fix bookmarks context menu
 
 ## v0.13.0 - 2026-03-21
 

@@ -7,7 +7,7 @@
 - [x] Fix target="_blank" links
 - [ ] Fix all other issues
 - [x] Change context menu for vertical tabs
-- [ ] Fix bookmarks context menu
+- [x] Fix bookmarks context menu
 - [ ] Bookmarks menu and folders
   
 ## v1.1.0
