@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Eye } from 'lucide-react';
 import { electron } from '../electronBridge';
 
 export type UpdateCheckPayload = {
@@ -133,10 +132,9 @@ export default function UpdatePrompt({ open, update, onLater, onView }: Props) {
             <button
               onClick={onView}
               className="theme-btn theme-btn-nav"
-              style={{ padding: '7px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
+              style={{ padding: '7px 12px' }}
               disabled={isRunningUpdateAction}
             >
-              <Eye size={14} />
               View
             </button>
           )}

@@ -236,7 +236,6 @@ function Browser() {
     resetZoom,
     toggleFullScreen,
     scrollPage,
-    navigate,
     activeId,
     restorePromptOpen,
   } = useTabs();
@@ -455,7 +454,7 @@ function Browser() {
         update={pendingUpdate}
         onLater={() => setPendingUpdate(null)}
         onView={() => {
-          navigate('mira://Updates');
+          newTab('mira://Updates');
           setPendingUpdate(null);
         }}
       />
