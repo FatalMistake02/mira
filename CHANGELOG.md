@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.14.0 - 2026-03-22
+
 - Add view button to update prompt
 - Fix context menu open in new tab 
 - Fix context menu open in new window
