@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.14.1 - 2026-03-22
+- Add report issue button in settings
 
 ## v0.14.0 - 2026-03-22
 

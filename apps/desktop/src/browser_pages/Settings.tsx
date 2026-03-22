@@ -743,19 +743,11 @@ export default function Settings() {
       })
       .catch(() => {
         if (!isSubscribed) return;
-        setCanConfigureRunOnStartup(false);
-        setRunOnStartupStatus('Failed to check startup settings.');
       });
 
     return () => {
       isSubscribed = false;
     };
-  }, []);
-
-  useEffect(() => {
-    void refreshDefaultBrowserStatus();
-    // Run once on open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const canConfigureRunOnStartupSetting = electron?.isMacOS || electron?.platform === 'win32';
@@ -852,27 +844,40 @@ export default function Settings() {
       </header>
 
       <div className="settings-body">
-        <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-          {settingsSectionTabs.map((section) => (
-            <button
-              key={section.id}
-              id={`settings-tab-${section.id}`}
-              type="button"
-              role="tab"
-              aria-selected={activeSection === section.id}
-              aria-controls={`settings-panel-${section.id}`}
-              onClick={() => {
-                setActiveSection(section.id);
-                setThemeDropdownOpen(false);
-                setLayoutDropdownOpen(false);
-              }}
-              className={`theme-btn theme-btn-nav settings-tab-btn ${
-                activeSection === section.id ? 'settings-tab-btn-active' : ''
-              }`}
+        <div className="settings-sidebar">
+          <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+            {settingsSectionTabs.map((section) => (
+              <button
+                key={section.id}
+                id={`settings-tab-${section.id}`}
+                type="button"
+                role="tab"
+                aria-selected={activeSection === section.id}
+                aria-controls={`settings-panel-${section.id}`}
+                onClick={() => {
+                  setActiveSection(section.id);
+                  setThemeDropdownOpen(false);
+                  setLayoutDropdownOpen(false);
+                }}
+                className={`theme-btn theme-btn-nav settings-tab-btn ${
+                  activeSection === section.id ? 'settings-tab-btn-active' : ''
+                }`}
+              >
+                <span className="settings-tab-label">{section.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="settings-actions" role="group" aria-label="Settings actions">
+            <a
+              href="https://github.com/FatalMistake02/mira/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="theme-btn theme-btn-nav settings-tab-btn settings-action-btn"
             >
-              <span className="settings-tab-label">{section.label}</span>
-            </button>
-          ))}
+              <span className="settings-tab-label">Report Issue</span>
+            </a>
+          </div>
         </div>
 
         <div

@@ -423,7 +423,32 @@ textarea {
   border-radius: var(--layoutSettingsTabsRadius, 12px);
   border: var(--layoutBorderWidth, 1px) solid var(--settingsTabsBorder, var(--settingsCardBorder));
   background: var(--settingsTabsBg, var(--settingsCardBg));
-  align-self: flex-start;
+  align-self: stretch;
+  width: 100%;
+}
+
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--layoutSettingsTabsRadius, 12px);
+  border: var(--layoutBorderWidth, 1px) solid var(--settingsTabsBorder, var(--settingsCardBorder));
+  background: var(--settingsTabsBg, var(--settingsCardBg));
+  align-self: stretch;
+  width: 100%;
+}
+
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  grid-area: sidebar;
+  align-self: start;
+}
+
+.settings-action-btn {
+  text-decoration: none;
 }
 
 .settings-tab-btn {
@@ -453,11 +478,13 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  grid-area: content;
 }
 
 .settings-body {
   display: grid;
   grid-template-columns: minmax(150px, 200px) minmax(0, 1fr);
+  grid-template-areas: "sidebar content";
   gap: 12px;
   align-items: start;
 }
@@ -985,7 +1012,7 @@ textarea {
     padding: 16px;
   }
 
-  .settings-tabs {
+  .settings-sidebar {
     width: 100%;
     align-self: stretch;
   }
