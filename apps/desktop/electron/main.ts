@@ -9,7 +9,7 @@ import {
   session,
   webContents as electronWebContents,
 } from 'electron';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'electron';
 import { appendFileSync, promises as fs, readFileSync, unlinkSync, writeFileSync } from 'fs';
@@ -2362,13 +2362,12 @@ function setupUpdateHandlers() {
         }
 
         const downloadedPath = await downloadAssetToDownloads(result.downloadUrl, result.assetName);
-        const openError = await shell.openPath(downloadedPath);
-        if (openError) {
-          return {
-            ok: false,
-            error: openError,
-          };
-        }
+        // Launch installer in silent mode for auto-updates (shows only progress bar)
+        const child = spawn(downloadedPath, ['/S'], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.unref();
 
         if (process.platform === 'win32') {
           setTimeout(() => app.quit(), 1000).unref();
@@ -2451,13 +2450,12 @@ function setupUpdateHandlers() {
 
       try {
         const downloadedPath = await downloadAssetToDownloads(downloadUrl, assetName);
-        const openError = await shell.openPath(downloadedPath);
-        if (openError) {
-          return {
-            ok: false,
-            error: openError,
-          };
-        }
+        // Launch installer in silent mode (shows only progress bar)
+        const child = spawn(downloadedPath, ['/S'], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.unref();
 
         if (process.platform === 'win32') {
           setTimeout(() => app.quit(), 1000).unref();
