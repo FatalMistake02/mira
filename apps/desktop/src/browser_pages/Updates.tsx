@@ -287,7 +287,7 @@ export default function Updates() {
           >
             <Download size={15} />
             {isRunningUpdateAction
-              ? 'Installing…'
+              ? 'Downloading…'
               : updateCheckResult?.mode === 'portable'
                 ? 'Download update'
                 : 'Install update'}
