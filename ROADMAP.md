@@ -1,11 +1,8 @@
 # Roadmap
 
 ## v1.0.0 — Stable Release
-- [ ] Improve performance
 - [x] Fix default browser
-- [ ] Fix auto update
 - [x] Fix target="_blank" links
-- [ ] Fix all other issues
 - [x] Change context menu for vertical tabs
 - [x] Fix bookmarks context menu
 - [ ] Bookmarks menu and folders
