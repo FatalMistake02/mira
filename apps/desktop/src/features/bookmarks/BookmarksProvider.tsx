@@ -18,6 +18,8 @@ type BookmarksContextType = {
   updateBookmark: (bookmark: Bookmark) => void;
   getBookmarkById: (id: string) => Bookmark | undefined;
   moveBookmark: (id: string, toIndex: number) => void;
+  moveBookmarkInFolder: (id: string, folderId: string | undefined, toIndex: number) => void;
+  moveBookmarkToFolder: (id: string, targetFolderId: string | null) => void;
 };
 
 const BookmarksContext = createContext<BookmarksContextType | undefined>(undefined);
@@ -100,6 +102,105 @@ function moveBookmarkInTree(bookmarks: Bookmark[], id: string, toIndex: number):
   nextBookmarks.splice(boundedIndex, 0, moved);
   return nextBookmarks;
 }
+function findBookmarkAndParent(bookmarks: Bookmark[], id: string, parent: Bookmark | null = null): { bookmark: Bookmark | undefined; parent: Bookmark | null; parentArray: Bookmark[] } {
+  for (let i = 0; i < bookmarks.length; i++) {
+    const bookmark = bookmarks[i];
+    if (bookmark.id === id) {
+      return { bookmark, parent, parentArray: bookmarks };
+    }
+    if (bookmark.children) {
+      const found = findBookmarkAndParent(bookmark.children, id, bookmark);
+      if (found.bookmark) return found;
+    }
+  }
+  return { bookmark: undefined, parent: null, parentArray: [] };
+}
+
+function removeBookmarkFromTree(bookmarks: Bookmark[], id: string): Bookmark[] {
+  return bookmarks
+    .filter(b => b.id !== id)
+    .map(b => ({
+      ...b,
+      children: b.children ? removeBookmarkFromTree(b.children, id) : undefined
+    }));
+}
+
+function addBookmarkToFolder(bookmarks: Bookmark[], bookmark: Bookmark, folderId: string): Bookmark[] {
+  return bookmarks.map(b => {
+    if (b.id === folderId && b.type === 'folder') {
+      return {
+        ...b,
+        children: [...(b.children || []), bookmark],
+        updatedAt: Date.now(),
+      };
+    }
+    if (b.children) {
+      return {
+        ...b,
+        children: addBookmarkToFolder(b.children, bookmark, folderId)
+      };
+    }
+    return b;
+  });
+}
+
+function moveBookmarkBetweenParents(bookmarks: Bookmark[], id: string, targetFolderId: string | null): Bookmark[] {
+  // Find the bookmark
+  const { bookmark } = findBookmarkAndParent(bookmarks, id);
+  
+  if (!bookmark) return bookmarks;
+  
+  // Remove from current location
+  let newBookmarks = removeBookmarkFromTree(bookmarks, id);
+  
+  // Update the bookmark's parentId
+  const updatedBookmark = { ...bookmark, parentId: targetFolderId || undefined, updatedAt: Date.now() };
+  
+  // Add to target folder or root
+  if (targetFolderId) {
+    newBookmarks = addBookmarkToFolder(newBookmarks, updatedBookmark, targetFolderId);
+  } else {
+    // Add to root
+    newBookmarks = [...newBookmarks, updatedBookmark];
+  }
+  
+  return newBookmarks;
+}
+
+function moveBookmarkInTreeAtParent(
+  bookmarks: Bookmark[],
+  id: string,
+  folderId: string | undefined,
+  toIndex: number
+): Bookmark[] {
+  // If folderId is undefined, we're moving at root level
+  if (!folderId) {
+    return moveBookmarkInTree(bookmarks, id, toIndex);
+  }
+
+  // Find the folder and move within its children
+  return bookmarks.map(b => {
+    if (b.id === folderId && b.type === 'folder' && b.children) {
+      const fromIndex = b.children.findIndex(child => child.id === id);
+      if (fromIndex === -1) return b;
+      
+      const boundedTargetIndex = Math.max(0, Math.min(toIndex, b.children.length - 1));
+      if (boundedTargetIndex === fromIndex) return b;
+      
+      const nextChildren = [...b.children];
+      const [moved] = nextChildren.splice(fromIndex, 1);
+      const boundedIndex = Math.max(0, Math.min(boundedTargetIndex, nextChildren.length));
+      nextChildren.splice(boundedIndex, 0, moved);
+      
+      return { ...b, children: nextChildren, updatedAt: Date.now() };
+    }
+    if (b.children) {
+      return { ...b, children: moveBookmarkInTreeAtParent(b.children, id, folderId, toIndex) };
+    }
+    return b;
+  });
+}
+
 function addBookmarkToTree(
   bookmarks: Bookmark[], 
   newBookmark: Omit<Bookmark, 'id' | 'createdAt' | 'updatedAt'>,
@@ -165,11 +266,31 @@ export function BookmarksProvider({ children }: { children: ReactNode }) {
     return findBookmarkById(bookmarks, id);
   }, [bookmarks]);
 
+  const moveBookmarkInFolder = useCallback((id: string, folderId: string | undefined, toIndex: number) => {
+    if (!id) return;
+
+    setBookmarks(prev => {
+      const updated = moveBookmarkInTreeAtParent(prev, id, folderId, toIndex);
+      saveBookmarksToStorage(updated);
+      return updated;
+    });
+  }, []);
+
   const moveBookmark = useCallback((id: string, toIndex: number) => {
     if (!id) return;
 
     setBookmarks(prev => {
       const updated = moveBookmarkInTree(prev, id, toIndex);
+      saveBookmarksToStorage(updated);
+      return updated;
+    });
+  }, []);
+
+  const moveBookmarkToFolder = useCallback((id: string, targetFolderId: string | null) => {
+    if (!id) return;
+
+    setBookmarks(prev => {
+      const updated = moveBookmarkBetweenParents(prev, id, targetFolderId);
       saveBookmarksToStorage(updated);
       return updated;
     });
@@ -183,6 +304,8 @@ export function BookmarksProvider({ children }: { children: ReactNode }) {
       updateBookmark,
       getBookmarkById,
       moveBookmark,
+      moveBookmarkInFolder,
+      moveBookmarkToFolder,
     }}>
       {children}
     </BookmarksContext.Provider>

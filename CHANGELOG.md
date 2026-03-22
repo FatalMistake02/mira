@@ -9,6 +9,7 @@
 - Tabs keep their width when dragging
 - Webview has white background
 - Fix bookmarks context menu
+- Finish bookmarks menu and folders
 
 ## v0.13.0 - 2026-03-21
 

@@ -5,7 +5,7 @@
 - [x] Fix target="_blank" links
 - [x] Change context menu for vertical tabs
 - [x] Fix bookmarks context menu
-- [ ] Bookmarks menu and folders
+- [x] Bookmarks menu and folders
   
 ## v1.1.0
 - [ ] Ad blocker blocks Youtube videos

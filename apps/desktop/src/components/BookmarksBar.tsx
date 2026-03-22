@@ -6,6 +6,129 @@ import { electron } from '../electronBridge';
 import { Folder } from 'lucide-react';
 import ContextMenu, { type ContextMenuEntry } from './ContextMenu';
 
+// Folder Dropdown Component - uses fixed positioning to avoid clipping
+function FolderDropdown({
+  bookmark,
+  folderRefs,
+  getTabFavicon,
+  handleNavigate,
+  handleContextMenu,
+  setExpandedFolders,
+}: {
+  bookmark: Bookmark;
+  folderRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  getTabFavicon: (url?: string) => string | undefined;
+  handleNavigate: (url: string) => void;
+  handleContextMenu: (event: React.MouseEvent, bookmark: Bookmark, parentFolderId?: string) => void;
+  setExpandedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
+}) {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    const folderButton = document.querySelector(`[data-folder-button="${bookmark.id}"]`);
+    if (folderButton) {
+      const rect = folderButton.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    }
+  }, [bookmark.id]);
+
+  useEffect(() => {
+    folderRefs.current[bookmark.id] = dropdownRef.current;
+    return () => {
+      folderRefs.current[bookmark.id] = null;
+    };
+  }, [bookmark.id, folderRefs]);
+
+  return (
+    <div
+      ref={dropdownRef}
+      data-folder-children
+      style={{
+        position: 'fixed',
+        top: position.top,
+        left: position.left,
+        background: 'var(--surfaceBg, #2a2a2a)',
+        border: '1px solid var(--surfaceBorder, #3a3a3a)',
+        borderRadius: 6,
+        padding: 4,
+        minWidth: 150,
+        maxWidth: 250,
+        maxHeight: 300,
+        overflowY: 'auto',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        zIndex: 9999,
+      }}
+    >
+      {bookmark.children?.map((child) => (
+        <div
+          key={child.id}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <button
+            onClick={() => {
+              if (child.type === 'bookmark' && child.url) {
+                handleNavigate(child.url);
+              }
+              setExpandedFolders(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(bookmark.id);
+                return newSet;
+              });
+            }}
+            onContextMenu={(e) => {
+              e.stopPropagation();
+              handleContextMenu(e, child, bookmark.id);
+            }}
+            className="theme-btn theme-btn-nav"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 10px',
+              fontSize: 12,
+              textAlign: 'left',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--text2)',
+              borderRadius: 4,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            title={child.title}
+          >
+            {child.type === 'bookmark' ? (
+              <>
+                {getTabFavicon(child.url) ? (
+                  <img
+                    src={getTabFavicon(child.url)}
+                    alt=""
+                    style={{ width: 14, height: 14, flexShrink: 0 }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (
+                  <div style={{ width: 14, height: 14, borderRadius: 2, background: 'var(--accent)', flexShrink: 0 }} />
+                )}
+              </>
+            ) : (
+              <Folder size={14} style={{ flexShrink: 0 }} />
+            )}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{child.title}</span>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const BOOKMARK_SWAP_TRIGGER_RATIO = 0.5;
 const BOOKMARK_SWAP_MIN_POINTER_DELTA_PX = 5;
 const BOOKMARK_SWAP_COOLDOWN_MS = 50;
@@ -23,15 +146,23 @@ function BookmarkBarItem({
   tabFavicon,
   isDragging,
   isDragOverlay,
+  onContextMenu,
+  onClick,
+  isFolderExpanded,
 }: {
   bookmark: Bookmark;
   onNavigate: (url: string) => void;
   tabFavicon?: string;
   isDragging?: boolean;
   isDragOverlay?: boolean;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onClick?: (e: React.MouseEvent) => void;
+  isFolderExpanded?: boolean;
 }) {
-  const handleClick = () => {
-    if (bookmark.type === 'bookmark' && bookmark.url) {
+  const handleClick = (e: React.MouseEvent) => {
+    if (onClick) {
+      onClick(e);
+    } else if (bookmark.type === 'bookmark' && bookmark.url) {
       onNavigate(bookmark.url);
     }
   };
@@ -64,6 +195,7 @@ function BookmarkBarItem({
       onClick={handleClick}
       className="theme-btn theme-btn-nav bookmarks-bar-item"
       title={bookmark.url || bookmark.title}
+      onContextMenu={onContextMenu}
       style={{
         padding: '2px 6px',
         fontSize: 11,
@@ -71,10 +203,10 @@ function BookmarkBarItem({
         alignItems: 'center',
         gap: 2,
         minWidth: 0,
-        maxWidth: 120,
+        maxWidth: bookmark.type === 'folder' ? undefined : 120,
         height: '22px',
         border: 'none',
-        background: 'transparent',
+        background: isFolderExpanded ? 'rgba(128, 128, 128, 0.25)' : 'transparent',
         borderRadius: '3px',
         color: 'var(--text2)',
         transition: 'background-color 0.15s ease',
@@ -161,7 +293,20 @@ export default function BookmarksBar() {
     bookmark: Bookmark | null;
   }>({ open: false, bookmark: null });
 
-  // Get only top-level bookmarks (not in folders)
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const folderRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Get bookmark by ID from entire tree (including nested)
+  const getBookmarkById = useCallback((id: string, bookmarkList: Bookmark[] = bookmarks): Bookmark | undefined => {
+    for (const b of bookmarkList) {
+      if (b.id === id) return b;
+      if (b.children) {
+        const found = getBookmarkById(id, b.children);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  }, [bookmarks]);
   const topLevelBookmarks = bookmarks.filter(bookmark => !bookmark.parentId);
 
   const [renderedBookmarks, setRenderedBookmarks] = useState<RenderedBookmarkState[]>(() =>
@@ -411,7 +556,7 @@ export default function BookmarksBar() {
     }
   }, [contextMenu]);
 
-  // Handle bookmark native context menu commands
+  // Handle bookmark native context menu commands - works for all bookmarks including nested
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
     if (!ipc) return;
@@ -423,7 +568,7 @@ export default function BookmarksBar() {
       const bookmarkId = typeof candidate.bookmarkId === 'string' ? candidate.bookmarkId.trim() : '';
       if (!command || !bookmarkId) return;
 
-      // Deduplicate rapid commands (same pattern as TabBar.tsx)
+      // Deduplicate rapid commands
       const dedupeSignature = `${command}|${bookmarkId}`;
       const now = Date.now();
       const previous = lastNativeBookmarkCommandRef.current;
@@ -432,9 +577,20 @@ export default function BookmarksBar() {
       }
       lastNativeBookmarkCommandRef.current = { signature: dedupeSignature, at: now };
 
-      // Find the bookmark
-      const bookmark = bookmarks.find(b => b.id === bookmarkId);
+      // Find the bookmark anywhere in the tree
+      const bookmark = getBookmarkById(bookmarkId);
       if (!bookmark) return;
+
+      // Close parent folder if this was a nested bookmark
+      const parentId = contextMenuParentFolderRef.current;
+      if (parentId) {
+        setExpandedFolders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(parentId);
+          return newSet;
+        });
+        contextMenuParentFolderRef.current = null;
+      }
 
       switch (command) {
         case 'open':
@@ -469,19 +625,24 @@ export default function BookmarksBar() {
     return () => {
       ipc.off('bookmark-native-context-command', handleBookmarkCommand);
     };
-  }, [bookmarks, handleNavigate, deleteBookmark, newTab]);
+  }, [bookmarks, handleNavigate, deleteBookmark, newTab, getBookmarkById]);
 
   if (topLevelBookmarks.length === 0) {
     return null;
   }
 
-  // Context menu handlers
-  const handleContextMenu = (event: React.MouseEvent, bookmark: Bookmark) => {
+  // Track which folder to close when context menu action is selected
+  const contextMenuParentFolderRef = useRef<string | null>(null);
+
+  // Context menu handlers - works for any bookmark including nested
+  const handleContextMenu = (event: React.MouseEvent, bookmark: Bookmark, parentFolderId?: string) => {
     event.preventDefault();
     event.stopPropagation();
 
+    // Store the parent folder ID so we can close it when action is selected
+    contextMenuParentFolderRef.current = parentFolderId || null;
+
     if (nativeContextMenusEnabled && electron?.ipcRenderer) {
-      // Use native OS context menu for bookmarks
       setContextMenu(null);
       void electron.ipcRenderer
         .invoke('bookmark-show-native-context-menu', {
@@ -495,21 +656,74 @@ export default function BookmarksBar() {
       return;
     }
 
-    // Fall back to custom context menu
     setContextMenu({
       anchor: { x: event.clientX, y: event.clientY },
       bookmark
     });
   };
 
+  // Folder expansion toggle
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  // Close folder when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if click is inside any expanded folder
+      expandedFolders.forEach(folderId => {
+        const folderEl = folderRefs.current[folderId];
+        if (folderEl && !folderEl.contains(target)) {
+          // Check if click was on the folder button itself
+          const folderButton = document.querySelector(`[data-folder-button="${folderId}"]`);
+          if (!folderButton?.contains(target)) {
+            setExpandedFolders(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(folderId);
+              return newSet;
+            });
+          }
+        }
+      });
+    };
+
+    if (expandedFolders.size > 0) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [expandedFolders]);
+
   const getContextMenuEntries = (bookmark: Bookmark): ContextMenuEntry[] => {
     const entries: ContextMenuEntry[] = [];
+
+    // Helper to close parent folder if exists
+    const closeParentFolder = () => {
+      const parentId = contextMenuParentFolderRef.current;
+      if (parentId) {
+        setExpandedFolders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(parentId);
+          return newSet;
+        });
+        contextMenuParentFolderRef.current = null;
+      }
+    };
 
     if (bookmark.type === 'bookmark' && bookmark.url) {
       entries.push({
         type: 'item',
         label: 'Open',
         onSelect: () => {
+          closeParentFolder();
           if (bookmark.url) handleNavigate(bookmark.url);
         },
       });
@@ -519,6 +733,7 @@ export default function BookmarksBar() {
       type: 'item',
       label: 'Delete',
       onSelect: () => {
+        closeParentFolder();
         setDeleteDialog({ open: true, bookmark });
       },
     });
@@ -558,8 +773,11 @@ export default function BookmarksBar() {
             bookmarkElementRefs.current[bookmark.id] = el;
           }}
           data-bookmark-id={bookmark.id}
+          data-folder-button={bookmark.type === 'folder' ? bookmark.id : undefined}
           onMouseDown={(event) => {
             if (event.button !== 0) return;
+            // Don't start drag if clicking on folder children
+            if ((event.target as HTMLElement).closest('[data-folder-children]')) return;
             const targetEl = bookmarkElementRefs.current[bookmark.id];
             if (targetEl) {
               const rect = targetEl.getBoundingClientRect();
@@ -577,7 +795,6 @@ export default function BookmarksBar() {
             dragMovedEnoughRef.current = false;
             setDraggingBookmarkId(bookmark.id);
           }}
-          onContextMenu={(event) => handleContextMenu(event, bookmark)}
           style={{
             position: 'relative',
             zIndex: draggingBookmarkId === bookmark.id ? 20 : 1,
@@ -588,7 +805,21 @@ export default function BookmarksBar() {
             onNavigate={handleNavigate}
             tabFavicon={getTabFavicon(bookmark.url)}
             isDragging={draggingBookmarkId === bookmark.id && draggedPosition !== null}
+            isFolderExpanded={bookmark.type === 'folder' ? expandedFolders.has(bookmark.id) : false}
+            onClick={bookmark.type === 'folder' ? () => toggleFolder(bookmark.id) : undefined}
+            onContextMenu={(e) => handleContextMenu(e, bookmark)}
           />
+          {/* Folder dropdown */}
+          {bookmark.type === 'folder' && expandedFolders.has(bookmark.id) && bookmark.children && (
+            <FolderDropdown
+              bookmark={bookmark}
+              folderRefs={folderRefs}
+              getTabFavicon={getTabFavicon}
+              handleNavigate={handleNavigate}
+              handleContextMenu={handleContextMenu}
+              setExpandedFolders={setExpandedFolders}
+            />
+          )}
         </div>
       ))}
 
