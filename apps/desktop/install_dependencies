@@ -1,0 +1,15 @@
+# install dependencies for deving Mira
+
+echo "Initializing npm in this environment . . ."
+npm ci -s
+
+echo "Installing dependencies . . ."
+
+echo "Installing lucide-react"
+npm install lucide-react -s
+
+echo "Installing react-markdown"
+npm install react-markdown -s
+
+echo "Running first build of app . . ."
+npm run build
