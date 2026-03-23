@@ -7,6 +7,7 @@
     "apps/mobile"
   ],
   "scripts": {
+    "build": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:build\\''); process.exit(1)\"",
     "desktop:dev": "npm run dev --workspace apps/desktop",
     "desktop:dev:react": "npm run dev:react --workspace apps/desktop",
     "desktop:dev:electron": "npm run dev:electron --workspace apps/desktop",
@@ -21,5 +22,8 @@
     "mobile:start": "npm run start --workspace apps/mobile",
     "mobile:android": "npm run android --workspace apps/mobile",
     "mobile:ios": "npm run ios --workspace apps/mobile"
+  },
+  "dependencies": {
+    "react-markdown": "^10.1.0"
   }
 }
