@@ -9,31 +9,26 @@ A desktop browser built with Electron + React.
 
 ## Features
 
-- Themes
-- Layouts
-- Tabbed browsing
-- Multi-window browsing
-- Session restore
-- Reopen closed tabs
+- Tabbed browsing with drag-to-rearrange
+- Multi-window browsing with session restore
+- Vertical and horizontal tabs
 - Memory-saving tab sleeping
+- Reopen closed tabs
+- Session restore with window positions
+- Default browser support
+- Themes and theme creator
+- Layouts and layouts creator
+- Customizable new tab
+- Built-in ad blocker
+- Tracker blocker
+- Bookmarks with folder organization
 - Browsing history
 - Download manager
 - Find in page
 - Devtools support
 - Print support
-- Ad block
-- Tracker block
+- Search engine selection
+- Auto-update with update page
+- Run on startup option
 
-
-## Dev setup
-
-```bash
-# install dependencies
-npm install
-
-# run development mode
-npm run dev
-
-# create production build
-npm run build
-```
+Don't see a feature you want? [Request it](https://github.com/FatalMistake02/mira/issues/new?template=feature_request.md) or [contribute](https://github.com/FatalMistake02/mira/blob/main/CONTRIBUTING.md).

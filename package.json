@@ -7,22 +7,19 @@
     "apps/mobile"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace apps/desktop",
-    "dev:react": "npm run dev:react --workspace apps/desktop",
-    "dev:electron": "npm run dev:electron --workspace apps/desktop",
-    "build": "npm run build --workspace apps/desktop",
-    "build:renderer": "npm run build:renderer --workspace apps/desktop",
-    "build:fast": "npm run build:fast --workspace apps/desktop",
-    "build:portable": "npm run build:portable --workspace apps/desktop",
-    "build:nsis": "npm run build:nsis --workspace apps/desktop",
-    "lint": "npm run lint --workspace apps/desktop",
-    "preview": "npm run preview --workspace apps/desktop",
-    "format": "npm run format --workspace apps/desktop",
+    "desktop:dev": "npm run dev --workspace apps/desktop",
+    "desktop:dev:react": "npm run dev:react --workspace apps/desktop",
+    "desktop:dev:electron": "npm run dev:electron --workspace apps/desktop",
+    "desktop:build": "npm run build --workspace apps/desktop",
+    "desktop:build:renderer": "npm run build:renderer --workspace apps/desktop",
+    "desktop:build:fast": "npm run build:fast --workspace apps/desktop",
+    "desktop:build:portable": "npm run build:portable --workspace apps/desktop",
+    "desktop:build:nsis": "npm run build:nsis --workspace apps/desktop",
+    "desktop:lint": "npm run lint --workspace apps/desktop",
+    "desktop:preview": "npm run preview --workspace apps/desktop",
+    "desktop:format": "npm run format --workspace apps/desktop",
     "mobile:start": "npm run start --workspace apps/mobile",
     "mobile:android": "npm run android --workspace apps/mobile",
     "mobile:ios": "npm run ios --workspace apps/mobile"
-  },
-  "dependencies": {
-    "mira-mobile": "^0.10.0"
   }
 }

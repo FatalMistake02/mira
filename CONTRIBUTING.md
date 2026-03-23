@@ -17,6 +17,30 @@ We welcome contributions of all sizes, from fixing typos to adding new features.
 4. Run formatting and lint checks (see below)
 5. Open a pull request
 
+## Development Setup
+
+**Prerequisites:** Node.js 25+ and npm
+
+If you don't have Node.js installed, you can run the install script:
+
+**Windows:** 
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\install-node.ps1
+```
+
+**macOS/Linux:** 
+```bash
+bash scripts/install-node.sh
+```
+
+Then run
+```bash
+npm install # For dependencies
+```
+
+For desktop app instructions, see [`apps/desktop/README.md`](apps/desktop/README.md).
+
+
 ## Guidelines
 
 - Keep code clean and consistent
