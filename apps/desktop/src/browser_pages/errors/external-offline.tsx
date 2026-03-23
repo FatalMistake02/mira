@@ -180,6 +180,11 @@ function OfflineRunnerGame() {
       ctx.save();
       ctx.translate(playerCenterX, playerCenterY);
       ctx.rotate(playerRotationRef.current);
+      const mirrorAxis = -(3 * Math.PI) / 4;
+      ctx.rotate(-mirrorAxis);
+      ctx.scale(1, -1);
+      ctx.rotate(mirrorAxis);
+      ctx.scale(1, -1);
       if (icon?.complete) {
         ctx.drawImage(icon, -PLAYER_SIZE / 2, -PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
       } else {
