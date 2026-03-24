@@ -7,7 +7,11 @@
     "apps/mobile"
   ],
   "scripts": {
+    "dev": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:dev\\''); process.exit(1)\"",
     "build": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:build\\''); process.exit(1)\"",
+    "lint": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:lint\\''); process.exit(1)\"",
+    "preview": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:preview\\''); process.exit(1)\"",
+    "format": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:format\\''); process.exit(1)\"",
     "desktop:dev": "npm run dev --workspace apps/desktop",
     "desktop:dev:react": "npm run dev:react --workspace apps/desktop",
     "desktop:dev:electron": "npm run dev:electron --workspace apps/desktop",
