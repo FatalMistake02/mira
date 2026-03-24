@@ -23,7 +23,5 @@
     "mobile:android": "npm run android --workspace apps/mobile",
     "mobile:ios": "npm run ios --workspace apps/mobile"
   },
-  "dependencies": {
-    "react-markdown": "^10.1.0"
-  }
+  "dependencies": {}
 }
