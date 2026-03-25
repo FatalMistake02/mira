@@ -1,7 +1,7 @@
 {
   "name": "Mira Light",
   "author": "Mira",
-  "version": "v1",
+  "version": "1",
   "mode": "light",
   "fonts": {
     "fontPrimaryFamily": "'Segoe UI'",
