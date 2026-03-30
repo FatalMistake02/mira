@@ -6,6 +6,8 @@
 - Fullscreen hides top bar and tabs
 - Localhost urls work
 - HTTPS first and HTTP warning page
+- Windows stack correctly
+- Add open in new window option to the taskbar context menu (Windows)
 
 ## v0.14.0 - 2026-03-22
 

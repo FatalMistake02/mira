@@ -3657,6 +3657,25 @@ function setupMacDockMenu() {
   app.dock.setMenu(dockMenu);
 }
 
+function setupWindowsJumpList() {
+  if (!isWindows) return;
+
+  // Set consistent AppUserModelID for proper taskbar grouping
+  app.setAppUserModelId('com.fatalmistake02.mira');
+
+  // Configure Windows Jump List for taskbar right-click menu
+  app.setUserTasks([
+    {
+      program: process.execPath,
+      arguments: '--new-window',
+      iconPath: process.execPath,
+      iconIndex: 0,
+      title: 'New Window',
+      description: 'Open a new Mira window',
+    },
+  ]);
+}
+
 function setupApplicationMenu() {
   const template = [
     ...(isMacOS
@@ -4196,6 +4215,15 @@ if (!hasSingleInstanceLock) {
   }
 
   app.on('second-instance', (_event, commandLine) => {
+    // Check if this was triggered by the Jump List "New Window" task
+    if (commandLine.includes('--new-window')) {
+      if (app.isReady()) {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        createWindow(focusedWindow && !focusedWindow.isDestroyed() ? focusedWindow : undefined);
+      }
+      return;
+    }
+
     const incomingUrl = extractIncomingBrowserUrlFromArgv(commandLine);
     if (incomingUrl) {
       if (app.isReady()) {
@@ -4269,6 +4297,7 @@ app.whenReady().then(async () => {
   setupOnboardingHandlers();
   setupApplicationMenu();
   setupMacDockMenu();
+  setupWindowsJumpList();
   scheduleAdBlockListRefresh();
   setupDownloadHandlers();
 
