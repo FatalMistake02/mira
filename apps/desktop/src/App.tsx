@@ -25,6 +25,30 @@ import { getThemeById } from './features/themes/themeLoader';
 import { applyLayout } from './features/layouts/applyLayout';
 import { getLayoutById } from './features/layouts/layoutLoader';
 
+function useFullscreenState() {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    ipc.invoke<boolean>('window-is-fullscreen')
+      .then((value) => setIsFullscreen(!!value))
+      .catch(() => undefined);
+
+    const onFullscreenChanged = (_event: unknown, value: boolean) => {
+      setIsFullscreen(!!value);
+    };
+
+    ipc.on('window-fullscreen-changed', onFullscreenChanged);
+    return () => {
+      ipc.off('window-fullscreen-changed', onFullscreenChanged);
+    };
+  }, []);
+
+  return { isFullscreen };
+}
+
 type PerformanceMemoryInfo = {
   usedJSHeapSize?: number;
   totalJSHeapSize?: number;
@@ -205,6 +229,7 @@ function Browser() {
     const settings = getBrowserSettings();
     return settings.tabStripPosition ?? 'top';
   });
+  const { isFullscreen } = useFullscreenState();
   const {
     tabs,
     newTab,
@@ -388,10 +413,11 @@ function Browser() {
   }, [tabs, activeId]);
 
   const isVerticalTabs = tabStripPosition === 'left' || tabStripPosition === 'right';
+  const hideBars = isFullscreen;
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', width: '100vw' }}>
-      <TopBar>{!isVerticalTabs && <TabBar orientation="horizontal" />}</TopBar>
+      {!hideBars && <TopBar>{!isVerticalTabs && <TabBar orientation="horizontal" />}</TopBar>}
 
       {isVerticalTabs ? (
         <div
@@ -433,16 +459,16 @@ function Browser() {
               flexDirection: 'column',
             }}
           >
-            <AddressBar inputRef={addressInputRef} />
-            {showBookmarksBar && <BookmarksBar />}
+            {!hideBars && <AddressBar inputRef={addressInputRef} />}
+            {!hideBars && showBookmarksBar && <BookmarksBar />}
             <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
             <TabView />
           </div>
         </div>
       ) : (
         <>
-          <AddressBar inputRef={addressInputRef} />
-          {showBookmarksBar && <BookmarksBar />}
+          {!hideBars && <AddressBar inputRef={addressInputRef} />}
+          {!hideBars && showBookmarksBar && <BookmarksBar />}
           <FindBar open={findBarOpen} focusToken={findBarFocusToken} onClose={closeFindBar} />
           <TabView />
         </>
