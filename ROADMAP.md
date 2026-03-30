@@ -38,3 +38,4 @@
 - [ ] Built in screenshots
 - [ ] Picture in picture
 - [ ] Page translate
+- [ ] Password manager(s)
