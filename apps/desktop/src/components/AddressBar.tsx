@@ -194,6 +194,11 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     let finalUrl: string;
     if (isSupportedProtocol(raw)) {
       finalUrl = raw;
+      // If user explicitly types http://, show unsecure warning first
+      if (raw.startsWith('http://')) {
+        navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(raw)}`);
+        return;
+      }
     } else if (isLikelyDomainOrUrl(raw)) {
       finalUrl = raw.startsWith('//') ? `https:${raw}` : `https://${raw}`;
     } else {

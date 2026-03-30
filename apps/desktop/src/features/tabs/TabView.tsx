@@ -143,14 +143,18 @@ interface MainFrameHttpErrorPayload {
 }
 
 interface ExternalErrorState {
-  route: 'errors/external-404' | 'errors/external-network' | 'errors/external-offline';
+  route: 'errors/external-404' | 'errors/external-network' | 'errors/external-offline' | 'errors/unsecure-site';
   failedUrlComparable: string;
+  httpFallbackUrl?: string;
 }
 
 const RAW_FILE_DARK_STYLE_SCRIPT_ID = 'mira-raw-file-dark-mode-style';
 const WEBVIEW_TRACKED_SRC_ATTR = 'data-mira-tracked-src';
 const WEBVIEW_TAB_ID_ATTR = 'data-mira-tab-id';
 const ERR_INTERNET_DISCONNECTED = -106;
+const ERR_CONNECTION_REFUSED = -102;
+const ERR_CONNECTION_FAILED = -104;
+const ERR_NAME_NOT_RESOLVED = -105;
 
 /**
  * Produces a stable comparable URL string used to suppress redundant webview reloads.
@@ -444,6 +448,8 @@ export default function TabView() {
           console.log('Opened login tab:', { newTabId, href });
           
           // Set up monitoring for login completion
+          if (!newTabId) return;
+          
           setTimeout(() => {
             const webview = webviewMap.current[newTabId] || null;
             if (webview && typeof webview.executeJavaScript === 'function') {
@@ -1097,6 +1103,22 @@ export default function TabView() {
                       if (!ev.isMainFrame) return;
                       // Ignore cancellations from abort/redirect churn.
                       if (ev.errorCode === 0 || ev.errorCode === -3) return;
+
+                      const failedUrl = ev.validatedURL || tab.url;
+
+                      // Check if this is an HTTPS connection failure that we should fallback from
+                      if (
+                        failedUrl.startsWith('https://') &&
+                        (ev.errorCode === ERR_CONNECTION_REFUSED ||
+                          ev.errorCode === ERR_CONNECTION_FAILED ||
+                          ev.errorCode === ERR_NAME_NOT_RESOLVED)
+                      ) {
+                        // Try HTTP fallback - navigate to unsecure warning page with HTTP URL
+                        const httpUrl = failedUrl.replace(/^https:\/\//, 'http://');
+                        navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(httpUrl)}`, tab.id);
+                        return;
+                      }
+
                       const route =
                         ev.errorCode === ERR_INTERNET_DISCONNECTED
                           ? 'errors/external-offline'
@@ -1105,7 +1127,7 @@ export default function TabView() {
                         ...current,
                         [tab.id]: {
                           route,
-                          failedUrlComparable: normalizeComparableUrl(ev.validatedURL ?? tab.url),
+                          failedUrlComparable: normalizeComparableUrl(failedUrl),
                         },
                       }));
                     };

@@ -16,7 +16,7 @@
       Show/hide bookmarks bar: Ctrl+Shift+B
       Bookmark manager: Ctrl+Shift+O
 - [ ] Site settings
-- [ ] HTTPS first and http warning page
+- [x] HTTPS first and http warning page
 - [ ] Site permissions controls
 - [x] Tracker blocking
 - [ ] Private mode

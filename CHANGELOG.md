@@ -5,6 +5,7 @@
 - Add report issue button in settings
 - Fullscreen hides top bar and tabs
 - Localhost urls work
+- HTTPS first and HTTP warning page
 
 ## v0.14.0 - 2026-03-22
 

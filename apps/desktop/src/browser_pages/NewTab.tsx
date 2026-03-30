@@ -107,6 +107,13 @@ export default function NewTab() {
     const trimmed = query.trim();
     if (!trimmed) return;
 
+    // If user explicitly types http://, show unsecure warning first
+    if (trimmed.startsWith('http://')) {
+      navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(trimmed)}`);
+      setQuery('');
+      return;
+    }
+
     if (isLikelyDomainOrUrl(trimmed)) {
       const url = trimmed.startsWith('//') ? `https:${trimmed}` : `https://${trimmed}`;
       navigate(url);
