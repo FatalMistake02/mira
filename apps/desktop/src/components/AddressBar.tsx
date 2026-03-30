@@ -168,8 +168,14 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     if (/\s/.test(value)) return false;
     if (isSupportedProtocol(value)) return true;
 
-    // Unknown explicit schemes (for example "javascript:") should be searched.
-    if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return false;
+    // Check for host:port format (e.g., localhost:3000) before rejecting as unknown scheme
+    const schemeLikeMatch = value.match(/^([a-z][a-z0-9+.-]*):(.*)/i);
+    if (schemeLikeMatch) {
+      const afterColon = schemeLikeMatch[2];
+      // If after colon is just a port number, it's host:port, not a scheme
+      const isPort = /^\d+$/.test(afterColon) && Number(afterColon) > 0 && Number(afterColon) <= 65535;
+      if (!isPort) return false;
+    }
 
     const candidate = value.startsWith('//') ? `https:${value}` : `https://${value}`;
     try {

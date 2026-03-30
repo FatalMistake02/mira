@@ -10,6 +10,73 @@ import {
 const NEW_TAB_INTRO_SHOWN_KEY = 'mira.newtab.intro.shown.v1';
 const INTRO_BLOCK_HEIGHT = 300;
 
+function isSupportedProtocol(value: string) {
+  const schemeMatch = value.match(/^([a-z][a-z0-9+.-]*:)/i);
+  if (!schemeMatch) return false;
+  const scheme = schemeMatch[1].toLowerCase();
+  return (
+    scheme === 'http:' ||
+    scheme === 'https:' ||
+    scheme === 'file:' ||
+    scheme === 'about:' ||
+    scheme === 'mira:' ||
+    scheme === 'data:' ||
+    scheme === 'view-source:'
+  );
+}
+
+function isIpv4Host(hostname: string) {
+  const parts = hostname.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) return false;
+    const value = Number.parseInt(part, 10);
+    return value >= 0 && value <= 255;
+  });
+}
+
+function isLikelyDomainOrHost(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'localhost') return true;
+  if (isIpv4Host(normalized)) return true;
+  if (normalized.includes(':')) return true;
+  if (!normalized.includes('.')) return false;
+
+  const labels = normalized.split('.');
+  return labels.every(
+    (label) =>
+      label.length > 0 &&
+      label.length <= 63 &&
+      /^[a-z0-9-]+$/i.test(label) &&
+      !label.startsWith('-') &&
+      !label.endsWith('-'),
+  );
+}
+
+function isLikelyDomainOrUrl(value: string) {
+  if (/\s/.test(value)) return false;
+  if (isSupportedProtocol(value)) return true;
+
+  // Check for host:port format (e.g., localhost:3000) before rejecting as unknown scheme
+  const schemeLikeMatch = value.match(/^([a-z][a-z0-9+.-]*):(.*)/i);
+  if (schemeLikeMatch) {
+    const afterColon = schemeLikeMatch[2];
+    // If after colon is just a port number, it's host:port, not a scheme
+    const isPort = /^\d+$/.test(afterColon) && Number(afterColon) > 0 && Number(afterColon) <= 65535;
+    if (!isPort) return false;
+  }
+
+  const candidate = value.startsWith('//') ? `https:${value}` : `https://${value}`;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    return isLikelyDomainOrHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export default function NewTab() {
   const [query, setQuery] = useState('');
   const [introState] = useState(() => {
@@ -40,16 +107,21 @@ export default function NewTab() {
     const trimmed = query.trim();
     if (!trimmed) return;
 
-    const settings = getBrowserSettings();
-    navigate(
-      getSearchUrlFromInput(
-        trimmed,
-        settings.searchEngine,
-        settings.searchEngineShortcutsEnabled,
-        settings.searchEngineShortcutPrefix,
-        settings.searchEngineShortcutChars,
-      ),
-    );
+    if (isLikelyDomainOrUrl(trimmed)) {
+      const url = trimmed.startsWith('//') ? `https:${trimmed}` : `https://${trimmed}`;
+      navigate(url);
+    } else {
+      const settings = getBrowserSettings();
+      navigate(
+        getSearchUrlFromInput(
+          trimmed,
+          settings.searchEngine,
+          settings.searchEngineShortcutsEnabled,
+          settings.searchEngineShortcutPrefix,
+          settings.searchEngineShortcutChars,
+        ),
+      );
+    }
     setQuery('');
   };
 
