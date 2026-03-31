@@ -759,7 +759,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                   minWidth: isVertical ? 0 : isCollapsed ? 0 : TAB_MIN_WIDTH,
                   maxWidth: isVertical ? '100%' : isCollapsed ? 0 : TAB_TARGET_WIDTH,
                   overflow: 'hidden',
-                  padding: isCollapsed ? '0' : '0 10px',
+                  padding: isCollapsed ? '0' : '0 6px 0 10px',
                   position: 'relative',
                   marginBottom: 0,
                   marginRight:
@@ -795,10 +795,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                       : undefined,
                   pointerEvents: isExiting || (draggingTabId && tab.id !== draggingTabId) ? 'none' : 'auto',
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
-                  boxShadow:
-                    draggingTabId === tab.id
-                      ? 'var(--tabDragShadow, 0 6px 18px rgba(0, 0, 0, 0.28))'
-                      : undefined,
+                  borderTop: tab.isSleeping ? `${borderWidth} dashed var(--tabBorder, var(--surfaceBorder))` : undefined,
                 }}
               >
                 {displayFavicon ? (
@@ -833,17 +830,13 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                     flex: 1,
                     minWidth: 0,
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    maskImage: 'linear-gradient(to right, black calc(100% - 10px), transparent 100%)',
+                    WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 10px), transparent 100%)',
                   }}
                 >
                   {displayTitle}
                 </span>
-                {tab.isSleeping ? (
-                  <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
-                    zz
-                  </span>
-                ) : null}
                 <button
                   type="button"
                   aria-label="Close tab"
@@ -890,6 +883,9 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                 ? 'var(--layoutTabRadius, 8px)'
                 : undefined,
               WebkitAppRegion: 'no-drag',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
@@ -936,8 +932,10 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
               top: !isVertical && originalTabPosition ? originalTabPosition.y : draggedTabPosition.y - dragPointerToTopRef.current,
               zIndex: 1000,
               pointerEvents: 'none',
-              opacity: 'var(--tabDragOpacity, 1)',
-              boxShadow: 'var(--tabDragShadow, 0 6px 18px rgba(0, 0, 0, 0.28))',
+              boxShadow:
+                draggingTabId === draggedTab.id
+                  ? 'var(--tabDragShadow, 0 6px 18px rgba(0, 0, 0, 0.28))'
+                  : undefined,
             }}
           >
             <div
@@ -952,7 +950,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                 width: isVertical ? '100%' : draggedTabWidth ?? TAB_TARGET_WIDTH,
                 minWidth: 'var(--layoutTabMinWidth, 100px)',
                 overflow: 'hidden',
-                padding: '0 10px',
+                padding: '0 6px 0 10px',
                 background: draggedTab.id === activeId ? 'var(--surfaceBgHover, var(--tabBgHover))' : undefined,
               }}
             >
@@ -987,17 +985,13 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                   flex: 1,
                   minWidth: 0,
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  maskImage: 'linear-gradient(to right, black calc(100% - 10px), transparent 100%)',
+                  WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 10px), transparent 100%)',
                 }}
               >
                 {displayTitle}
               </span>
-              {draggedTab.isSleeping ? (
-                <span title="Sleeping" style={{ fontSize: 10, opacity: 0.75 }}>
-                  zz
-                </span>
-              ) : null}
             </div>
           </div>
         );
