@@ -1278,7 +1278,14 @@ export default function Settings() {
                     type="button"
                     className="theme-btn theme-btn-nav settings-btn-pad"
                   >
-                    Add Theme JSON
+                    Add Theme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.open('https://mirabrowser.fatalmistake02.com/themes', '_blank')}
+                    className="theme-btn theme-btn-nav settings-btn-pad"
+                  >
+                    Get More Themes
                   </button>
                   <input
                     ref={themeFileInputRef}

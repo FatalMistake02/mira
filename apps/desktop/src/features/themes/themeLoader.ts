@@ -63,7 +63,10 @@ function normalizeTheme(value: unknown): Theme | null {
   if (!isRecord(value)) return null;
 
   const versionRaw = typeof value.version === 'string' ? value.version.trim().toLowerCase() : '';
-  if (versionRaw && versionRaw !== THEME_SCHEMA_VERSION) return null;
+  // Accept both "1" and "v1" for backwards compatibility with existing theme files
+  const normalizedVersion = versionRaw.replace(/^v/, '');
+  const expectedVersion = THEME_SCHEMA_VERSION.replace(/^v/, '');
+  if (versionRaw && normalizedVersion !== expectedVersion) return null;
 
   const name = typeof value.name === 'string' ? value.name.trim() : '';
   const author = typeof value.author === 'string' ? value.author.trim() : '';
