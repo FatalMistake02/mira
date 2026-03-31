@@ -33,9 +33,10 @@ function BookmarkItem({
   expandedFolders,
   onToggleFolder,
   onStartDrag,
-  isDragging,
+  draggedBookmarkId,
+  isDragActive,
+  dropTargetFolderId,
   dragPosition,
-  onMove,
   parentId,
   itemRef,
   style,
@@ -48,9 +49,10 @@ function BookmarkItem({
   expandedFolders: Set<string>;
   onToggleFolder: (id: string) => void;
   onStartDrag: (bookmarkId: string, parentId: string | undefined, x: number, y: number, pointerToTop: number, pointerToLeft: number) => void;
-  isDragging: boolean;
+  draggedBookmarkId: string | null;
+  isDragActive: boolean;
+  dropTargetFolderId: string | null;
   dragPosition: { x: number; y: number } | null;
-  onMove: (bookmarkId: string, toIndex: number, toParentId?: string) => void;
   parentId?: string;
   itemRef: (el: HTMLDivElement | null, bookmarkId: string) => void;
   style?: React.CSSProperties;
@@ -61,8 +63,9 @@ function BookmarkItem({
   const [editTitle, setEditTitle] = useState(bookmark.title);
   const [editUrl, setEditUrl] = useState(bookmark.url || '');
   const [isHovered, setIsHovered] = useState(false);
-  const [isDropTarget, setIsDropTarget] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
+  const isDraggedItem = draggedBookmarkId === bookmark.id;
+  const isDropTarget = bookmark.type === 'folder' && dropTargetFolderId === bookmark.id;
 
   const handleSave = () => {
     onEdit({ ...bookmark, title: editTitle, url: editUrl });
@@ -77,15 +80,10 @@ function BookmarkItem({
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-    // If this is a folder and we're dragging, mark as drop target
-    if (bookmark.type === 'folder' && isDragging) {
-      setIsDropTarget(true);
-    }
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
-    setIsDropTarget(false);
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -158,6 +156,7 @@ function BookmarkItem({
           elementRef.current = el;
           itemRef(el, bookmark.id);
         }}
+        data-folder-id={bookmark.type === 'folder' ? bookmark.id : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -171,13 +170,14 @@ function BookmarkItem({
               : '1px solid transparent',
           backgroundColor: isDropTarget
             ? 'color-mix(in srgb, var(--accentPrimary) 15%, transparent)'
-            : isDragging 
+            : isDraggedItem && isDragActive
               ? 'var(--surfaceBgHover)' 
               : isHovered 
                 ? 'var(--surfaceBgHover)' 
                 : 'transparent',
           transition: 'background-color 0.15s ease, border-color 0.15s ease',
           position: 'relative',
+          opacity: isDraggedItem && isDragActive ? 0.3 : undefined,
           ...style,
         }}
         onClick={handleClick}
@@ -322,7 +322,7 @@ function BookmarkItem({
       </div>
 
       {/* Dragged item overlay - follows mouse */}
-      {isDragging && dragPosition && (
+      {isDraggedItem && isDragActive && dragPosition && (
         <div
           style={{
             position: 'fixed',
@@ -361,9 +361,10 @@ function BookmarkItem({
           expandedFolders={expandedFolders}
           onToggleFolder={onToggleFolder}
           onStartDrag={onStartDrag}
-          isDragging={isDragging}
+          draggedBookmarkId={draggedBookmarkId}
+          isDragActive={isDragActive}
+          dropTargetFolderId={dropTargetFolderId}
           dragPosition={dragPosition}
-          onMove={onMove}
           parentId={bookmark.id}
           itemRef={itemRef}
           suppressClickRef={suppressClickRef}
@@ -374,7 +375,7 @@ function BookmarkItem({
 }
 
 export default function Bookmarks() {
-  const { bookmarks, addBookmark, deleteBookmark, updateBookmark, moveBookmark, moveBookmarkToFolder, moveBookmarkInFolder } = useBookmarks();
+  const { bookmarks, addBookmark, deleteBookmark, updateBookmark, moveBookmark, moveBookmarkToFolder, moveBookmarkInFolder, getBookmarkById } = useBookmarks();
   const [showAddBookmarkForm, setShowAddBookmarkForm] = useState(false);
   const [showAddFolderForm, setShowAddFolderForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -408,7 +409,7 @@ export default function Bookmarks() {
 
   const handleStartDrag = useCallback((bookmarkId: string, parentId: string | undefined, x: number, y: number, pointerToTop: number, pointerToLeft: number) => {
     // If dragging a folder, collapse it first
-    const bookmark = bookmarks.find(b => b.id === bookmarkId);
+    const bookmark = getBookmarkById(bookmarkId);
     if (bookmark?.type === 'folder') {
       setExpandedFolders(prev => {
         const newSet = new Set(prev);
@@ -433,7 +434,7 @@ export default function Bookmarks() {
     lastSwapAtRef.current = 0;
     dragMovedRef.current = false;
     isOverFolderRef.current = false;
-  }, [bookmarks]);
+  }, [getBookmarkById]);
 
   // Handle global mouse move during drag
   useEffect(() => {
@@ -934,7 +935,7 @@ export default function Bookmarks() {
       ) : (
         <div className="theme-panel" style={{ borderRadius: 8, overflow: 'hidden' }}>
           {bookmarks.map((bookmark) => (
-            <div key={bookmark.id} data-folder-id={bookmark.type === 'folder' ? bookmark.id : undefined}>
+            <div key={bookmark.id}>
               <BookmarkItem
                 bookmark={bookmark}
                 onDelete={handleDelete}
@@ -942,20 +943,12 @@ export default function Bookmarks() {
                 expandedFolders={expandedFolders}
                 onToggleFolder={toggleFolder}
                 onStartDrag={handleStartDrag}
-                isDragging={dragState.bookmarkId === bookmark.id && dragState.movedEnough}
+                draggedBookmarkId={dragState.bookmarkId}
+                isDragActive={dragState.movedEnough}
+                dropTargetFolderId={dragState.dropTargetFolderId}
                 dragPosition={dragPosition}
-                onMove={moveBookmark}
                 itemRef={itemRefCallback}
                 suppressClickRef={suppressClickRef}
-                style={{
-                  opacity: dragState.bookmarkId === bookmark.id && dragState.movedEnough ? 0.3 : undefined,
-                  border: dragState.dropTargetFolderId === bookmark.id && bookmark.type === 'folder'
-                    ? '2px solid var(--accentPrimary, #8f8f85)'
-                    : undefined,
-                  backgroundColor: dragState.dropTargetFolderId === bookmark.id && bookmark.type === 'folder'
-                    ? 'color-mix(in srgb, var(--accentPrimary) 15%, transparent)'
-                    : undefined,
-                }}
               />
             </div>
           ))}

@@ -60,6 +60,11 @@ function findBookmarkById(bookmarks: Bookmark[], id: string): Bookmark | undefin
   return undefined;
 }
 
+function bookmarkTreeContainsId(bookmarks: Bookmark[] | undefined, id: string): boolean {
+  if (!bookmarks) return false;
+  return findBookmarkById(bookmarks, id) !== undefined;
+}
+
 function deleteBookmarkFromTree(bookmarks: Bookmark[], id: string): Bookmark[] {
   return bookmarks
     .filter(bookmark => bookmark.id !== id)
@@ -149,6 +154,10 @@ function moveBookmarkBetweenParents(bookmarks: Bookmark[], id: string, targetFol
   const { bookmark } = findBookmarkAndParent(bookmarks, id);
   
   if (!bookmark) return bookmarks;
+  if (targetFolderId === id) return bookmarks;
+  if (bookmark.type === 'folder' && bookmarkTreeContainsId(bookmark.children, targetFolderId ?? '')) {
+    return bookmarks;
+  }
   
   // Remove from current location
   let newBookmarks = removeBookmarkFromTree(bookmarks, id);
