@@ -795,7 +795,8 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                       : undefined,
                   pointerEvents: isExiting || (draggingTabId && tab.id !== draggingTabId) ? 'none' : 'auto',
                   zIndex: draggingTabId === tab.id ? 20 : tab.id === activeId ? 2 : 1,
-                  borderTop: tab.isSleeping ? `${borderWidth} dashed var(--tabBorder, var(--surfaceBorder))` : undefined,
+                  borderTopStyle: tab.isSleeping ? 'dashed' : undefined,
+                  borderTopWidth: tab.isSleeping ? borderWidth : undefined,
                 }}
               >
                 {displayFavicon ? (
