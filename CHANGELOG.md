@@ -8,6 +8,7 @@
 - HTTPS first and HTTP warning page
 - Windows stack correctly
 - Add open in new window option to the taskbar context menu (Windows)
+- Tabs can be dragged out into a new window
 
 ## v0.14.0 - 2026-03-22
 
