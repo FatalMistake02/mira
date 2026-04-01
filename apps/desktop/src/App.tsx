@@ -414,6 +414,7 @@ function Browser() {
 
   const isVerticalTabs = tabStripPosition === 'left' || tabStripPosition === 'right';
   const hideBars = isFullscreen;
+  const showVerticalTabSidebar = isVerticalTabs && !hideBars;
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', width: '100vw' }}>
@@ -429,26 +430,28 @@ function Browser() {
             width: '100%',
           }}
         >
-          <div
-            style={{
-              width: 240,
-              minWidth: 160,
-              maxWidth: 360,
-              borderRight:
-                tabStripPosition === 'left'
-                  ? '1px solid var(--surfaceBorder, var(--tabBorder))'
-                  : undefined,
-              borderLeft:
-                tabStripPosition === 'right'
-                  ? '1px solid var(--surfaceBorder, var(--tabBorder))'
-                  : undefined,
-              background: 'var(--surfaceBg, var(--tabBg))',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <TabBar orientation="vertical" />
-          </div>
+          {showVerticalTabSidebar && (
+            <div
+              style={{
+                width: 240,
+                minWidth: 160,
+                maxWidth: 360,
+                borderRight:
+                  tabStripPosition === 'left'
+                    ? '1px solid var(--surfaceBorder, var(--tabBorder))'
+                    : undefined,
+                borderLeft:
+                  tabStripPosition === 'right'
+                    ? '1px solid var(--surfaceBorder, var(--tabBorder))'
+                    : undefined,
+                background: 'var(--surfaceBg, var(--tabBg))',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <TabBar orientation="vertical" />
+            </div>
+          )}
 
           <div
             style={{
