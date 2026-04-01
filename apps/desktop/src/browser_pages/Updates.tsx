@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Download, ExternalLink, CheckCircle, ArrowRight, Sparkles } from 'lucide-react';
+import { Download, ExternalLink, CheckCircle, ArrowRight } from 'lucide-react';
 import { electron } from '../electronBridge';
 import { getBrowserSettings } from '../features/settings/browserSettings';
 
@@ -16,30 +16,14 @@ type UpdateCheckPayload = {
 };
 
 type UpdateCheckResponse = { ok: true; data: UpdateCheckPayload } | { ok: false; error: string };
-type UpdateLaunchAutoSupportResponse = { canAutoInstall: boolean };
 
 export default function Updates() {
   const [updateStatus, setUpdateStatus] = useState('');
   const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckPayload | null>(null);
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isRunningUpdateAction, setIsRunningUpdateAction] = useState(false);
-  const [canAutoInstallOnLaunch, setCanAutoInstallOnLaunch] = useState(false);
   const [releaseNotes, setReleaseNotes] = useState<string | null>(null);
   const [releaseUrl, setReleaseUrl] = useState<string | null>(null);
   const [isFetchingNotes, setIsFetchingNotes] = useState(false);
-
-  useEffect(() => {
-    if (!electron?.ipcRenderer) return;
-    let isSubscribed = true;
-    void electron.ipcRenderer
-      .invoke<UpdateLaunchAutoSupportResponse>('updates-launch-auto-support')
-      .then((response) => {
-        if (!isSubscribed) return;
-        setCanAutoInstallOnLaunch(response.canAutoInstall === true);
-      })
-      .catch(() => undefined);
-    return () => { isSubscribed = false; };
-  }, []);
 
   useEffect(() => {
     void checkForUpdates();
@@ -51,7 +35,6 @@ export default function Updates() {
       setUpdateStatus('Update checks are only available in the desktop app.');
       return;
     }
-    setIsCheckingUpdates(true);
     setUpdateStatus('');
     setUpdateCheckResult(null);
     try {
@@ -59,7 +42,10 @@ export default function Updates() {
       const response = await electron.ipcRenderer.invoke<UpdateCheckResponse>('updates-check', {
         includePrerelease: settings.includePrereleaseUpdates,
       });
-      if (!response.ok) { setUpdateStatus(response.error); return; }
+      if (!response.ok) {
+        setUpdateStatus(response.error);
+        return;
+      }
       const result = response.data;
       setUpdateCheckResult(result);
       setUpdateStatus(result.hasUpdate ? 'update-available' : 'up-to-date');
@@ -82,8 +68,6 @@ export default function Updates() {
       }
     } catch {
       setUpdateStatus('failed');
-    } finally {
-      setIsCheckingUpdates(false);
     }
   }, []);
 
@@ -94,17 +78,23 @@ export default function Updates() {
       if (updateCheckResult.mode === 'portable') {
         const response = await electron.ipcRenderer.invoke<{ ok: boolean; savedPath?: string; error?: string }>(
           'updates-download-asset',
-          { downloadUrl: updateCheckResult.downloadUrl, assetName: updateCheckResult.assetName }
+          { downloadUrl: updateCheckResult.downloadUrl, assetName: updateCheckResult.assetName },
         );
-        if (!response.ok) { setUpdateStatus(response.error || 'Failed to download update.'); return; }
+        if (!response.ok) {
+          setUpdateStatus(response.error || 'Failed to download update.');
+          return;
+        }
         setUpdateStatus(response.savedPath ? `Downloaded: ${response.savedPath}` : 'Downloaded to Downloads folder.');
         return;
       }
       const response = await electron.ipcRenderer.invoke<{ ok: boolean; error?: string }>(
         'updates-download-and-install',
-        { downloadUrl: updateCheckResult.downloadUrl, assetName: updateCheckResult.assetName }
+        { downloadUrl: updateCheckResult.downloadUrl, assetName: updateCheckResult.assetName },
       );
-      if (!response.ok) { setUpdateStatus(response.error || 'Failed to download update.'); return; }
+      if (!response.ok) {
+        setUpdateStatus(response.error || 'Failed to download update.');
+        return;
+      }
       setUpdateStatus('installer-launched');
     } catch {
       setUpdateStatus('Failed to run update action.');
@@ -115,24 +105,31 @@ export default function Updates() {
 
   const isUpToDate = updateStatus === 'up-to-date';
   const hasUpdate = updateCheckResult?.hasUpdate;
+  const updateHighlightColor = 'var(--settingsRowBorderHover, var(--surfaceBorderHover))';
+  const updateHighlightBg = 'var(--settingsRowBgHover, var(--surfaceBgHover))';
+  const updateBadgeBg = 'color-mix(in srgb, var(--settingsRowBgHover, var(--surfaceBgHover)) 88%, transparent)';
+  const updateBadgeBorder = 'color-mix(in srgb, var(--settingsRowBorderHover, var(--surfaceBorderHover)) 72%, transparent)';
 
   return (
-    <div style={{
-      padding: '48px 40px',
-      maxWidth: '720px',
-      margin: '0 auto',
-      fontFamily: '"Inter", system-ui, sans-serif',
-    }}>
-
-      {/* Page title */}
+    <div
+      style={{
+        padding: '48px 40px',
+        maxWidth: '720px',
+        margin: '0 auto',
+        minHeight: '100%',
+        color: 'var(--text1)',
+      }}
+    >
       <div style={{ marginBottom: '40px' }}>
-        <h1 style={{
-          fontSize: '22px',
-          fontWeight: 600,
-          color: 'var(--text1)',
-          margin: '0 0 6px 0',
-          letterSpacing: '-0.3px',
-        }}>
+        <h1
+          style={{
+            fontSize: '22px',
+            fontWeight: 600,
+            color: 'var(--text1)',
+            margin: '0 0 6px 0',
+            letterSpacing: '-0.3px',
+          }}
+        >
           Updates
         </h1>
         <p style={{ margin: 0, color: 'var(--text2)', fontSize: '14px' }}>
@@ -140,119 +137,140 @@ export default function Updates() {
         </p>
       </div>
 
-      {/* Version comparison block */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto 1fr',
-        gap: '0',
-        alignItems: 'center',
-        background: 'var(--surfaceBg)',
-        border: '1px solid var(--surfaceBorder)',
-        borderRadius: '16px',
-        overflow: 'hidden',
-        marginBottom: '24px',
-      }}>
-        {/* Current version */}
+      <div
+        className="theme-panel"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
+          gap: '0',
+          alignItems: 'center',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          marginBottom: '24px',
+        }}
+      >
         <div style={{ padding: '32px', textAlign: 'center' }}>
-          <div style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'var(--text2)',
-            marginBottom: '12px',
-          }}>
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'var(--text2)',
+              marginBottom: '12px',
+            }}
+          >
             Installed
           </div>
-          <div style={{
-            fontSize: '36px',
-            fontWeight: 700,
-            letterSpacing: '-1px',
-            color: 'var(--text1)',
-            fontVariantNumeric: 'tabular-nums',
-            marginBottom: '8px',
-          }}>
-            {updateCheckResult ? `v${updateCheckResult.currentVersion}` : '—'}
+          <div
+            style={{
+              fontSize: '36px',
+              fontWeight: 700,
+              letterSpacing: '-1px',
+              color: 'var(--text1)',
+              fontVariantNumeric: 'tabular-nums',
+              marginBottom: '8px',
+            }}
+          >
+            {updateCheckResult ? `v${updateCheckResult.currentVersion}` : '--'}
           </div>
-          <div style={{
-            fontSize: '13px',
-            color: isUpToDate ? '#10b981' : 'var(--text2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '5px',
-          }}>
+          <div
+            style={{
+              fontSize: '13px',
+              color: isUpToDate ? '#10b981' : 'var(--text2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '5px',
+            }}
+          >
             {isUpToDate && <CheckCircle size={13} />}
             {isUpToDate ? 'Up to date' : 'Current version'}
           </div>
         </div>
 
-        {/* Divider arrow */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '0 8px',
-        }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            background: hasUpdate ? 'color-mix(in srgb, #f59e0b 15%, transparent)' : 'var(--surfaceBorder)',
-            border: `1px solid ${hasUpdate ? '#f59e0b' : 'var(--surfaceBorder)'}`,
+        <div
+          style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-          }}>
-            <ArrowRight size={14} color={hasUpdate ? '#f59e0b' : 'var(--text2)'} />
+            padding: '0 8px',
+          }}
+        >
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: hasUpdate ? updateBadgeBg : 'var(--surfaceBgHover, var(--tabBgHover))',
+              border: `1px solid ${hasUpdate ? updateBadgeBorder : 'var(--surfaceBorder)'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <ArrowRight size={14} color={hasUpdate ? updateHighlightColor : 'var(--text2)'} />
           </div>
         </div>
 
-        {/* Latest version */}
-        <div style={{
-          padding: '32px',
-          textAlign: 'center',
-          background: hasUpdate
-            ? 'color-mix(in srgb, #f59e0b 5%, transparent)'
-            : 'transparent',
-          borderLeft: `1px solid ${hasUpdate ? 'color-mix(in srgb, #f59e0b 25%, transparent)' : 'var(--surfaceBorder)'}`,
-        }}>
-          <div style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'var(--text2)',
-            marginBottom: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-          }}>
-            {hasUpdate && <Sparkles size={11} color="#f59e0b" />}
+        <div
+          style={{
+            padding: '32px',
+            textAlign: 'center',
+            background: hasUpdate ? updateHighlightBg : 'transparent',
+            borderLeft: `1px solid ${hasUpdate ? updateHighlightColor : 'var(--surfaceBorder)'}`,
+          }}
+        >
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'var(--text2)',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+          >
             Latest
           </div>
-          <div style={{
-            fontSize: '36px',
-            fontWeight: 700,
-            letterSpacing: '-1px',
-            color: hasUpdate ? '#f59e0b' : 'var(--text1)',
-            fontVariantNumeric: 'tabular-nums',
-            marginBottom: '8px',
-          }}>
-            {updateCheckResult ? `v${updateCheckResult.latestVersion}` : '—'}
+          <div
+            style={{
+              fontSize: '36px',
+              fontWeight: 700,
+              letterSpacing: '-1px',
+              color: hasUpdate ? 'var(--surfaceTextHover, var(--text1))' : 'var(--text1)',
+              fontVariantNumeric: 'tabular-nums',
+              marginBottom: '8px',
+            }}
+          >
+            {updateCheckResult ? `v${updateCheckResult.latestVersion}` : '--'}
           </div>
-          <div style={{ fontSize: '13px', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          <div
+            style={{
+              fontSize: '13px',
+              color: 'var(--text2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+          >
             {updateCheckResult?.latestIsPrerelease && (
-              <span style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                padding: '2px 8px',
-                borderRadius: '999px',
-                background: 'color-mix(in srgb, #f59e0b 15%, transparent)',
-                color: '#f59e0b',
-                border: '1px solid color-mix(in srgb, #f59e0b 30%, transparent)',
-              }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  background: updateBadgeBg,
+                  color: updateHighlightColor,
+                  border: `1px solid ${updateBadgeBorder}`,
+                }}
+              >
                 Pre-release
               </span>
             )}
@@ -261,12 +279,13 @@ export default function Updates() {
         </div>
       </div>
 
-      {/* Action row */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
         {hasUpdate && (
           <button
+            type="button"
             onClick={runUpdateAction}
             disabled={isRunningUpdateAction}
+            className="theme-btn theme-btn-go"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -274,26 +293,20 @@ export default function Updates() {
               gap: '7px',
               width: '100%',
               padding: '10px 20px',
-              background: '#f59e0b',
-              color: '#000',
-              border: 'none',
               borderRadius: '10px',
               fontSize: '14px',
               fontWeight: 600,
-              cursor: isRunningUpdateAction ? 'not-allowed' : 'pointer',
-              opacity: isRunningUpdateAction ? 0.7 : 1,
-              transition: 'opacity 0.15s',
             }}
           >
             <Download size={15} />
             {isRunningUpdateAction
-              ? 'Downloading…'
+              ? 'Downloading...'
               : updateCheckResult?.mode === 'portable'
                 ? 'Download update'
                 : 'Install update'}
           </button>
         )}
- 
+
         {typeof updateStatus === 'string' && !['update-available', 'up-to-date', 'failed', 'installer-launched', ''].includes(updateStatus) && (
           <span style={{ fontSize: '13px', color: 'var(--text2)' }}>{updateStatus}</span>
         )}
@@ -305,20 +318,23 @@ export default function Updates() {
         )}
       </div>
 
-      {/* Release notes */}
       {hasUpdate && updateCheckResult && (
-        <div style={{
-          border: '1px solid var(--surfaceBorder)',
-          borderRadius: '16px',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '20px 24px 16px',
-            borderBottom: '1px solid var(--surfaceBorder)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
+        <div
+          className="theme-panel"
+          style={{
+            borderRadius: '16px',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              padding: '20px 24px 16px',
+              borderBottom: '1px solid var(--surfaceBorder)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
             <div>
               <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text1)', marginBottom: '2px' }}>
                 What's new in v{updateCheckResult.latestVersion}
@@ -334,16 +350,15 @@ export default function Updates() {
                 href={releaseUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                className="theme-btn theme-btn-nav"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
                   fontSize: '13px',
-                  color: 'var(--text2)',
                   textDecoration: 'none',
                   padding: '6px 12px',
                   borderRadius: '8px',
-                  border: '1px solid var(--surfaceBorder)',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -353,15 +368,17 @@ export default function Updates() {
             )}
           </div>
 
-          <div style={{
-            padding: '20px 24px',
-            fontSize: '13.5px',
-            lineHeight: '1.7',
-            color: 'var(--text2)',
-            background: 'var(--surfaceBg)',
-          }}>
+          <div
+            style={{
+              padding: '20px 24px',
+              fontSize: '13.5px',
+              lineHeight: '1.7',
+              color: 'var(--text2)',
+              background: 'var(--settingsRowBg, var(--surfaceBg))',
+            }}
+          >
             {isFetchingNotes ? (
-              'Loading release notes…'
+              'Loading release notes...'
             ) : releaseNotes ? (
               <ReactMarkdown
                 components={{
@@ -372,9 +389,45 @@ export default function Updates() {
                   ul: ({ children }) => <ul style={{ margin: '0 0 8px', paddingLeft: '20px' }}>{children}</ul>,
                   ol: ({ children }) => <ol style={{ margin: '0 0 8px', paddingLeft: '20px' }}>{children}</ol>,
                   li: ({ children }) => <li style={{ marginBottom: '4px' }}>{children}</li>,
-                  code: ({ children }) => <code style={{ fontSize: '12px', background: 'var(--surfaceBorder)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'monospace' }}>{children}</code>,
-                  pre: ({ children }) => <pre style={{ fontSize: '12px', background: 'var(--surfaceBorder)', padding: '12px', borderRadius: '8px', overflow: 'auto', margin: '8px 0' }}>{children}</pre>,
-                  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>{children}</a>,
+                  code: ({ children }) => (
+                    <code
+                      style={{
+                        fontSize: '12px',
+                        background: 'var(--fieldBg, var(--surfaceBg))',
+                        border: '1px solid var(--fieldBorder, var(--surfaceBorder))',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {children}
+                    </code>
+                  ),
+                  pre: ({ children }) => (
+                    <pre
+                      style={{
+                        fontSize: '12px',
+                        background: 'var(--fieldBg, var(--surfaceBg))',
+                        border: '1px solid var(--fieldBorder, var(--surfaceBorder))',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        overflow: 'auto',
+                        margin: '8px 0',
+                      }}
+                    >
+                      {children}
+                    </pre>
+                  ),
+                  a: ({ href, children }) => (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--navButtonTextHover, var(--text1))', textDecoration: 'none' }}
+                    >
+                      {children}
+                    </a>
+                  ),
                   strong: ({ children }) => <strong style={{ color: 'var(--text1)', fontWeight: 600 }}>{children}</strong>,
                   hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--surfaceBorder)', margin: '12px 0' }} />,
                 }}
@@ -387,15 +440,6 @@ export default function Updates() {
           </div>
         </div>
       )}
-
-
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
