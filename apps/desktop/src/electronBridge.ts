@@ -1,6 +1,7 @@
 interface RendererIpcBridge {
   on: <TArgs extends unknown[]>(channel: string, listener: (...args: TArgs) => void) => void;
   off: <TArgs extends unknown[]>(channel: string, listener: (...args: TArgs) => void) => void;
+  send: (channel: string, ...args: unknown[]) => void;
   invoke: <TResult = unknown>(channel: string, ...args: unknown[]) => Promise<TResult>;
 }
 

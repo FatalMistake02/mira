@@ -36,4 +36,7 @@ export type Tab = {
   isSleeping: boolean;
   lastActiveAt: number;
   frozenState?: FrozenTabState;
+  transferredGuestInstance?: string;
+  detachedTransferId?: string;
+  transferredWebContentsId?: number;
 };

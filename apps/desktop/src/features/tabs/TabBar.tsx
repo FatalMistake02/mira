@@ -23,6 +23,7 @@ const TAB_ENTER_EXIT_DURATION_MS = 180;
 const TAB_REORDER_ANIMATION_MS = 170;
 const TAB_REORDER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const ORIENTATION_CHANGE_SETTLE_MS = 200;
+const TAB_DETACH_THRESHOLD_PX = 56;
 
 type RenderedTabState = {
   tab: Tab;
@@ -62,6 +63,16 @@ function getDisplayFavicon(url: string, favicon?: string): string | undefined {
   }
 }
 
+function getOutsideDistance(value: number, min: number, max: number): number {
+  if (value < min) return min - value;
+  if (value > max) return value - max;
+  return 0;
+}
+
+function isPointInsideRect(x: number, y: number, rect: DOMRect): boolean {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
 export default function TabBar({ orientation = 'horizontal' }: { orientation?: 'horizontal' | 'vertical' }) {
   const {
     tabs,
@@ -75,6 +86,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     newTab,
     reloadTab,
     duplicateTab,
+    moveTabToNewWindow,
   } = useTabs();
   const [tabMenuState, setTabMenuState] = useState<{ tabId: string; x: number; y: number } | null>(
     null,
@@ -83,6 +95,8 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   const [draggedTabPosition, setDraggedTabPosition] = useState<{ x: number; y: number } | null>(null);
   const [originalTabPosition, setOriginalTabPosition] = useState<{ x: number; y: number } | null>(null);
   const [draggedTabWidth, setDraggedTabWidth] = useState<number | null>(null);
+  const [dragIsDetached, setDragIsDetached] = useState(false);
+  const [dragUsesNativeWindow, setDragUsesNativeWindow] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [nativeContextMenusEnabled, setNativeContextMenusEnabled] = useState(
@@ -108,6 +122,15 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   const lastSwapClientYRef = useRef<number | null>(null);
   const lastSwapAtRef = useRef(0);
   const dragMovedRef = useRef(false);
+  const dragDetachedRef = useRef(false);
+  const detachedWindowDragStartedRef = useRef(false);
+  const detachedWindowDragOpeningRef = useRef(false);
+  const activeDragPointerIdRef = useRef<number | null>(null);
+  const activeDragPointerTargetRef = useRef<HTMLDivElement | null>(null);
+  const lastPointerClientXRef = useRef(0);
+  const lastPointerClientYRef = useRef(0);
+  const lastPointerScreenXRef = useRef(0);
+  const lastPointerScreenYRef = useRef(0);
   const suppressClickRef = useRef(false);
   const releasedDragTabIdRef = useRef<string | null>(null);
   const lastNativeTabCommandRef = useRef<{ signature: string; at: number } | null>(null);
@@ -407,27 +430,67 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
   useEffect(() => {
     if (!draggingTabId) return;
 
-    const onMouseMove = (event: MouseEvent) => {
+    const onPointerMove = (event: PointerEvent) => {
+      const activePointerId = activeDragPointerIdRef.current;
+      if (activePointerId !== null && event.pointerId !== activePointerId) return;
       const currentTabs = tabsRef.current;
       if (!draggingTabId) return;
-      
+      lastPointerClientXRef.current = event.clientX;
+      lastPointerClientYRef.current = event.clientY;
+      lastPointerScreenXRef.current = event.screenX;
+      lastPointerScreenYRef.current = event.screenY;
+
       const isVertical = orientation === 'vertical';
       const draggedEl = tabElementRefs.current[draggingTabId];
       const containerRect = scrollRef.current?.getBoundingClientRect();
       const draggedRect = draggedEl?.getBoundingClientRect();
       const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-      
+
       // Only update position when actually dragging (after threshold)
       if (Math.abs(event.movementX) > 2 || Math.abs(event.movementY) > 2) {
         dragMovedRef.current = true;
-        if (isVertical) {
+        if (!dragDetachedRef.current) {
+          const outsideX = containerRect
+            ? getOutsideDistance(event.clientX, containerRect.left, containerRect.right)
+            : 0;
+          const outsideY = containerRect
+            ? getOutsideDistance(event.clientY, containerRect.top, containerRect.bottom)
+            : 0;
+          if (Math.max(outsideX, outsideY) >= TAB_DETACH_THRESHOLD_PX) {
+            dragDetachedRef.current = true;
+            setDragIsDetached(true);
+            if (!detachedWindowDragOpeningRef.current && !detachedWindowDragStartedRef.current) {
+              detachedWindowDragOpeningRef.current = true;
+              detachedWindowDragStartedRef.current = true;
+              setDragUsesNativeWindow(true);
+              moveTabToNewWindow(
+                draggingTabId,
+                {
+                  screenX: event.screenX,
+                  screenY: event.screenY,
+                },
+                {
+                  dragMode: true,
+                  pointerOffsetX: dragPointerToLeftRef.current,
+                  pointerOffsetY: dragPointerToTopRef.current,
+                },
+              );
+            }
+          }
+        }
+
+        if (dragDetachedRef.current) {
+          if (!detachedWindowDragStartedRef.current) {
+            setDraggedTabPosition({ x: event.clientX, y: event.clientY });
+          }
+        } else if (isVertical) {
           let nextY = event.clientY;
           if (containerRect && draggedRect) {
             const minY = containerRect.top + dragPointerToTopRef.current;
             const maxY = containerRect.bottom - (draggedRect.height - dragPointerToTopRef.current);
             nextY = clamp(nextY, minY, maxY);
           }
-          setDraggedTabPosition({ x: 0, y: nextY }); // Lock X position to 0 for vertical tabs
+          setDraggedTabPosition({ x: event.clientX, y: nextY });
         } else {
           let nextX = event.clientX;
           if (containerRect && draggedRect) {
@@ -435,8 +498,12 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
             const maxX = containerRect.right - (draggedRect.width - dragPointerToLeftRef.current);
             nextX = clamp(nextX, minX, maxX);
           }
-          setDraggedTabPosition({ x: nextX, y: 0 }); // Lock Y position to 0 for horizontal tabs
+          setDraggedTabPosition({ x: nextX, y: event.clientY });
         }
+      }
+
+      if (dragDetachedRef.current) {
+        return;
       }
 
       const currentIndex = currentTabs.findIndex((tab) => tab.id === draggingTabId);
@@ -505,17 +572,57 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       }
     };
 
-    const onMouseUp = () => {
+    const endDrag = (event?: PointerEvent | FocusEvent) => {
       const moved = dragMovedRef.current;
+      const containerRect = scrollRef.current?.getBoundingClientRect();
+      const hasPointerCoordinates = event instanceof PointerEvent;
+      const releaseClientX = hasPointerCoordinates ? event.clientX : lastPointerClientXRef.current;
+      const releaseClientY = hasPointerCoordinates ? event.clientY : lastPointerClientYRef.current;
+      const releaseScreenX = hasPointerCoordinates ? event.screenX : lastPointerScreenXRef.current;
+      const releaseScreenY = hasPointerCoordinates ? event.screenY : lastPointerScreenYRef.current;
+      const releasedOutsideTabBar =
+        !!containerRect && !isPointInsideRect(releaseClientX, releaseClientY, containerRect);
+      if (detachedWindowDragStartedRef.current) {
+        void electron?.ipcRenderer?.invoke('window-release-detached-tab-drag').catch(() => undefined);
+      } else if (moved && dragDetachedRef.current && releasedOutsideTabBar) {
+        moveTabToNewWindow(draggingTabId, {
+          screenX: releaseScreenX,
+          screenY: releaseScreenY,
+        });
+      }
+
+      const pointerTarget = activeDragPointerTargetRef.current;
+      const pointerId = activeDragPointerIdRef.current;
+      if (
+        pointerTarget &&
+        pointerId !== null &&
+        typeof pointerTarget.hasPointerCapture === 'function' &&
+        pointerTarget.hasPointerCapture(pointerId) &&
+        typeof pointerTarget.releasePointerCapture === 'function'
+      ) {
+        try {
+          pointerTarget.releasePointerCapture(pointerId);
+        } catch {
+          // Ignore release failures during teardown.
+        }
+      }
+
       releasedDragTabIdRef.current = draggingTabId;
       setDraggingTabId(null);
       setDraggedTabPosition(null);
       setOriginalTabPosition(null);
       setDraggedTabWidth(null);
+      setDragIsDetached(false);
       lastSwapClientXRef.current = null;
       lastSwapClientYRef.current = null;
       lastSwapAtRef.current = 0;
       dragMovedRef.current = false;
+      dragDetachedRef.current = false;
+      detachedWindowDragStartedRef.current = false;
+      detachedWindowDragOpeningRef.current = false;
+      activeDragPointerIdRef.current = null;
+      activeDragPointerTargetRef.current = null;
+      setDragUsesNativeWindow(false);
       if (moved) {
         suppressClickRef.current = true;
         window.setTimeout(() => {
@@ -524,15 +631,17 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       }
     };
 
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('blur', onMouseUp);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+    window.addEventListener('blur', endDrag);
     return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.removeEventListener('blur', onMouseUp);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+      window.removeEventListener('blur', endDrag);
     };
-  }, [draggingTabId, moveTabToIndex, tabs, orientation]);
+  }, [draggingTabId, moveTabToIndex, moveTabToNewWindow, orientation]);
 
   // Add a small delay when orientation changes to ensure proper cleanup
   useEffect(() => {
@@ -541,6 +650,13 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
     setDraggedTabPosition(null);
     setOriginalTabPosition(null);
     setDraggedTabWidth(null); // Clear dragged tab width on orientation change
+    setDragIsDetached(false);
+    setDragUsesNativeWindow(false);
+    dragDetachedRef.current = false;
+    detachedWindowDragStartedRef.current = false;
+    detachedWindowDragOpeningRef.current = false;
+    activeDragPointerIdRef.current = null;
+    activeDragPointerTargetRef.current = null;
     // Set the settle time to prevent rapid setActive calls during remount
     orientationSettleUntilRef.current = Date.now() + ORIENTATION_CHANGE_SETTLE_MS;
   }, [orientation]);
@@ -690,10 +806,26 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                     setActive(tab.id);
                   }
                 }}
-                onMouseDown={(event) => {
+                onPointerDown={(event) => {
                   if (isExiting) return;
+                  if (event.pointerType !== 'mouse') return;
+                  if (!event.isPrimary) return;
                   if (event.button !== 0) return;
+                  event.preventDefault();
                   // Allow vertical tabs to be dragged too
+                  lastPointerClientXRef.current = event.clientX;
+                  lastPointerClientYRef.current = event.clientY;
+                  lastPointerScreenXRef.current = event.screenX;
+                  lastPointerScreenYRef.current = event.screenY;
+                  activeDragPointerIdRef.current = event.pointerId;
+                  activeDragPointerTargetRef.current = event.currentTarget;
+                  if (typeof event.currentTarget.setPointerCapture === 'function') {
+                    try {
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    } catch {
+                      // Ignore capture failures and fall back to global listeners.
+                    }
+                  }
                   const targetEl = tabElementRefs.current[tab.id];
                   if (targetEl) {
                     const rect = targetEl.getBoundingClientRect();
@@ -710,6 +842,11 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                   lastSwapClientYRef.current = null;
                   lastSwapAtRef.current = 0;
                   dragMovedRef.current = false;
+                  dragDetachedRef.current = false;
+                  setDragIsDetached(false);
+                  detachedWindowDragStartedRef.current = false;
+                  detachedWindowDragOpeningRef.current = false;
+                  setDragUsesNativeWindow(false);
                   setDraggingTabId(tab.id);
                   // Don't set position yet - wait for mouse movement
                 }}
@@ -908,6 +1045,21 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
         )}
       </div>
 
+      {draggingTabId && (
+        <div
+          aria-hidden={true}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999,
+            background: 'transparent',
+            cursor: dragIsDetached ? 'grabbing' : 'default',
+            WebkitAppRegion: 'no-drag',
+          }}
+          onContextMenu={(event) => event.preventDefault()}
+        />
+      )}
+
       <ContextMenu
         open={!nativeContextMenusEnabled && !!tabMenuState}
         anchor={tabMenuState ? { x: tabMenuState.x, y: tabMenuState.y } : null}
@@ -917,7 +1069,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
       />
       
       {/* Dragged tab overlay */}
-      {draggingTabId && draggedTabPosition && (() => {
+      {draggingTabId && draggedTabPosition && !dragUsesNativeWindow && (() => {
         const draggedTab = tabs.find(tab => tab.id === draggingTabId);
         if (!draggedTab) return null;
         const displayFavicon = getDisplayFavicon(draggedTab.url, draggedTab.favicon);
@@ -929,8 +1081,16 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
           <div
             style={{
               position: 'fixed',
-              left: isVertical ? originalTabPosition?.x ?? 0 : draggedTabPosition.x - dragPointerToLeftRef.current,
-              top: !isVertical && originalTabPosition ? originalTabPosition.y : draggedTabPosition.y - dragPointerToTopRef.current,
+              left: dragIsDetached
+                ? draggedTabPosition.x - dragPointerToLeftRef.current
+                : isVertical
+                  ? originalTabPosition?.x ?? 0
+                  : draggedTabPosition.x - dragPointerToLeftRef.current,
+              top: dragIsDetached
+                ? draggedTabPosition.y - dragPointerToTopRef.current
+                : !isVertical && originalTabPosition
+                  ? originalTabPosition.y
+                  : draggedTabPosition.y - dragPointerToTopRef.current,
               zIndex: 1000,
               pointerEvents: 'none',
               boxShadow:
@@ -948,7 +1108,7 @@ export default function TabBar({ orientation = 'horizontal' }: { orientation?: '
                 gap: 6,
                 alignItems: 'center',
                 whiteSpace: 'nowrap',
-                width: isVertical ? '100%' : draggedTabWidth ?? TAB_TARGET_WIDTH,
+                width: draggedTabWidth ?? TAB_TARGET_WIDTH,
                 minWidth: 'var(--layoutTabMinWidth, 100px)',
                 overflow: 'hidden',
                 padding: '0 6px 0 10px',

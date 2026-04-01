@@ -73,6 +73,7 @@ interface WebviewNewWindowEvent extends Event {
 
 interface WebviewElement extends HTMLElement {
   src: string;
+  guestinstance?: string;
   reload: () => void;
   executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
   findInPage: (
@@ -155,6 +156,7 @@ const ERR_INTERNET_DISCONNECTED = -106;
 const ERR_CONNECTION_REFUSED = -102;
 const ERR_CONNECTION_FAILED = -104;
 const ERR_NAME_NOT_RESOLVED = -105;
+const DETACHED_TRANSFER_ATTACH_TIMEOUT_MS = 1500;
 
 /**
  * Produces a stable comparable URL string used to suppress redundant webview reloads.
@@ -343,6 +345,19 @@ function detachWebviewListeners(webview: WebviewElement) {
   }
 }
 
+function readWebviewWebContentsId(webview: WebviewElement): number | null {
+  if (typeof webview.getWebContentsId !== 'function') return null;
+  try {
+    const value = webview.getWebContentsId();
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return Math.floor(value);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 // Load all internal pages (unchanged)
 const modules = import.meta.glob('../../browser_pages/**/*.tsx', { eager: true }) as Record<
   string,
@@ -431,6 +446,55 @@ export default function TabView() {
   );
   const webviewMap = useRef<Record<string, WebviewElement>>({});
   const webviewRefCallbacks = useRef<Record<string, (el: Element | null) => void>>({});
+  const completedDetachedTransferIdsRef = useRef<Record<string, true>>({});
+  const pendingDetachedTransferIdsRef = useRef<Record<string, true>>({});
+
+  const acknowledgeDetachedTransfer = React.useEffectEvent((transferId: string) => {
+    if (!transferId || completedDetachedTransferIdsRef.current[transferId]) return;
+    completedDetachedTransferIdsRef.current[transferId] = true;
+    delete pendingDetachedTransferIdsRef.current[transferId];
+
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+    void ipc.invoke('detached-tab-transfer-complete', transferId).catch(() => undefined);
+  });
+
+  const waitForDetachedTransferAttachment = React.useEffectEvent(
+    (webview: WebviewElement, transferId: string, expectedWebContentsId?: number) => {
+      if (!transferId || completedDetachedTransferIdsRef.current[transferId]) return;
+      if (pendingDetachedTransferIdsRef.current[transferId]) return;
+
+      pendingDetachedTransferIdsRef.current[transferId] = true;
+      const startedAt = window.performance.now();
+
+      const poll = () => {
+        if (completedDetachedTransferIdsRef.current[transferId]) {
+          delete pendingDetachedTransferIdsRef.current[transferId];
+          return;
+        }
+
+        const currentWebContentsId = readWebviewWebContentsId(webview);
+        const matchesExpected =
+          typeof expectedWebContentsId !== 'number'
+          || !Number.isFinite(expectedWebContentsId)
+          || currentWebContentsId === expectedWebContentsId;
+
+        if (currentWebContentsId !== null && matchesExpected) {
+          acknowledgeDetachedTransfer(transferId);
+          return;
+        }
+
+        if (window.performance.now() - startedAt >= DETACHED_TRANSFER_ATTACH_TIMEOUT_MS) {
+          delete pendingDetachedTransferIdsRef.current[transferId];
+          return;
+        }
+
+        window.requestAnimationFrame(poll);
+      };
+
+      window.requestAnimationFrame(poll);
+    },
+  );
 
   useEffect(() => {
     const syncSettings = () => {
@@ -1044,11 +1108,36 @@ export default function TabView() {
     }
 
     const webview = node as unknown as WebviewElement;
+    const tab = tabsById.get(tabId);
+    const transferredGuestInstance =
+      typeof tab?.transferredGuestInstance === 'string' ? tab.transferredGuestInstance.trim() : '';
+    const detachedTransferId =
+      typeof tab?.detachedTransferId === 'string' ? tab.detachedTransferId.trim() : '';
+    const transferredWebContentsId =
+      typeof tab?.transferredWebContentsId === 'number' && Number.isFinite(tab.transferredWebContentsId)
+        ? Math.floor(tab.transferredWebContentsId)
+        : undefined;
+
     webview.setAttribute(WEBVIEW_TAB_ID_ATTR, tabId);
     // Electron/Chromium treats `allowpopups` as a presence-based attribute.
     // React may serialize boolean props as `allowpopups="true"`, which can
     // fail to enable popups (e.g. target="_blank") depending on platform.
     webview.setAttribute('allowpopups', '');
+    if (transferredGuestInstance) {
+      webview.guestinstance = transferredGuestInstance;
+      webview.setAttribute('guestinstance', transferredGuestInstance);
+      if (tab && !isInternal(tab.url)) {
+        webview.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(tab.url));
+      }
+
+      if (detachedTransferId) {
+        waitForDetachedTransferAttachment(
+          webview,
+          detachedTransferId,
+          transferredWebContentsId,
+        );
+      }
+    }
 
     if (existing === webview) {
       registerWebview(tabId, webview);
@@ -1530,6 +1619,10 @@ export default function TabView() {
             ) : (
               <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', background: '#fff' }}>
                 <webview
+                  guestinstance={tab.transferredGuestInstance}
+                  data-mira-tracked-src={
+                    tab.transferredGuestInstance ? normalizeComparableUrl(tab.url) : undefined
+                  }
                   ref={getWebviewRefCallback(tab.id)}
                   style={{ flex: 1, width: '100%', height: '100%' }}
                 />

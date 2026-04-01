@@ -52,6 +52,8 @@ type WebviewElement = {
   closeDevTools: () => void;
   isDevToolsOpened: () => boolean;
   getWebContentsId?: () => number;
+  getAttribute?: (qualifiedName: string) => string | null;
+  guestinstance?: string;
   print?: (options?: unknown, callback?: (success: boolean, failureReason: string) => void) => void;
 } | null;
 
@@ -68,6 +70,24 @@ type SessionRestoreState = {
 };
 
 type SessionRestoreMode = 'tabs' | 'windows';
+
+type DetachedTabWindowPosition = {
+  screenX: number;
+  screenY: number;
+};
+
+type MoveTabToNewWindowOptions = {
+  dragMode?: boolean;
+  pointerOffsetX?: number;
+  pointerOffsetY?: number;
+};
+
+type DetachedTabTransferPayload = {
+  transferId: string;
+  tab: Tab;
+  guestInstance?: string;
+  webContentsId?: number;
+};
 
 type TabsContextType = {
   tabs: Tab[];
@@ -90,7 +110,11 @@ type TabsContextType = {
   moveTab: (fromId: string, toId: string) => void;
   moveTabToIndex: (tabId: string, toIndex: number) => void;
   moveActiveTabBy: (delta: -1 | 1) => void;
-  moveTabToNewWindow: (id: string) => void;
+  moveTabToNewWindow: (
+    id: string,
+    position?: DetachedTabWindowPosition,
+    options?: MoveTabToNewWindowOptions,
+  ) => void;
   navigate: (url: string, tabId?: string) => void;
   navigateToNewTabPage: () => void;
   goBack: () => void;
@@ -261,6 +285,35 @@ function parseSnapshot(raw: string | null, defaultTabUrl: string): SessionSnapsh
   }
 }
 
+function normalizeDetachedTabTransfer(
+  value: unknown,
+  defaultTabUrl: string,
+): DetachedTabTransferPayload | null {
+  if (!isRecord(value)) return null;
+
+  const transferId = typeof value.transferId === 'string' ? value.transferId.trim() : '';
+  if (!transferId) return null;
+
+  const tab = normalizeTab(value.tab, defaultTabUrl);
+  if (!tab) return null;
+
+  const guestInstance =
+    typeof value.guestInstance === 'string' && value.guestInstance.trim()
+      ? value.guestInstance.trim()
+      : undefined;
+  const webContentsId =
+    typeof value.webContentsId === 'number' && Number.isFinite(value.webContentsId)
+      ? Math.floor(value.webContentsId)
+      : undefined;
+
+  return {
+    transferId,
+    tab,
+    guestInstance,
+    webContentsId,
+  };
+}
+
 function isDefaultSnapshot(snapshot: SessionSnapshot, defaultTabUrl: string): boolean {
   return snapshot.tabs.length === 1 && snapshot.tabs[0].url === defaultTabUrl;
 }
@@ -304,6 +357,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const ipcOpenTabActivateTimerRef = useRef<number | null>(null);
   const ipcOpenTabNavigateTimerRef = useRef<number | null>(null);
   const zoomFactorByTabRef = useRef<Record<string, number>>({});
+  const bootDetachedTransferHandledRef = useRef(false);
   const activeFindInPageMatches = findInPageMatchesByTab[activeId] ?? {
     activeMatchOrdinal: 0,
     matches: 0,
@@ -335,6 +389,42 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       delete next[tabId];
       return next;
     });
+  }, []);
+
+  const applyDetachedTransfer = useCallback((payload: unknown) => {
+    if (bootDetachedTransferHandledRef.current) return true;
+    const detachedTransfer = normalizeDetachedTabTransfer(
+      payload,
+      getBrowserSettings().newTabPage,
+    );
+    if (!detachedTransfer) return false;
+
+    bootDetachedTransferHandledRef.current = true;
+    const now = Date.now();
+    const transferredTab: Tab = {
+      ...detachedTransfer.tab,
+      isSleeping: false,
+      lastActiveAt: now,
+      transferredGuestInstance: detachedTransfer.guestInstance,
+      detachedTransferId: detachedTransfer.transferId,
+      transferredWebContentsId: detachedTransfer.webContentsId,
+    };
+    startupIncomingUrlsRef.current = [];
+    setTabs([transferredTab]);
+    setActiveId(transferredTab.id);
+
+    if (!detachedTransfer.guestInstance) {
+      const ipc = electron?.ipcRenderer;
+      if (ipc) {
+        window.requestAnimationFrame(() => {
+          void ipc
+            .invoke('detached-tab-transfer-complete', detachedTransfer.transferId)
+            .catch(() => undefined);
+        });
+      }
+    }
+
+    return true;
   }, []);
 
   const updateFindInPageMatches = useCallback(
@@ -426,6 +516,18 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onDetachedTabBootstrap = (_event: unknown, payload: unknown) => {
+      applyDetachedTransfer(payload);
+    };
+
+    ipc.on('window-detached-tab-bootstrap', onDetachedTabBootstrap);
+    return () => ipc.off('window-detached-tab-bootstrap', onDetachedTabBootstrap);
+  }, [applyDetachedTransfer]);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
     if (!ipc) {
       startupIncomingUrlsRef.current = [];
       const settings = getBrowserSettings();
@@ -471,7 +573,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
             .then((url) => (typeof url === 'string' ? url.trim() : ''))
             .catch(() => ''),
         ]);
-        if (cancelled) return;
+        if (cancelled || bootDetachedTransferHandledRef.current) return;
+
         const queuedUrls = initialWindowUrlRaw
           ? [initialWindowUrlRaw, ...queuedUrlsRaw]
           : queuedUrlsRaw;
@@ -480,7 +583,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         const windowRestore = await ipc.invoke<SessionSnapshot | null>(
           'session-take-window-restore',
         );
-        if (cancelled) return;
+        if (cancelled || bootDetachedTransferHandledRef.current) return;
 
         if (windowRestore && windowRestore.tabs.length > 0) {
           applyRestoredSnapshot(windowRestore);
@@ -488,7 +591,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         }
 
         const restoreState = await ipc.invoke<SessionRestoreState>('session-get-restore-state');
-        if (cancelled) return;
+        if (cancelled || bootDetachedTransferHandledRef.current) return;
 
         if (restoreState?.hasPendingRestore && startupIncomingUrlsRef.current.length === 0) {
           const restoreBehavior: StartupRestoreBehavior =
@@ -1060,28 +1163,26 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     [tabs, activeId, moveTabToIndex],
   );
 
-  const moveTabToNewWindow = useCallback(
+  const finalizeDetachedTabMove = useCallback(
     (id: string) => {
-      const tabToMove = tabs.find((tab) => tab.id === id);
-      if (!tabToMove) return;
-
-      const url = tabToMove.url.trim();
-      if (electron?.ipcRenderer) {
-        electron.ipcRenderer.invoke('window-new-with-url', url).catch(() => undefined);
-      } else {
-        window.open(url || window.location.href, '_blank', 'noopener,noreferrer');
-      }
+      if (!id) return;
       clearTabRuntimeState(id);
 
       setTabs((currentTabs) => {
         const nextTabs = currentTabs.filter((tab) => tab.id !== id);
+        if (nextTabs.length === currentTabs.length) {
+          return currentTabs;
+        }
+
         if (!nextTabs.length) {
           const replacement = createInitialTab(getBrowserSettings().newTabPage);
           setActiveId(replacement.id);
           return [replacement];
         }
 
-        if (id !== activeId) return nextTabs;
+        if (id !== activeIdRef.current) {
+          return nextTabs;
+        }
 
         const now = Date.now();
         const nextActiveId = nextTabs[0].id;
@@ -1091,7 +1192,78 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         );
       });
     },
-    [tabs, activeId, clearTabRuntimeState],
+    [clearTabRuntimeState],
+  );
+
+  const moveTabToNewWindow = useCallback(
+    (id: string, position?: DetachedTabWindowPosition, options?: MoveTabToNewWindowOptions) => {
+      const tabToMove = tabsRef.current.find((tab) => tab.id === id);
+      if (!tabToMove) return;
+
+      const url = tabToMove.url.trim();
+      const ipc = electron?.ipcRenderer;
+      if (ipc) {
+        const webview = webviewMap.current[id];
+        const guestInstanceFromProperty =
+          typeof webview?.guestinstance === 'string' ? webview.guestinstance.trim() : '';
+        const guestInstanceFromAttribute =
+          typeof webview?.getAttribute === 'function'
+            ? (webview.getAttribute('guestinstance') ?? '').trim()
+            : '';
+        const guestInstance = guestInstanceFromProperty || guestInstanceFromAttribute || undefined;
+        let webContentsId: number | undefined;
+        if (typeof webview?.getWebContentsId === 'function') {
+          try {
+            const candidate = webview.getWebContentsId();
+            if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
+              webContentsId = Math.floor(candidate);
+            }
+          } catch {
+            webContentsId = undefined;
+          }
+        }
+        const payload = {
+          tab: {
+            id: tabToMove.id,
+            url: tabToMove.url,
+            title: tabToMove.title,
+            favicon: tabToMove.favicon,
+            history: [...tabToMove.history],
+            historyIndex: tabToMove.historyIndex,
+            reloadToken: tabToMove.reloadToken,
+            isSleeping: false,
+            lastActiveAt: Date.now(),
+          },
+          guestInstance,
+          webContentsId,
+          dragMode: options?.dragMode === true,
+          pointerOffsetX: options?.pointerOffsetX,
+          pointerOffsetY: options?.pointerOffsetY,
+          position,
+        };
+
+        void ipc
+          .invoke<{ transferId?: unknown } | null>('window-detach-tab-to-new-window', payload)
+          .then((result) => {
+            const transferId =
+              result && typeof result.transferId === 'string' ? result.transferId.trim() : '';
+            if (transferId) {
+              return;
+            }
+            void ipc.invoke('window-new-with-url', url).catch(() => undefined);
+            finalizeDetachedTabMove(id);
+          })
+          .catch(() => {
+            void ipc.invoke('window-new-with-url', url).catch(() => undefined);
+            finalizeDetachedTabMove(id);
+          });
+        return;
+      }
+
+      window.open(url || window.location.href, '_blank', 'noopener,noreferrer');
+      finalizeDetachedTabMove(id);
+    },
+    [finalizeDetachedTabMove],
   );
 
   const setActive = useCallback(
@@ -1838,6 +2010,22 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     ipc.on('open-url-in-current-tab', onOpenUrlInCurrentTab);
     return () => ipc.off('open-url-in-current-tab', onOpenUrlInCurrentTab);
   }, []);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onDetachedTabTransferComplete = (_event: unknown, payload: unknown) => {
+      if (typeof payload !== 'object' || !payload) return;
+      const candidate = payload as { tabId?: unknown };
+      const tabId = typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
+      if (!tabId) return;
+      finalizeDetachedTabMove(tabId);
+    };
+
+    ipc.on('detached-tab-transfer-complete', onDetachedTabTransferComplete);
+    return () => ipc.off('detached-tab-transfer-complete', onDetachedTabTransferComplete);
+  }, [finalizeDetachedTabMove]);
 
   return (
     <TabsContext.Provider

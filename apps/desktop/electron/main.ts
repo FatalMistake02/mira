@@ -5,6 +5,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  screen,
   shell,
   session,
   webContents as electronWebContents,
@@ -67,6 +68,27 @@ interface PersistedSessionSnapshot {
   savedAt: number;
 }
 
+interface DetachedTabTransferPayload {
+  transferId: string;
+  sourceWindowId: number;
+  targetWindowId: number;
+  tab: TabSessionSnapshot;
+  guestInstance?: string;
+  webContentsId?: number;
+  attached?: boolean;
+  deferSourceFinalize?: boolean;
+  releaseRequested?: boolean;
+}
+
+interface DetachedWindowDragSession {
+  transferId: string;
+  sourceWindowId: number;
+  targetWindowId: number;
+  pointerOffsetX: number;
+  pointerOffsetY: number;
+  timer: NodeJS.Timeout;
+}
+
 interface PersistedAppState {
   onboardingCompleted?: boolean;
 }
@@ -106,6 +128,9 @@ const recentNewWindowShortcutByWindow = new Map<number, number>();
 const RENDERER_RECOVERY_COOLDOWN_MS = 3000;
 const recentRendererRecoveryByWindow = new Map<number, number>();
 const pendingInitialUrlByWindowId = new Map<number, string>();
+const pendingDetachedTabTransferByWindowId = new Map<number, DetachedTabTransferPayload>();
+const detachedTabTransferById = new Map<string, DetachedTabTransferPayload>();
+const activeDetachedWindowDragBySourceWindowId = new Map<number, DetachedWindowDragSession>();
 const SHORTCUT_DEVTOOLS_SUPPRESS_MS = 500;
 const activeWebContentsByWindow = new Map<number, WebContents>();
 const suppressHostDevToolsUntilByWindowId = new Map<number, number>();
@@ -1323,6 +1348,66 @@ function normalizeWindowSessionSnapshot(value: unknown): WindowSessionSnapshot |
   };
 }
 
+function normalizeDetachedTabTransferRequest(
+  value: unknown,
+): {
+  tab: TabSessionSnapshot;
+  guestInstance?: string;
+  webContentsId?: number;
+  dragMode?: boolean;
+  pointerOffsetX?: number;
+  pointerOffsetY?: number;
+  x?: number;
+  y?: number;
+} | null {
+  if (typeof value !== 'object' || !value) return null;
+  const candidate = value as Record<string, unknown>;
+  const tab = normalizeTabSessionSnapshot(candidate.tab);
+  if (!tab) return null;
+
+  const guestInstance =
+    typeof candidate.guestInstance === 'string' && candidate.guestInstance.trim()
+      ? candidate.guestInstance.trim()
+      : undefined;
+  const webContentsId =
+    typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+      ? Math.floor(candidate.webContentsId)
+      : undefined;
+  const dragMode = candidate.dragMode === true;
+  const pointerOffsetX =
+    typeof candidate.pointerOffsetX === 'number' && Number.isFinite(candidate.pointerOffsetX)
+      ? Math.max(0, Math.round(candidate.pointerOffsetX))
+      : undefined;
+  const pointerOffsetY =
+    typeof candidate.pointerOffsetY === 'number' && Number.isFinite(candidate.pointerOffsetY)
+      ? Math.max(0, Math.round(candidate.pointerOffsetY))
+      : undefined;
+
+  const positionCandidate =
+    typeof candidate.position === 'object' && candidate.position
+      ? (candidate.position as Record<string, unknown>)
+      : null;
+  const screenX =
+    typeof positionCandidate?.screenX === 'number' && Number.isFinite(positionCandidate.screenX)
+      ? Math.round(positionCandidate.screenX)
+      : undefined;
+  const screenY =
+    typeof positionCandidate?.screenY === 'number' && Number.isFinite(positionCandidate.screenY)
+      ? Math.round(positionCandidate.screenY)
+      : undefined;
+
+  return {
+    tab,
+    guestInstance,
+    webContentsId,
+    dragMode,
+    pointerOffsetX,
+    pointerOffsetY,
+    x: screenX,
+    y: screenY,
+  };
+}
+
 function mergeRestoreWindowsIntoSingleSnapshot(
   windows: WindowSessionSnapshot[],
 ): WindowSessionSnapshot | null {
@@ -1351,6 +1436,126 @@ function mergeRestoreWindowsIntoSingleSnapshot(
     activeId,
     savedAt: Date.now(),
   };
+}
+
+function sendDetachedTabBootstrapToWindow(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  const pending = pendingDetachedTabTransferByWindowId.get(win.id);
+  if (!pending) return;
+
+  try {
+    win.webContents.send('window-detached-tab-bootstrap', pending);
+  } catch {
+    // Ignore send failures during window bootstrap/teardown.
+  }
+}
+
+function scheduleDetachedTabBootstrapDelivery(win: BrowserWindow): void {
+  const scheduleDelivery = () => {
+    [60, 180, 420].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        sendDetachedTabBootstrapToWindow(win);
+      }, delayMs);
+      timer.unref();
+    });
+  };
+
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', scheduleDelivery);
+    return;
+  }
+
+  scheduleDelivery();
+}
+
+function finalizeDetachedTransferIfReady(transferId: string): boolean {
+  const transfer = detachedTabTransferById.get(transferId);
+  if (!transfer) return false;
+  if (!transfer.attached) return false;
+  if (transfer.deferSourceFinalize && !transfer.releaseRequested) return false;
+
+  detachedTabTransferById.delete(transferId);
+  pendingDetachedTabTransferByWindowId.delete(transfer.targetWindowId);
+
+  const sourceWindow = BrowserWindow.fromId(transfer.sourceWindowId);
+  if (sourceWindow && !sourceWindow.isDestroyed()) {
+    sourceWindow.webContents.send('detached-tab-transfer-complete', {
+      transferId,
+      tabId: transfer.tab.id,
+    });
+  }
+  return true;
+}
+
+function stopDetachedWindowDragSession(
+  sourceWindowId: number,
+  options?: { requestFinalize?: boolean; focusTarget?: boolean },
+): boolean {
+  const session = activeDetachedWindowDragBySourceWindowId.get(sourceWindowId);
+  if (!session) return false;
+
+  clearInterval(session.timer);
+  activeDetachedWindowDragBySourceWindowId.delete(sourceWindowId);
+
+  const transfer = detachedTabTransferById.get(session.transferId);
+  if (transfer && options?.requestFinalize) {
+    transfer.releaseRequested = true;
+    finalizeDetachedTransferIfReady(transfer.transferId);
+  }
+
+  if (options?.focusTarget) {
+    const targetWindow = BrowserWindow.fromId(session.targetWindowId);
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      if (targetWindow.isMinimized()) targetWindow.restore();
+      targetWindow.focus();
+    }
+  }
+
+  return true;
+}
+
+function startDetachedWindowDragSession(
+  transfer: DetachedTabTransferPayload,
+  pointerOffsetX: number,
+  pointerOffsetY: number,
+): void {
+  stopDetachedWindowDragSession(transfer.sourceWindowId);
+
+  const targetWindow = BrowserWindow.fromId(transfer.targetWindowId);
+  if (!targetWindow || targetWindow.isDestroyed()) return;
+
+  const updatePosition = () => {
+    if (targetWindow.isDestroyed()) {
+      stopDetachedWindowDragSession(transfer.sourceWindowId);
+      return;
+    }
+
+    const cursorPoint = screen.getCursorScreenPoint();
+    const bounds = targetWindow.getBounds();
+    const nextX = cursorPoint.x - pointerOffsetX;
+    const nextY = cursorPoint.y - pointerOffsetY;
+    if (bounds.x === nextX && bounds.y === nextY) return;
+
+    targetWindow.setBounds({
+      x: nextX,
+      y: nextY,
+      width: bounds.width,
+      height: bounds.height,
+    });
+  };
+
+  updatePosition();
+  const timer = setInterval(updatePosition, 16);
+  timer.unref();
+
+  activeDetachedWindowDragBySourceWindowId.set(transfer.sourceWindowId, {
+    transferId: transfer.transferId,
+    sourceWindowId: transfer.sourceWindowId,
+    targetWindowId: transfer.targetWindowId,
+    pointerOffsetX,
+    pointerOffsetY,
+    timer,
+  });
 }
 
 function collectPersistedSessionSnapshot(): PersistedSessionSnapshot | null {
@@ -2741,12 +2946,95 @@ function setupWindowControlsHandlers() {
     return true;
   });
 
+  ipcMain.handle('window-detach-tab-to-new-window', (event, payload: unknown) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return null;
+
+    const normalized = normalizeDetachedTabTransferRequest(payload);
+    if (!normalized) return null;
+
+    const detachedWindow = createWindow(
+      sourceWindow,
+      undefined,
+      undefined,
+      {
+        initialBounds:
+          typeof normalized.x === 'number' && typeof normalized.y === 'number'
+            ? {
+                x: normalized.x - 140,
+                y: normalized.y - 18,
+                width: 1200,
+                height: 800,
+              }
+            : undefined,
+        maximize: false,
+        showInactive: normalized.dragMode === true,
+      },
+    );
+    const transferId = uuidv4();
+    const transfer: DetachedTabTransferPayload = {
+      transferId,
+      sourceWindowId: sourceWindow.id,
+      targetWindowId: detachedWindow.id,
+      tab: normalized.tab,
+      guestInstance: normalized.guestInstance,
+      webContentsId: normalized.webContentsId,
+      attached: false,
+      deferSourceFinalize: normalized.dragMode === true,
+      releaseRequested: false,
+    };
+    pendingDetachedTabTransferByWindowId.set(detachedWindow.id, transfer);
+    detachedTabTransferById.set(transferId, transfer);
+    scheduleDetachedTabBootstrapDelivery(detachedWindow);
+
+    if (normalized.dragMode) {
+      startDetachedWindowDragSession(
+        transfer,
+        normalized.pointerOffsetX ?? 160,
+        normalized.pointerOffsetY ?? 18,
+      );
+    }
+
+    return { transferId };
+  });
+
   ipcMain.handle('window-consume-initial-url', (event) => {
     const sourceWindow = BrowserWindow.fromWebContents(event.sender);
     if (!sourceWindow || sourceWindow.isDestroyed()) return '';
     const pending = pendingInitialUrlByWindowId.get(sourceWindow.id) ?? '';
     pendingInitialUrlByWindowId.delete(sourceWindow.id);
     return pending;
+  });
+
+  ipcMain.handle('window-consume-detached-tab', (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return null;
+    const pending = pendingDetachedTabTransferByWindowId.get(sourceWindow.id) ?? null;
+    pendingDetachedTabTransferByWindowId.delete(sourceWindow.id);
+    return pending;
+  });
+
+  ipcMain.handle('window-release-detached-tab-drag', (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!sourceWindow || sourceWindow.isDestroyed()) return false;
+    return stopDetachedWindowDragSession(sourceWindow.id, {
+      requestFinalize: true,
+      focusTarget: true,
+    });
+  });
+
+  ipcMain.handle('detached-tab-transfer-complete', (event, transferId: unknown) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!targetWindow || targetWindow.isDestroyed()) return false;
+
+    const normalizedTransferId = typeof transferId === 'string' ? transferId.trim() : '';
+    if (!normalizedTransferId) return false;
+
+    const transfer = detachedTabTransferById.get(normalizedTransferId);
+    if (!transfer || transfer.targetWindowId !== targetWindow.id) return false;
+
+    transfer.attached = true;
+    return finalizeDetachedTransferIfReady(normalizedTransferId) || true;
   });
 
   ipcMain.handle('tab-open-url-in-new-tab', (event, url: unknown) => {
@@ -3858,14 +4146,33 @@ function createWindow(
   sourceWindow?: BrowserWindow,
   initialUrl?: string,
   restoreSnapshot?: WindowSessionSnapshot,
+  options?: {
+    initialBounds?: {
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+    };
+    maximize?: boolean;
+    showInactive?: boolean;
+  },
 ): BrowserWindow {
   const sourceBounds = sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow.getBounds() : null;
   const restoreBounds = restoreSnapshot?.bounds;
+  const requestedBounds = options?.initialBounds;
   const win = new BrowserWindow({
-    x: restoreBounds ? restoreBounds.x : sourceBounds ? sourceBounds.x + 24 : undefined,
-    y: restoreBounds ? restoreBounds.y : sourceBounds ? sourceBounds.y + 24 : undefined,
-    width: restoreBounds ? restoreBounds.width : 1200,
-    height: restoreBounds ? restoreBounds.height : 800,
+    x:
+      restoreBounds
+        ? restoreBounds.x
+        : requestedBounds?.x
+          ?? (sourceBounds ? sourceBounds.x + 24 : undefined),
+    y:
+      restoreBounds
+        ? restoreBounds.y
+        : requestedBounds?.y
+          ?? (sourceBounds ? sourceBounds.y + 24 : undefined),
+    width: restoreBounds ? restoreBounds.width : requestedBounds?.width ?? 1200,
+    height: restoreBounds ? restoreBounds.height : requestedBounds?.height ?? 800,
     frame: isMacOS,
     titleBarStyle: isMacOS ? 'hiddenInset' : isWindows ? 'hidden' : undefined,
     titleBarOverlay: isWindows
@@ -3904,7 +4211,11 @@ function createWindow(
   loadRendererShell(win);
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) {
-      win.show();
+      if (options?.showInactive) {
+        win.showInactive();
+      } else {
+        win.show();
+      }
     }
   });
 
@@ -3913,7 +4224,7 @@ function createWindow(
   }
 
   applyWindowStateFromSnapshot(win, restoreSnapshot);
-  if (!restoreSnapshot) {
+  if (!restoreSnapshot && options?.maximize !== false) {
     win.maximize();
   }
 
@@ -4006,6 +4317,18 @@ function createWindow(
   });
 
   win.on('closed', () => {
+    stopDetachedWindowDragSession(win.id);
+    const pendingDetachedTransfer = pendingDetachedTabTransferByWindowId.get(win.id);
+    if (pendingDetachedTransfer) {
+      stopDetachedWindowDragSession(pendingDetachedTransfer.sourceWindowId);
+      pendingDetachedTabTransferByWindowId.delete(win.id);
+      detachedTabTransferById.delete(pendingDetachedTransfer.transferId);
+    }
+    for (const [transferId, transfer] of detachedTabTransferById.entries()) {
+      if (transfer.targetWindowId !== win.id) continue;
+      stopDetachedWindowDragSession(transfer.sourceWindowId);
+      detachedTabTransferById.delete(transferId);
+    }
     bootRestoreByWindowId.delete(win.id);
     windowTitleBarOverlayState.delete(win.id);
     recentRendererRecoveryByWindow.delete(win.id);
