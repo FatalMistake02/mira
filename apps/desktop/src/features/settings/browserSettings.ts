@@ -132,6 +132,9 @@ function normalizeNewTabPage(value: unknown): string {
 
   const normalized = value.trim();
   if (!normalized) return DEFAULT_BROWSER_SETTINGS.newTabPage;
+  if (normalized.toLowerCase() === DEFAULT_BROWSER_SETTINGS.newTabPage.trim().toLowerCase()) {
+    return DEFAULT_BROWSER_SETTINGS.newTabPage;
+  }
 
   return normalized;
 }

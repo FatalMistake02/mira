@@ -595,6 +595,72 @@ textarea {
   flex-wrap: wrap;
 }
 
+.settings-visibility {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  margin-top: calc(-1 * var(--layoutSettingsCardGap, 12px));
+}
+
+.settings-visibility-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  margin-top: 0;
+}
+
+.settings-visibility-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-page-animations-enabled .settings-visibility-animated {
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.2, 0, 0.2, 1),
+    opacity 180ms cubic-bezier(0.2, 0, 0.2, 1),
+    transform 220ms cubic-bezier(0.2, 0, 0.2, 1),
+    margin-top 220ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.settings-input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+}
+
+.settings-input-with-action:focus-within {
+  background: var(--urlBarBgActive, var(--fieldBgActive));
+  border-color: var(--urlBarBorderActive, var(--fieldBorderActive));
+}
+
+.settings-input-with-action-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: calc(var(--layoutSettingsControlHeight, 36px) - 8px);
+  padding: calc(var(--layoutSettingsControlPaddingY, 8px) - 2px)
+    var(--layoutSettingsControlPaddingX, 10px);
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.settings-input-with-action-input::placeholder {
+  color: var(--urlBarTextPlaceholder, var(--fieldTextPlaceholder));
+}
+
+.settings-input-with-action-button {
+  white-space: nowrap;
+}
+
 .settings-text-input,
 .settings-select-input,
 .settings-number-input {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import { useDownloads } from '../features/downloads/DownloadProvider';
@@ -162,6 +162,33 @@ const resolveSectionFromParams = (
     ? (normalized as SettingsSectionId)
     : null;
 };
+
+function isBuiltInNewTabPageUrl(value: string): boolean {
+  return value.trim().toLowerCase() === DEFAULT_BROWSER_SETTINGS.newTabPage.trim().toLowerCase();
+}
+
+type SettingsVisibilityProps = {
+  visible: boolean;
+  animated: boolean;
+  children: ReactNode;
+};
+
+function SettingsVisibility({ visible, animated, children }: SettingsVisibilityProps) {
+  if (!animated) {
+    return visible ? <>{children}</> : null;
+  }
+
+  return (
+    <div
+      className={`settings-visibility settings-visibility-animated ${
+        visible ? 'settings-visibility-open' : 'settings-visibility-closed'
+      }`}
+      aria-hidden={!visible}
+    >
+      <div className="settings-visibility-inner">{children}</div>
+    </div>
+  );
+}
 
 export default function Settings() {
   const AUTO_SAVE_DELAY_MS = 300;
@@ -775,6 +802,7 @@ export default function Settings() {
     const trimmed = activeTabUrl.trim();
     return trimmed.toLowerCase().startsWith('mira://settings');
   }, [activeTabUrl]);
+  const isBuiltInNewTabPage = useMemo(() => isBuiltInNewTabPageUrl(newTabPage), [newTabPage]);
   const hasTriggeredUpdateCheckRef = useRef(false);
 
   useEffect(() => {
@@ -790,12 +818,10 @@ export default function Settings() {
       });
       return;
     }
-    if (hash) {
-      setActiveSection((prev) => {
-        if (prev === 'general') return prev;
-        return 'general';
-      });
-    }
+    setActiveSection((prev) => {
+      if (prev === 'general') return prev;
+      return 'general';
+    });
   }, [activeTabUrl, isSettingsTab, settingsSectionIds]);
 
   useEffect(() => {
@@ -816,8 +842,7 @@ export default function Settings() {
       return;
     }
     const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
-    const nextUrl =
-      activeSection === 'general' ? baseUrl : `${baseUrl}#section=${activeSection}`;
+    const nextUrl = `${baseUrl}#section=${activeSection}`;
     if (activeTabUrl && activeTabUrl !== nextUrl) {
       navigate(nextUrl);
     }
@@ -895,59 +920,73 @@ export default function Settings() {
                 </div>
                 <div className="settings-setting-row">
                   <label htmlFor="new-tab-page" className="settings-setting-meta">
-                    <span className="settings-setting-label">New Tab Page URL</span>
-                    <span className="settings-setting-description">
-                      URL opened whenever a new tab is created.
-                    </span>
+                    <span className="settings-setting-label">New Tab URL</span>
                   </label>
-                  <input
-                    id="new-tab-page"
-                    type="text"
-                    value={newTabPage}
-                    onChange={(e) => {
-                      setNewTabPage(e.target.value);
-                      setSaveStatus('saving');
-                    }}
-                    placeholder={DEFAULT_BROWSER_SETTINGS.newTabPage}
-                    className="theme-input settings-text-input settings-setting-control settings-setting-control-grow settings-setting-control-right"
-                  />
+                  <div className="theme-input settings-input-with-action settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                    <input
+                      id="new-tab-page"
+                      type="text"
+                      value={newTabPage}
+                      onChange={(e) => {
+                        setNewTabPage(e.target.value);
+                        setSaveStatus('saving');
+                      }}
+                      placeholder={DEFAULT_BROWSER_SETTINGS.newTabPage}
+                      className="settings-input-with-action-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTabPage(DEFAULT_BROWSER_SETTINGS.newTabPage);
+                        setSaveStatus('saving');
+                      }}
+                      className="theme-btn theme-btn-nav settings-btn-pad settings-input-with-action-button"
+                      disabled={isBuiltInNewTabPage}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
-                <label htmlFor="show-new-tab-branding" className="settings-setting-row">
-                  <span className="settings-setting-meta">
-                    <span className="settings-setting-label">Show New Tab branding</span>
-                    <span className="settings-setting-description">
-                      Display Mira logo and welcome message on new tabs.
-                    </span>
-                  </span>
-                  <input
-                    id="show-new-tab-branding"
-                    type="checkbox"
-                    className="settings-toggle settings-setting-control"
-                    checked={showNewTabBranding}
-                    onChange={(e) => {
-                      setShowNewTabBranding(e.currentTarget.checked);
-                      setSaveStatus('saving');
-                    }}
-                  />
-                </label>
-                <label htmlFor="disable-new-tab-intro" className="settings-setting-row">
-                  <span className="settings-setting-meta">
-                    <span className="settings-setting-label">Disable intro animation</span>
-                    <span className="settings-setting-description">
-                      Skip the new-tab intro animation at all times.
-                    </span>
-                  </span>
-                  <input
-                    id="disable-new-tab-intro"
-                    type="checkbox"
-                    className="settings-toggle settings-setting-control"
-                    checked={disableNewTabIntro}
-                    onChange={(e) => {
-                      setDisableNewTabIntro(e.currentTarget.checked);
-                      setSaveStatus('saving');
-                    }}
-                  />
-                </label>
+                <SettingsVisibility visible={isBuiltInNewTabPage} animated={animationsEnabled}>
+                  <>
+                    <label htmlFor="show-new-tab-branding" className="settings-setting-row">
+                      <span className="settings-setting-meta">
+                        <span className="settings-setting-label">Show New Tab branding</span>
+                        <span className="settings-setting-description">
+                          Display Mira logo and welcome message on new tabs.
+                        </span>
+                      </span>
+                      <input
+                        id="show-new-tab-branding"
+                        type="checkbox"
+                        className="settings-toggle settings-setting-control"
+                        checked={showNewTabBranding}
+                        onChange={(e) => {
+                          setShowNewTabBranding(e.currentTarget.checked);
+                          setSaveStatus('saving');
+                        }}
+                      />
+                    </label>
+                    <label htmlFor="disable-new-tab-intro" className="settings-setting-row">
+                      <span className="settings-setting-meta">
+                        <span className="settings-setting-label">Disable intro animation</span>
+                        <span className="settings-setting-description">
+                          Skip the new-tab intro animation at all times.
+                        </span>
+                      </span>
+                      <input
+                        id="disable-new-tab-intro"
+                        type="checkbox"
+                        className="settings-toggle settings-setting-control"
+                        checked={disableNewTabIntro}
+                        onChange={(e) => {
+                          setDisableNewTabIntro(e.currentTarget.checked);
+                          setSaveStatus('saving');
+                        }}
+                      />
+                    </label>
+                  </>
+                </SettingsVisibility>
               </section>
 
               <section className="theme-panel settings-card">
@@ -957,9 +996,6 @@ export default function Settings() {
                 <div className="settings-setting-row">
                   <label htmlFor="tab-sleep-value" className="settings-setting-meta">
                     <span className="settings-setting-label">Sleep timeout</span>
-                    <span className="settings-setting-description">
-                      Time a background tab waits before sleep mode is applied.
-                    </span>
                   </label>
                   <div className="settings-inline-controls settings-setting-control settings-setting-control-grow settings-setting-control-right">
                     <input
@@ -1001,9 +1037,6 @@ export default function Settings() {
                 <div className="settings-setting-row">
                   <label htmlFor="tab-sleep-mode" className="settings-setting-meta">
                     <span className="settings-setting-label">Sleep behavior</span>
-                    <span className="settings-setting-description">
-                      Choose whether sleeping tabs freeze state or get discarded.
-                    </span>
                   </label>
                   <select
                     id="tab-sleep-mode"
@@ -1120,7 +1153,10 @@ export default function Settings() {
                     }}
                   />
                 </label>
-                {searchEngineShortcutsEnabled && (
+                <SettingsVisibility
+                  visible={searchEngineShortcutsEnabled}
+                  animated={animationsEnabled}
+                >
                   <>
                     <div className="settings-setting-row">
                       <label htmlFor="search-shortcut-prefix" className="settings-setting-meta">
@@ -1175,7 +1211,7 @@ export default function Settings() {
                       </div>
                     </div>
                   </>
-                )}
+                </SettingsVisibility>
               </section>
             </>
           )}
@@ -1415,49 +1451,13 @@ export default function Settings() {
                     )}
                   </div>
                 </div>
-                <div className="settings-setting-row">
-                  <label htmlFor="show-bookmark-button" className="settings-setting-meta">
-                    <span className="settings-setting-label">Show bookmark button</span>
-                    <span className="settings-setting-description">
-                      Display a bookmark button in the address bar for quick access.
-                    </span>
-                  </label>
-                  <input
-                    id="show-bookmark-button"
-                    type="checkbox"
-                    className="settings-toggle settings-setting-control"
-                    checked={showBookmarkButton}
-                    onChange={(e) => {
-                      setShowBookmarkButton(e.currentTarget.checked);
-                      setSaveStatus('saving');
-                    }}
-                  />
-                </div>
-                <div className="settings-setting-row">
-                  <label htmlFor="show-bookmarks-bar" className="settings-setting-meta">
-                    <span className="settings-setting-label">Show bookmarks bar</span>
-                    <span className="settings-setting-description">
-                      Display a bookmarks bar below the address bar for quick access to saved bookmarks.
-                    </span>
-                  </label>
-                  <input
-                    id="show-bookmarks-bar"
-                    type="checkbox"
-                    className="settings-toggle settings-setting-control"
-                    checked={showBookmarksBar}
-                    onChange={(e) => {
-                      setShowBookmarksBar(e.currentTarget.checked);
-                      setSaveStatus('saving');
-                    }}
-                  />
-                </div>
                 <div className="settings-actions-row">
                   <button
                     onClick={() => layoutFileInputRef.current?.click()}
                     type="button"
                     className="theme-btn theme-btn-nav settings-btn-pad"
                   >
-                    Add Layout JSON
+                    Add Layout
                   </button>
                   <input
                     ref={layoutFileInputRef}
@@ -1474,18 +1474,9 @@ export default function Settings() {
                     Open Layout Creator
                   </button>
                 </div>
-              </section>
-
-              <section className="theme-panel settings-card">
-                <div className="settings-card-header">
-                  <h2 className="settings-card-title">Tab strip</h2>
-                </div>
                 <div className="settings-setting-row">
                   <label htmlFor="tab-strip-position" className="settings-setting-meta">
                     <span className="settings-setting-label">Tab strip position</span>
-                    <span className="settings-setting-description">
-                      Choose where tabs appear around the page content.
-                    </span>
                   </label>
                   <select
                     id="tab-strip-position"
@@ -1499,10 +1490,40 @@ export default function Settings() {
                     }}
                     className="theme-input settings-select-input settings-select-limit settings-setting-control"
                   >
-                    <option value="top">Top (default)</option>
-                    <option value="left">Left (vertical)</option>
-                    <option value="right">Right (vertical)</option>
+                    <option value="top">Top</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
                   </select>
+                </div>
+                <div className="settings-setting-row">
+                  <label htmlFor="show-bookmark-button" className="settings-setting-meta">
+                    <span className="settings-setting-label">Show bookmark button</span>
+                  </label>
+                  <input
+                    id="show-bookmark-button"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={showBookmarkButton}
+                    onChange={(e) => {
+                      setShowBookmarkButton(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
+                </div>
+                <div className="settings-setting-row">
+                  <label htmlFor="show-bookmarks-bar" className="settings-setting-meta">
+                    <span className="settings-setting-label">Show bookmarks bar</span>
+                  </label>
+                  <input
+                    id="show-bookmarks-bar"
+                    type="checkbox"
+                    className="settings-toggle settings-setting-control"
+                    checked={showBookmarksBar}
+                    onChange={(e) => {
+                      setShowBookmarksBar(e.currentTarget.checked);
+                      setSaveStatus('saving');
+                    }}
+                  />
                 </div>
               </section>
 
@@ -1559,7 +1580,7 @@ export default function Settings() {
                     }}
                     className="theme-input settings-select-input settings-select-limit settings-setting-control"
                   >
-                    <option value="side">Docked to side (default)</option>
+                    <option value="side">Docked to side</option>
                     <option value="window">Separate window</option>
                   </select>
                 </div>
@@ -1618,7 +1639,7 @@ export default function Settings() {
                     }}
                     className="theme-input settings-select-input settings-select-limit settings-setting-control"
                   >
-                    <option value="ask">Always Ask (default)</option>
+                    <option value="ask">Always Ask</option>
                     <option value="windows">Auto Restore All Windows</option>
                     <option value="tabs">Auto Restore Tabs</option>
                     <option value="fresh">Auto Start Fresh</option>
@@ -1722,10 +1743,7 @@ export default function Settings() {
                 </label>
                 <label htmlFor="auto-update-mode" className="settings-setting-row">
                   <span className="settings-setting-meta">
-                    <span className="settings-setting-label">Automatic update behavior</span>
-                    <span className="settings-setting-description">
-                      Choose when Mira should check for and apply updates automatically.
-                    </span>
+                    <span className="settings-setting-label">Automatic Updates</span>
                   </span>
                   <select
                     id="auto-update-mode"
@@ -1758,10 +1776,7 @@ export default function Settings() {
                 </label>
                 <div className="settings-setting-row">
                   <div className="settings-setting-meta">
-                    <span className="settings-setting-label">Update actions</span>
-                    <span className="settings-setting-description">
-                      Check for updates and install/download when available.
-                    </span>
+                    <span className="settings-setting-label">Check for Updates</span>
                   </div>
                   <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
                     <button
