@@ -21,6 +21,7 @@ import {
   throttleTimers,
   restoreTimers,
 } from './tabStateManagement';
+import { isLikelyAuthUrl } from './popupFlows';
 
 const SESSION_STORAGE_KEY = 'mira.session.tabs.v1';
 const IPC_OPEN_TAB_DEDUPE_WINDOW_MS = 500;
@@ -82,6 +83,12 @@ type MoveTabToNewWindowOptions = {
   pointerOffsetY?: number;
 };
 
+type NewTabToRightOptions = {
+  activate?: boolean;
+  authFlowSourceTabId?: string;
+  authFlowInitialUrl?: string;
+};
+
 type DetachedTabTransferPayload = {
   transferId: string;
   tab: Tab;
@@ -93,7 +100,7 @@ type TabsContextType = {
   tabs: Tab[];
   activeId: string;
   newTab: (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => void;
-  newTabToRight: (id: string, url?: string) => string | undefined;
+  newTabToRight: (id: string, url?: string, options?: NewTabToRightOptions) => string | undefined;
   reloadTab: (id: string) => void;
   duplicateTab: (id: string) => void;
   reopenLastClosedTab: () => void;
@@ -250,6 +257,30 @@ function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
     isSleeping,
     lastActiveAt,
   };
+}
+
+function normalizeOpenUrlInNewTabRequest(
+  value: unknown,
+): { url: string; sourceWebContentsId?: number } | null {
+  if (typeof value === 'string') {
+    const normalizedUrl = value.trim();
+    if (!normalizedUrl || normalizedUrl.toLowerCase() === 'about:blank') return null;
+    return { url: normalizedUrl };
+  }
+
+  if (!isRecord(value)) return null;
+
+  const normalizedUrl = typeof value.url === 'string' ? value.url.trim() : '';
+  if (!normalizedUrl || normalizedUrl.toLowerCase() === 'about:blank') return null;
+
+  const sourceWebContentsId =
+    typeof value.sourceWebContentsId === 'number' && Number.isFinite(value.sourceWebContentsId)
+      ? Math.floor(value.sourceWebContentsId)
+      : undefined;
+
+  return sourceWebContentsId && sourceWebContentsId > 0
+    ? { url: normalizedUrl, sourceWebContentsId }
+    : { url: normalizedUrl };
 }
 
 /**
@@ -688,6 +719,23 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const findTabIdForWebContentsId = useCallback((webContentsId: number): string | undefined => {
+    if (!Number.isFinite(webContentsId) || webContentsId <= 0) return undefined;
+
+    for (const [tabId, webview] of Object.entries(webviewMap.current)) {
+      if (!webview || typeof webview.getWebContentsId !== 'function') continue;
+      try {
+        if (webview.getWebContentsId() === webContentsId) {
+          return tabId;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return undefined;
+  }, []);
+
   function miraUrlToName(url?: string) {
     if (!url?.startsWith('mira://')) {
       throw new Error(`Invalid mira url: '${url}'`);
@@ -745,11 +793,22 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   );
 
   const newTabToRight = useCallback(
-    (id: string, url?: string) => {
+    (id: string, url?: string, options?: NewTabToRightOptions) => {
       if (!id) return;
 
+      const shouldActivate = options?.activate !== false;
       const defaultNewTabUrl = getBrowserSettings().newTabPage;
       const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+      const authFlowSourceTabId =
+        typeof options?.authFlowSourceTabId === 'string' && options.authFlowSourceTabId.trim()
+          ? options.authFlowSourceTabId.trim()
+          : undefined;
+      const authFlowInitialUrl =
+        authFlowSourceTabId
+          ? typeof options?.authFlowInitialUrl === 'string' && options.authFlowInitialUrl.trim()
+            ? options.authFlowInitialUrl.trim()
+            : targetUrl
+          : undefined;
       const now = Date.now();
       const newEntry: Tab = {
         id: crypto.randomUUID(),
@@ -761,6 +820,8 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         reloadToken: 0,
         isSleeping: false,
         lastActiveAt: now,
+        authFlowSourceTabId,
+        authFlowInitialUrl,
       };
 
       setTabs((currentTabs) => {
@@ -774,7 +835,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         return nextTabs;
       });
 
-      setActiveId(newEntry.id);
+      if (shouldActivate) {
+        setActiveId(newEntry.id);
+      }
       return newEntry.id;
     },
     [activeId],
@@ -1896,10 +1959,11 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     const ipc = electron?.ipcRenderer;
     if (!ipc) return;
 
-    const onOpenUrlInNewTab = (_event: unknown, url: string) => {
-      if (!url || typeof url !== 'string') return;
-      const normalized = url.trim();
-      if (!normalized) return;
+    const onOpenUrlInNewTab = (_event: unknown, payload: unknown) => {
+      const request = normalizeOpenUrlInNewTabRequest(payload);
+      if (!request) return;
+
+      const normalized = request.url;
 
       const now = Date.now();
       const last = recentIpcTabOpenRef.current;
@@ -1908,8 +1972,17 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       if (isDuplicate) return;
 
       recentIpcTabOpenRef.current = { url: normalized, openedAt: now };
+      const sourceTabId =
+        request.sourceWebContentsId !== undefined
+          ? findTabIdForWebContentsId(request.sourceWebContentsId) ?? activeIdRef.current
+          : activeIdRef.current;
       const activeTab = tabsRef.current.find((tab) => tab.id === activeIdRef.current);
-      if (activeTab && isNewTabUrl(activeTab.url, getBrowserSettings().newTabPage)) {
+      const shouldTrackAuthFlow = isLikelyAuthUrl(normalized);
+      if (
+        activeTab
+        && activeTab.id === sourceTabId
+        && isNewTabUrl(activeTab.url, getBrowserSettings().newTabPage)
+      ) {
         navigateRef.current(normalized, activeTab.id);
         return;
       }
@@ -1937,15 +2010,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         reloadToken: 0,
         isSleeping: false,
         lastActiveAt: nowForTab,
+        authFlowSourceTabId: shouldTrackAuthFlow ? sourceTabId : undefined,
+        authFlowInitialUrl: shouldTrackAuthFlow ? normalized : undefined,
       };
       setTabs((currentTabs) => {
+        const sourceTabIndex = currentTabs.findIndex((tab) => tab.id === sourceTabId);
         const activeTabIndex = currentTabs.findIndex((tab) => tab.id === activeIdRef.current);
         const updatedTabs = currentTabs.map((tab) =>
           tab.id === activeIdRef.current ? { ...tab, lastActiveAt: nowForTab } : tab,
         );
 
-        // Insert the new tab next to the active tab, or at the end if active tab not found
-        if (activeTabIndex >= 0) {
+        // Insert the new tab next to the source tab when available.
+        if (sourceTabIndex >= 0) {
+          updatedTabs.splice(sourceTabIndex + 1, 0, stagedTab);
+        } else if (activeTabIndex >= 0) {
           updatedTabs.splice(activeTabIndex + 1, 0, stagedTab);
         } else {
           updatedTabs.push(stagedTab);
@@ -1976,7 +2054,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
 
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
-  }, [isBootstrapReady]);
+  }, [findTabIdForWebContentsId, isBootstrapReady]);
 
   useEffect(
     () => () => {

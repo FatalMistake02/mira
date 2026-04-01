@@ -39,4 +39,6 @@ export type Tab = {
   transferredGuestInstance?: string;
   detachedTransferId?: string;
   transferredWebContentsId?: number;
+  authFlowSourceTabId?: string;
+  authFlowInitialUrl?: string;
 };

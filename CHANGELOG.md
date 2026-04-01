@@ -13,6 +13,7 @@
 - Fix included themes not showing
 - Fix nested bookmark folders
 - Change tab sleeping indicator
+- Fix multi-tab logins
 
 ## v0.14.0 - 2026-03-22
 

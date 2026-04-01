@@ -166,6 +166,13 @@ const TRACKER_BLOCK_LOCAL_FILE = path.join('src', 'assets', 'trackers.txt');
 const YOUTUBE_AD_CPN_TTL_MS = 30 * 60 * 1000;
 const MAX_TRACKED_YOUTUBE_AD_CPNS = 512;
 
+const AUTH_WINDOW_URL_PATTERN =
+  /(?:^|[/?#&=_-])(login|signin|sign-in|oauth|authorize|auth|sso|consent|selectaccount|accountchooser|challenge|saml)(?:$|[/?#&=_-])/i;
+const AUTH_WINDOW_HOST_PATTERN =
+  /(^|\.)accounts\.google\.com$|(^|\.)appleid\.apple\.com$|(^|\.)login\.live\.com$|(^|\.)login\.microsoftonline\.com$/i;
+const POPUP_WINDOW_FEATURE_PATTERN =
+  /(^|,)(popup|width|height|left|top|toolbar|menubar|location|status|resizable|scrollbars)=?/i;
+
 const DEFAULT_BLOCKED_AD_HOSTS = [
   'doubleclick.net',
   'googlesyndication.com',
@@ -2093,6 +2100,49 @@ function setupVersionHandlers() {
   ipcMain.handle('app-get-version', () => getMiraVersion());
 }
 
+function isLikelyAuthPopupUrl(url: string): boolean {
+  const normalized = url.trim();
+  if (!normalized || normalized.toLowerCase() === 'about:blank') return false;
+
+  try {
+    const parsed = new URL(normalized);
+    return AUTH_WINDOW_URL_PATTERN.test(normalized) || AUTH_WINDOW_HOST_PATTERN.test(parsed.hostname);
+  } catch {
+    return AUTH_WINDOW_URL_PATTERN.test(normalized);
+  }
+}
+
+function hasPopupWindowFeatures(features: string): boolean {
+  const normalized = features.trim();
+  return !!normalized && POPUP_WINDOW_FEATURE_PATTERN.test(normalized);
+}
+
+function shouldOpenAsNativePopup(details: {
+  url: string;
+  disposition?: string;
+  features?: string;
+  frameName?: string;
+}): boolean {
+  const normalizedUrl = details.url.trim();
+  const normalizedDisposition = (details.disposition ?? '').trim().toLowerCase();
+  const normalizedFrameName = (details.frameName ?? '').trim().toLowerCase();
+  const popupFeatureRequest = hasPopupWindowFeatures(details.features ?? '');
+
+  if (isLikelyAuthPopupUrl(normalizedUrl)) {
+    return true;
+  }
+
+  if (normalizedUrl.toLowerCase() === 'about:blank') {
+    return (
+      popupFeatureRequest
+      || normalizedDisposition === 'new-window'
+      || (!!normalizedFrameName && normalizedFrameName !== '_blank')
+    );
+  }
+
+  return popupFeatureRequest && normalizedDisposition !== 'background-tab';
+}
+
 function setupWebviewTabOpenHandler() {
   app.on('web-contents-created', (_, contents) => {
     if (contents.getType() !== 'devtools') {
@@ -2394,13 +2444,55 @@ function setupWebviewTabOpenHandler() {
       triggerNewWindowFromShortcut(hostWindow);
     });
 
-    contents.setWindowOpenHandler(({ url }) => {
+    contents.setWindowOpenHandler(({ url, disposition, features, frameName }) => {
       const host =
         contents.hostWebContents
         ?? (contents.getType() === 'window' ? contents : null);
       if (!host) return { action: 'deny' };
       const normalized = (url ?? '').trim();
-      if (!normalized || normalized === 'about:blank') {
+      const normalizedFeatures = typeof features === 'string' ? features.trim() : '';
+      const normalizedFrameName = typeof frameName === 'string' ? frameName.trim() : '';
+      const hostWindow = BrowserWindow.fromWebContents(host);
+      if (!normalized) {
+        return { action: 'deny' };
+      }
+
+      if (
+        shouldOpenAsNativePopup({
+          url: normalized,
+          disposition,
+          features: normalizedFeatures,
+          frameName: normalizedFrameName,
+        })
+      ) {
+        return {
+          action: 'allow',
+          createWindow: (options) => {
+            const popupWindow = new BrowserWindow({
+              ...options,
+              parent:
+                hostWindow && !hostWindow.isDestroyed()
+                  ? hostWindow
+                  : options.parent,
+              modal: false,
+              autoHideMenuBar: true,
+              backgroundColor: '#12161d',
+              show: true,
+            });
+
+            popupWindow.setMenuBarVisibility(false);
+            popupWindow.on('closed', () => {
+              if (hostWindow && !hostWindow.isDestroyed()) {
+                hostWindow.focus();
+              }
+            });
+
+            return popupWindow.webContents;
+          },
+        };
+      }
+
+      if (normalized === 'about:blank') {
         return { action: 'deny' };
       }
 
@@ -2411,7 +2503,11 @@ function setupWebviewTabOpenHandler() {
 
       if (host && !host.isDestroyed() && !isDuplicate) {
         recentOpenTabByHost.set(host.id, { url: normalized, openedAt: now });
-        host.send('open-url-in-new-tab', normalized);
+        host.send('open-url-in-new-tab', {
+          url: normalized,
+          sourceWebContentsId: contents.id,
+          disposition,
+        });
       }
       return { action: 'deny' };
     });
