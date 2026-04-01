@@ -288,6 +288,61 @@ function applyRawFileDarkModeStyle(webview: WebviewElement, shouldApply: boolean
   webview.executeJavaScript(script).catch(() => undefined);
 }
 
+function detachWebviewListeners(webview: WebviewElement) {
+  if (webview.didNavigateHandler) {
+    webview.removeEventListener('did-navigate', webview.didNavigateHandler as EventListener);
+    delete webview.didNavigateHandler;
+  }
+  if (webview.didNavigateInPageHandler) {
+    webview.removeEventListener(
+      'did-navigate-in-page',
+      webview.didNavigateInPageHandler as EventListener,
+    );
+    delete webview.didNavigateInPageHandler;
+  }
+  if (webview.didStartLoadingHandler) {
+    webview.removeEventListener(
+      'did-start-loading',
+      webview.didStartLoadingHandler as EventListener,
+    );
+    delete webview.didStartLoadingHandler;
+  }
+  if (webview.didFailLoadHandler) {
+    webview.removeEventListener('did-fail-load', webview.didFailLoadHandler as EventListener);
+    delete webview.didFailLoadHandler;
+  }
+  if (webview.domReadyHandler) {
+    webview.removeEventListener('dom-ready', webview.domReadyHandler as EventListener);
+    delete webview.domReadyHandler;
+  }
+  if (webview.didPageTitleUpdatedHandler) {
+    webview.removeEventListener(
+      'page-title-updated',
+      webview.didPageTitleUpdatedHandler as EventListener,
+    );
+    delete webview.didPageTitleUpdatedHandler;
+  }
+  if (webview.pageFaviconUpdatedHandler) {
+    webview.removeEventListener(
+      'page-favicon-updated',
+      webview.pageFaviconUpdatedHandler as EventListener,
+    );
+    delete webview.pageFaviconUpdatedHandler;
+  }
+  if (webview.foundInPageHandler) {
+    webview.removeEventListener('found-in-page', webview.foundInPageHandler as EventListener);
+    delete webview.foundInPageHandler;
+  }
+  if (webview.contextMenuHandler) {
+    webview.removeEventListener('context-menu', webview.contextMenuHandler as EventListener);
+    delete webview.contextMenuHandler;
+  }
+  if (webview.newWindowHandler) {
+    webview.removeEventListener('new-window', webview.newWindowHandler as EventListener);
+    delete webview.newWindowHandler;
+  }
+}
+
 // Load all internal pages (unchanged)
 const modules = import.meta.glob('../../browser_pages/**/*.tsx', { eager: true }) as Record<
   string,
@@ -375,6 +430,7 @@ export default function TabView() {
     [renderOrderTabIds, tabsById],
   );
   const webviewMap = useRef<Record<string, WebviewElement>>({});
+  const webviewRefCallbacks = useRef<Record<string, (el: Element | null) => void>>({});
 
   useEffect(() => {
     const syncSettings = () => {
@@ -567,6 +623,468 @@ export default function TabView() {
       }
       return current;
     });
+  }, [tabs]);
+
+  useEffect(() => {
+    const nextIdSet = new Set(tabs.map((tab) => tab.id));
+    for (const tabId of Object.keys(webviewRefCallbacks.current)) {
+      if (!nextIdSet.has(tabId)) {
+        delete webviewRefCallbacks.current[tabId];
+      }
+    }
+  }, [tabs]);
+
+  const syncWebviewSource = React.useEffectEvent((tabId: string, webview: WebviewElement) => {
+    const tab = tabsById.get(tabId);
+    if (!tab || isInternal(tab.url)) return;
+
+    const trackedSrc = webview.getAttribute(WEBVIEW_TRACKED_SRC_ATTR) ?? '';
+    const nextSrc = normalizeComparableUrl(tab.url);
+    if (trackedSrc !== nextSrc) {
+      webview.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, nextSrc);
+      webview.src = tab.url;
+    }
+  });
+
+  const handleDidNavigate = React.useEffectEvent(
+    (tabId: string, webview: WebviewElement, event: Event) => {
+      const webviewEvent = event as WebviewNavigationEvent;
+      webview.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(webviewEvent.url));
+      clearExternalErrorForTab(tabId);
+      navigate(webviewEvent.url, tabId);
+      applyRawFileDarkModeStyle(webview, shouldApplyRawFileDarkMode);
+    },
+  );
+
+  const handleDidStartLoading = React.useEffectEvent((tabId: string) => {
+    clearExternalErrorForTab(tabId);
+  });
+
+  const handleDidFailLoad = React.useEffectEvent((tabId: string, event: Event) => {
+    const webviewEvent = event as WebviewDidFailLoadEvent;
+    if (!webviewEvent.isMainFrame) return;
+    // Ignore cancellations from abort/redirect churn.
+    if (webviewEvent.errorCode === 0 || webviewEvent.errorCode === -3) return;
+
+    const currentTab = tabsById.get(tabId);
+    const failedUrl = webviewEvent.validatedURL || currentTab?.url || '';
+
+    // Check if this is an HTTPS connection failure that we should fallback from
+    if (
+      failedUrl.startsWith('https://') &&
+      (webviewEvent.errorCode === ERR_CONNECTION_REFUSED ||
+        webviewEvent.errorCode === ERR_CONNECTION_FAILED ||
+        webviewEvent.errorCode === ERR_NAME_NOT_RESOLVED)
+    ) {
+      // Try HTTP fallback - navigate to unsecure warning page with HTTP URL
+      const httpUrl = failedUrl.replace(/^https:\/\//, 'http://');
+      navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(httpUrl)}`, tabId);
+      return;
+    }
+
+    const route =
+      webviewEvent.errorCode === ERR_INTERNET_DISCONNECTED
+        ? 'errors/external-offline'
+        : 'errors/external-network';
+    setExternalErrorByTabId((current) => ({
+      ...current,
+      [tabId]: {
+        route,
+        failedUrlComparable: normalizeComparableUrl(failedUrl),
+      },
+    }));
+  });
+
+  const handleDomReady = React.useEffectEvent((webview: WebviewElement) => {
+    applyRawFileDarkModeStyle(webview, shouldApplyRawFileDarkMode);
+    // Inject script to handle data-link attributes
+    const dataLinkScript = `(() => {
+  const falsyAttr = (value) => value === 'false' || value === '0' || value === 'no';
+  const resolveUrl = (raw) => {
+    try {
+      return new URL(raw, window.location.href).toString();
+    } catch {
+      return raw;
+    }
+  };
+
+  document.addEventListener('click', (e) => {
+    const ev = e;
+    const path = typeof ev.composedPath === 'function' ? ev.composedPath() : [];
+    const candidate = (path[0] instanceof Element ? path[0] : ev.target) instanceof Element
+      ? (path[0] instanceof Element ? path[0] : ev.target)
+      : null;
+    if (!candidate) return;
+
+    const element = candidate.closest('[data-link]');
+    if (!element) return;
+
+    const rawLink = element.getAttribute('data-link') ?? '';
+    const link = rawLink.trim();
+    if (!link) return;
+
+    const hasNewTabAttr = element.hasAttribute('data-link-new-tab');
+    const newTabAttrValue = (element.getAttribute('data-link-new-tab') ?? '').trim().toLowerCase();
+    // Presence of data-link-new-tab should open in new tab, unless explicitly disabled.
+    const wantsNewTab = hasNewTabAttr && !falsyAttr(newTabAttrValue);
+
+    const isModifiedClick =
+      (ev instanceof MouseEvent)
+      && (ev.button === 1 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey);
+
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const resolved = resolveUrl(link);
+    if (wantsNewTab || isModifiedClick) {
+      // Use window.open to trigger webview new-window event (opens in new tab)
+      window.open(resolved, '_blank', 'noopener,noreferrer');
+    } else {
+      window.location.assign(resolved);
+    }
+  }, true);
+})();`;
+    webview.executeJavaScript(dataLinkScript).catch(() => undefined);
+
+    const miraVersion = electron?.appVersion ?? null;
+    if (miraVersion) {
+      const miraVersionScript = `(() => {
+  try {
+    const version = ${JSON.stringify(miraVersion)};
+    if (!version) return;
+    const value = Object.freeze({ version });
+    Object.defineProperty(window, 'mira', {
+      value,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    });
+  } catch {
+    // Ignore script injection errors.
+  }
+})();`;
+      webview.executeJavaScript(miraVersionScript).catch(() => undefined);
+    }
+  });
+
+  const handlePageTitleUpdated = React.useEffectEvent((tabId: string, event: Event) => {
+    const webviewEvent = event as WebviewPageTitleUpdatedEvent;
+    updateTabMetadata(tabId, { title: webviewEvent.title });
+  });
+
+  const handlePageFaviconUpdated = React.useEffectEvent((tabId: string, event: Event) => {
+    const webviewEvent = event as WebviewPageFaviconUpdatedEvent;
+    updateTabMetadata(tabId, { favicon: webviewEvent.favicons?.[0] ?? null });
+  });
+
+  const handleFoundInPage = React.useEffectEvent((tabId: string, event: Event) => {
+    const webviewEvent = event as WebviewFoundInPageEvent;
+    const result = webviewEvent.result ?? webviewEvent;
+    const requestId = typeof result.requestId === 'number' ? result.requestId : Number.NaN;
+    if (!Number.isFinite(requestId)) return;
+
+    const activeMatchOrdinal =
+      typeof result.activeMatchOrdinal === 'number' ? result.activeMatchOrdinal : 0;
+    const matches = typeof result.matches === 'number' ? result.matches : 0;
+    updateFindInPageMatches(tabId, requestId, activeMatchOrdinal, matches);
+  });
+
+  const handleContextMenu = React.useEffectEvent(
+    (tabId: string, webview: WebviewElement, event: Event) => {
+      const webviewEvent = event as WebviewContextMenuEvent;
+      const params = normalizeContextMenuParams(webviewEvent.params);
+
+      if (nativeTextFieldContextMenu) {
+        const ipc = electron?.ipcRenderer;
+        const webContentsId =
+          typeof webview.getWebContentsId === 'function' ? webview.getWebContentsId() : -1;
+        if (ipc && Number.isFinite(webContentsId) && webContentsId > 0) {
+          event.preventDefault();
+          setPageMenuState(null);
+
+          let x = params.x;
+          let y = params.y;
+          if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+            const webviewRect = webview.getBoundingClientRect();
+            x = webviewRect.left + params.x;
+            y = webviewRect.top + params.y;
+          }
+
+          const currentTab = tabsById.get(tabId);
+          const canGoBack = (currentTab?.historyIndex ?? 0) > 0;
+          const canGoForward =
+            !!currentTab && currentTab.historyIndex < currentTab.history.length - 1;
+          const sourceUrl = params.pageURL || currentTab?.url || '';
+
+          void ipc
+            .invoke('webview-show-native-context-menu', {
+              webContentsId: Math.floor(webContentsId),
+              tabId,
+              x,
+              y,
+              params,
+              context: {
+                canGoBack,
+                canGoForward,
+                sourceUrl,
+              },
+            })
+            .catch(() => undefined);
+          return;
+        }
+      }
+
+      event.preventDefault();
+
+      const webContentsId =
+        typeof webview.getWebContentsId === 'function' ? webview.getWebContentsId() : -1;
+      if (!Number.isFinite(webContentsId) || webContentsId <= 0) return;
+
+      let x = params.x;
+      let y = params.y;
+
+      // Some environments report coordinates relative to the webview bounds.
+      // If direct values look invalid, fall back to translating by webview offset.
+      if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+        const webviewRect = webview.getBoundingClientRect();
+        x = webviewRect.left + params.x;
+        y = webviewRect.top + params.y;
+      }
+      setPageMenuState({
+        tabId,
+        webContentsId: Math.floor(webContentsId),
+        x,
+        y,
+        params,
+      });
+    },
+  );
+
+  const handleNewWindow = React.useEffectEvent((tabId: string, event: Event) => {
+    const webviewEvent = event as WebviewNewWindowEvent;
+    const url = typeof webviewEvent.url === 'string' ? webviewEvent.url.trim() : '';
+    const disposition =
+      typeof webviewEvent.disposition === 'string' ? webviewEvent.disposition.toLowerCase() : '';
+
+    console.log('newWindowHandler called:', { url, disposition });
+
+    if (!url) {
+      event.preventDefault();
+      return;
+    }
+
+    // Prevent the default behavior of opening in a new window
+    event.preventDefault();
+
+    // Open in a new tab based on disposition
+    if (disposition === 'new-window') {
+      // Open in new window
+      const ipc = electron?.ipcRenderer;
+      if (ipc) {
+        void ipc.invoke('window-new-with-url', url).catch(() => undefined);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
+
+    // Open in new tab (default for target="_blank")
+    // Track if this might be a login tab by checking common login patterns
+    const isLikelyLoginTab =
+      /login|signin|oauth|auth|sso|account|consent/i.test(url) ||
+      /google\.com|github\.com|facebook\.com|microsoft\.com|apple\.com/i.test(url) ||
+      /accounts\.google\.com/i.test(url);
+
+    // Debug logging to help identify issues
+    if (isLikelyLoginTab) {
+      console.log('Login tab detected:', url);
+    } else {
+      console.log('URL not detected as login tab:', url);
+    }
+
+    const newTabId = newTabToRight(tabId, url);
+
+    // If this appears to be a login tab, set up navigation monitoring to return to original tab
+    if (isLikelyLoginTab && newTabId) {
+      // Store the original tab ID for potential return after login
+      setTimeout(() => {
+        const webview = webviewMap.current[newTabId];
+        if (webview && typeof webview.executeJavaScript === 'function') {
+          // Monitor navigation events to detect login completion
+          const loginMonitorScript = `
+                                (function() {
+                                  let originalTabId = '${tabId}';
+                                  let hasReturned = false;
+                                  
+                                  // Check if current URL suggests login completion
+                                  function checkForLoginCompletion() {
+                                    const currentUrl = window.location.href;
+                                    console.log('Checking for login completion at:', currentUrl);
+                                    
+                                    // More comprehensive patterns for login completion
+                                    const hasTokenOrCode = /#access_token=|#code=|/callback|/auth/callback|state=/.test(currentUrl);
+                                    const isNotLoginFlow = !/login|signin|oauth|auth|sso|consent|account/i.test(currentUrl);
+                                    const isBackToOriginal = currentUrl.includes(window.location.origin);
+                                    
+                                    // Google OAuth often redirects back to the app with tokens
+                                    const isOAuthComplete = hasTokenOrCode && (isNotLoginFlow || isBackToOriginal);
+                                    
+                                    console.log('Login completion check:', {
+                                      hasTokenOrCode,
+                                      isNotLoginFlow,
+                                      isBackToOriginal,
+                                      isOAuthComplete,
+                                      hasReturned
+                                    });
+                                    
+                                    if (isOAuthComplete && !hasReturned) {
+                                      hasReturned = true;
+                                      console.log('Login completed, returning to original tab:', originalTabId);
+                                      // Send message to parent to return to original tab
+                                      window.parent.postMessage({
+                                        type: 'login-completed',
+                                        originalTabId: originalTabId,
+                                        returnUrl: currentUrl
+                                      }, '*');
+                                    }
+                                  }
+                                  
+                                  // Monitor URL changes
+                                  let lastUrl = window.location.href;
+                                  setInterval(() => {
+                                    if (window.location.href !== lastUrl) {
+                                      lastUrl = window.location.href;
+                                      checkForLoginCompletion();
+                                    }
+                                  }, 1000);
+                                  
+                                  // Initial check
+                                  checkForLoginCompletion();
+                                })();
+                              `;
+
+          webview.executeJavaScript(loginMonitorScript).catch(() => undefined);
+        }
+      }, 2000); // Wait 2 seconds for tab to fully load
+    }
+  });
+
+  const attachWebview = React.useEffectEvent((tabId: string, webview: WebviewElement) => {
+    detachWebviewListeners(webview);
+
+    const didNavigateHandler = (event: Event) => {
+      handleDidNavigate(tabId, webview, event);
+    };
+    const didNavigateInPageHandler = (event: Event) => {
+      handleDidNavigate(tabId, webview, event);
+    };
+    const didStartLoadingHandler = () => {
+      handleDidStartLoading(tabId);
+    };
+    const didFailLoadHandler = (event: Event) => {
+      handleDidFailLoad(tabId, event);
+    };
+    const domReadyHandler = () => {
+      handleDomReady(webview);
+    };
+    const didPageTitleUpdatedHandler = (event: Event) => {
+      handlePageTitleUpdated(tabId, event);
+    };
+    const pageFaviconUpdatedHandler = (event: Event) => {
+      handlePageFaviconUpdated(tabId, event);
+    };
+    const foundInPageHandler = (event: Event) => {
+      handleFoundInPage(tabId, event);
+    };
+    const contextMenuHandler = (event: Event) => {
+      handleContextMenu(tabId, webview, event);
+    };
+    const newWindowHandler = (event: Event) => {
+      handleNewWindow(tabId, event);
+    };
+
+    webview.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
+    webview.didNavigateInPageHandler = didNavigateInPageHandler as (
+      e: WebviewNavigationEvent,
+    ) => void;
+    webview.didStartLoadingHandler = didStartLoadingHandler;
+    webview.didFailLoadHandler = didFailLoadHandler as (e: WebviewDidFailLoadEvent) => void;
+    webview.domReadyHandler = domReadyHandler;
+    webview.didPageTitleUpdatedHandler = didPageTitleUpdatedHandler as (
+      e: WebviewPageTitleUpdatedEvent,
+    ) => void;
+    webview.pageFaviconUpdatedHandler = pageFaviconUpdatedHandler as (
+      e: WebviewPageFaviconUpdatedEvent,
+    ) => void;
+    webview.foundInPageHandler = foundInPageHandler as (e: WebviewFoundInPageEvent) => void;
+    webview.contextMenuHandler = contextMenuHandler as (e: WebviewContextMenuEvent) => void;
+    webview.newWindowHandler = newWindowHandler as (e: WebviewNewWindowEvent) => void;
+
+    webview.addEventListener('did-navigate', didNavigateHandler);
+    webview.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
+    webview.addEventListener('did-start-loading', didStartLoadingHandler);
+    webview.addEventListener('did-fail-load', didFailLoadHandler);
+    webview.addEventListener('dom-ready', domReadyHandler);
+    webview.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
+    webview.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
+    webview.addEventListener('found-in-page', foundInPageHandler);
+    webview.addEventListener('context-menu', contextMenuHandler);
+    webview.addEventListener('new-window', newWindowHandler);
+  });
+
+  const handleWebviewRefChange = React.useEffectEvent((tabId: string, node: Element | null) => {
+    const existing = webviewMap.current[tabId] ?? null;
+    if (!node) {
+      if (!existing) return;
+      detachWebviewListeners(existing);
+      existing.removeAttribute(WEBVIEW_TAB_ID_ATTR);
+      delete webviewMap.current[tabId];
+      registerWebview(tabId, null);
+      return;
+    }
+
+    const webview = node as unknown as WebviewElement;
+    webview.setAttribute(WEBVIEW_TAB_ID_ATTR, tabId);
+    // Electron/Chromium treats `allowpopups` as a presence-based attribute.
+    // React may serialize boolean props as `allowpopups="true"`, which can
+    // fail to enable popups (e.g. target="_blank") depending on platform.
+    webview.setAttribute('allowpopups', '');
+
+    if (existing === webview) {
+      registerWebview(tabId, webview);
+      syncWebviewSource(tabId, webview);
+      return;
+    }
+
+    if (existing) {
+      detachWebviewListeners(existing);
+      registerWebview(tabId, null);
+    }
+
+    webviewMap.current[tabId] = webview;
+    registerWebview(tabId, webview);
+    attachWebview(tabId, webview);
+    syncWebviewSource(tabId, webview);
+  });
+
+  const getWebviewRefCallback = useCallback((tabId: string) => {
+    let callback = webviewRefCallbacks.current[tabId];
+    if (!callback) {
+      callback = (node: Element | null) => {
+        handleWebviewRefChange(tabId, node);
+      };
+      webviewRefCallbacks.current[tabId] = callback;
+    }
+    return callback;
+  }, []);
+
+  useEffect(() => {
+    for (const tab of tabs) {
+      if (isInternal(tab.url)) continue;
+      const webview = webviewMap.current[tab.id];
+      if (!webview) continue;
+      syncWebviewSource(tab.id, webview);
+    }
   }, [tabs]);
 
   useEffect(() => {
@@ -1012,436 +1530,7 @@ export default function TabView() {
             ) : (
               <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', background: '#fff' }}>
                 <webview
-                  ref={(el) => {
-                    if (!el) {
-                      // When the element unmounts we deregister it
-                      registerWebview(tab.id, null);
-                      return;
-                    }
-                    const wv = el as unknown as WebviewElement;
-                    registerWebview(tab.id, wv);
-                    wv.setAttribute(WEBVIEW_TAB_ID_ATTR, tab.id);
-                    // Electron/Chromium treats `allowpopups` as a presence-based attribute.
-                    // React may serialize boolean props as `allowpopups="true"`, which can
-                    // fail to enable popups (e.g. target="_blank") depending on platform.
-                    wv.setAttribute('allowpopups', '');
-
-                    // Clean any old listeners that might still be attached
-                    if (wv.didNavigateHandler) {
-                      wv.removeEventListener(
-                        'did-navigate',
-                        wv.didNavigateHandler as EventListener,
-                      );
-                    }
-                    if (wv.didNavigateInPageHandler) {
-                      wv.removeEventListener(
-                        'did-navigate-in-page',
-                        wv.didNavigateInPageHandler as EventListener,
-                      );
-                    }
-                    if (wv.didStartLoadingHandler) {
-                      wv.removeEventListener(
-                        'did-start-loading',
-                        wv.didStartLoadingHandler as EventListener,
-                      );
-                    }
-                    if (wv.didFailLoadHandler) {
-                      wv.removeEventListener(
-                        'did-fail-load',
-                        wv.didFailLoadHandler as EventListener,
-                      );
-                    }
-                    if (wv.domReadyHandler) {
-                      wv.removeEventListener('dom-ready', wv.domReadyHandler as EventListener);
-                    }
-                    if (wv.didPageTitleUpdatedHandler) {
-                      wv.removeEventListener(
-                        'page-title-updated',
-                        wv.didPageTitleUpdatedHandler as EventListener,
-                      );
-                    }
-                    if (wv.pageFaviconUpdatedHandler) {
-                      wv.removeEventListener(
-                        'page-favicon-updated',
-                        wv.pageFaviconUpdatedHandler as EventListener,
-                      );
-                    }
-                    if (wv.foundInPageHandler) {
-                      wv.removeEventListener(
-                        'found-in-page',
-                        wv.foundInPageHandler as EventListener,
-                      );
-                    }
-                    if (wv.contextMenuHandler) {
-                      wv.removeEventListener(
-                        'context-menu',
-                        wv.contextMenuHandler as EventListener,
-                      );
-                    }
-                    if (wv.newWindowHandler) {
-                      wv.removeEventListener('new-window', wv.newWindowHandler as EventListener);
-                    }
-                    const didNavigateHandler = (e: Event) => {
-                      const ev = e as WebviewNavigationEvent;
-                      wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
-                      clearExternalErrorForTab(tab.id);
-                      navigate(ev.url, tab.id);
-                      applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
-                    };
-                    const didNavigateInPageHandler = (e: Event) => {
-                      const ev = e as WebviewNavigationEvent;
-                      wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(ev.url));
-                      clearExternalErrorForTab(tab.id);
-                      navigate(ev.url, tab.id);
-                      applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
-                    };
-                    const didStartLoadingHandler = () => {
-                      clearExternalErrorForTab(tab.id);
-                    };
-                    const didFailLoadHandler = (e: Event) => {
-                      const ev = e as WebviewDidFailLoadEvent;
-                      if (!ev.isMainFrame) return;
-                      // Ignore cancellations from abort/redirect churn.
-                      if (ev.errorCode === 0 || ev.errorCode === -3) return;
-
-                      const failedUrl = ev.validatedURL || tab.url;
-
-                      // Check if this is an HTTPS connection failure that we should fallback from
-                      if (
-                        failedUrl.startsWith('https://') &&
-                        (ev.errorCode === ERR_CONNECTION_REFUSED ||
-                          ev.errorCode === ERR_CONNECTION_FAILED ||
-                          ev.errorCode === ERR_NAME_NOT_RESOLVED)
-                      ) {
-                        // Try HTTP fallback - navigate to unsecure warning page with HTTP URL
-                        const httpUrl = failedUrl.replace(/^https:\/\//, 'http://');
-                        navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(httpUrl)}`, tab.id);
-                        return;
-                      }
-
-                      const route =
-                        ev.errorCode === ERR_INTERNET_DISCONNECTED
-                          ? 'errors/external-offline'
-                          : 'errors/external-network';
-                      setExternalErrorByTabId((current) => ({
-                        ...current,
-                        [tab.id]: {
-                          route,
-                          failedUrlComparable: normalizeComparableUrl(failedUrl),
-                        },
-                      }));
-                    };
-                    const domReadyHandler = () => {
-                      applyRawFileDarkModeStyle(wv, shouldApplyRawFileDarkMode);
-                      // Inject script to handle data-link attributes
-                      const dataLinkScript = `(() => {
-  const falsyAttr = (value) => value === 'false' || value === '0' || value === 'no';
-  const resolveUrl = (raw) => {
-    try {
-      return new URL(raw, window.location.href).toString();
-    } catch {
-      return raw;
-    }
-  };
-
-  document.addEventListener('click', (e) => {
-    const ev = e;
-    const path = typeof ev.composedPath === 'function' ? ev.composedPath() : [];
-    const candidate = (path[0] instanceof Element ? path[0] : ev.target) instanceof Element
-      ? (path[0] instanceof Element ? path[0] : ev.target)
-      : null;
-    if (!candidate) return;
-
-    const element = candidate.closest('[data-link]');
-    if (!element) return;
-
-    const rawLink = element.getAttribute('data-link') ?? '';
-    const link = rawLink.trim();
-    if (!link) return;
-
-    const hasNewTabAttr = element.hasAttribute('data-link-new-tab');
-    const newTabAttrValue = (element.getAttribute('data-link-new-tab') ?? '').trim().toLowerCase();
-    // Presence of data-link-new-tab should open in new tab, unless explicitly disabled.
-    const wantsNewTab = hasNewTabAttr && !falsyAttr(newTabAttrValue);
-
-    const isModifiedClick =
-      (ev instanceof MouseEvent)
-      && (ev.button === 1 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey);
-
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    const resolved = resolveUrl(link);
-    if (wantsNewTab || isModifiedClick) {
-      // Use window.open to trigger webview new-window event (opens in new tab)
-      window.open(resolved, '_blank', 'noopener,noreferrer');
-    } else {
-      window.location.assign(resolved);
-    }
-  }, true);
-})();`;
-                      wv.executeJavaScript(dataLinkScript).catch(() => undefined);
-
-                      const miraVersion = electron?.appVersion ?? null;
-                      if (miraVersion) {
-                        const miraVersionScript = `(() => {
-  try {
-    const version = ${JSON.stringify(miraVersion)};
-    if (!version) return;
-    const value = Object.freeze({ version });
-    Object.defineProperty(window, 'mira', {
-      value,
-      configurable: false,
-      enumerable: false,
-      writable: false,
-    });
-  } catch {
-    // Ignore script injection errors.
-  }
-})();`;
-                        wv.executeJavaScript(miraVersionScript).catch(() => undefined);
-                      }
-                    };
-                    const didPageTitleUpdatedHandler = (e: Event) => {
-                      const ev = e as WebviewPageTitleUpdatedEvent;
-                      updateTabMetadata(tab.id, { title: ev.title });
-                    };
-                    const pageFaviconUpdatedHandler = (e: Event) => {
-                      const ev = e as WebviewPageFaviconUpdatedEvent;
-                      updateTabMetadata(tab.id, { favicon: ev.favicons?.[0] ?? null });
-                    };
-                    const foundInPageHandler = (e: Event) => {
-                      const ev = e as WebviewFoundInPageEvent;
-                      const result = ev.result ?? ev;
-                      const requestId =
-                        typeof result.requestId === 'number' ? result.requestId : Number.NaN;
-                      if (!Number.isFinite(requestId)) return;
-
-                      const activeMatchOrdinal =
-                        typeof result.activeMatchOrdinal === 'number'
-                          ? result.activeMatchOrdinal
-                          : 0;
-                      const matches = typeof result.matches === 'number' ? result.matches : 0;
-                      updateFindInPageMatches(tab.id, requestId, activeMatchOrdinal, matches);
-                    };
-                    const contextMenuHandler = (e: Event) => {
-                      const ev = e as WebviewContextMenuEvent;
-                      const params = normalizeContextMenuParams(ev.params);
-
-                      if (nativeTextFieldContextMenu) {
-                        const ipc = electron?.ipcRenderer;
-                        const webContentsId =
-                          typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
-                        if (ipc && Number.isFinite(webContentsId) && webContentsId > 0) {
-                          e.preventDefault();
-                          setPageMenuState(null);
-
-                          let x = params.x;
-                          let y = params.y;
-                          if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
-                            const webviewRect = wv.getBoundingClientRect();
-                            x = webviewRect.left + params.x;
-                            y = webviewRect.top + params.y;
-                          }
-
-                          const currentTab = tabs.find((entry) => entry.id === tab.id) ?? tab;
-                          const canGoBack = currentTab.historyIndex > 0;
-                          const canGoForward =
-                            currentTab.historyIndex < currentTab.history.length - 1;
-                          const sourceUrl = params.pageURL || currentTab.url || '';
-
-                          void ipc
-                            .invoke('webview-show-native-context-menu', {
-                              webContentsId: Math.floor(webContentsId),
-                              tabId: tab.id,
-                              x,
-                              y,
-                              params,
-                              context: {
-                                canGoBack,
-                                canGoForward,
-                                sourceUrl,
-                              },
-                            })
-                            .catch(() => undefined);
-                          return;
-                        }
-                      }
-
-                      e.preventDefault();
-
-                      const webContentsId =
-                        typeof wv.getWebContentsId === 'function' ? wv.getWebContentsId() : -1;
-                      if (!Number.isFinite(webContentsId) || webContentsId <= 0) return;
-
-                      let x = params.x;
-                      let y = params.y;
-
-                      // Some environments report coordinates relative to the webview bounds.
-                      // If direct values look invalid, fall back to translating by webview offset.
-                      if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
-                        const webviewRect = wv.getBoundingClientRect();
-                        x = webviewRect.left + params.x;
-                        y = webviewRect.top + params.y;
-                      }
-                      setPageMenuState({
-                        tabId: tab.id,
-                        webContentsId: Math.floor(webContentsId),
-                        x,
-                        y,
-                        params,
-                      });
-                    };
-                    const newWindowHandler = (e: Event) => {
-                      const ev = e as WebviewNewWindowEvent;
-                      const url = typeof ev.url === 'string' ? ev.url.trim() : '';
-                      const disposition =
-                        typeof ev.disposition === 'string' ? ev.disposition.toLowerCase() : '';
-
-                      console.log('newWindowHandler called:', { url, disposition });
-
-                      if (!url) {
-                        e.preventDefault();
-                        return;
-                      }
-
-                      // Prevent the default behavior of opening in a new window
-                      e.preventDefault();
-
-                      // Open in a new tab based on disposition
-                      if (disposition === 'new-window') {
-                        // Open in new window
-                        const ipc = electron?.ipcRenderer;
-                        if (ipc) {
-                          void ipc.invoke('window-new-with-url', url).catch(() => undefined);
-                        } else {
-                          window.open(url, '_blank', 'noopener,noreferrer');
-                        }
-                      } else {
-                        // Open in new tab (default for target="_blank")
-                        // Track if this might be a login tab by checking common login patterns
-                        const isLikelyLoginTab = /login|signin|oauth|auth|sso|account|consent/i.test(url) || 
-                                                 /google\.com|github\.com|facebook\.com|microsoft\.com|apple\.com/i.test(url) ||
-                                                 /accounts\.google\.com/i.test(url);
-                        
-                        // Debug logging to help identify issues
-                        if (isLikelyLoginTab) {
-                          console.log('Login tab detected:', url);
-                        } else {
-                          console.log('URL not detected as login tab:', url);
-                        }
-                        
-                        const newTabId = newTabToRight(tab.id, url);
-                        
-                        // If this appears to be a login tab, set up navigation monitoring to return to original tab
-                        if (isLikelyLoginTab && newTabId) {
-                          // Store the original tab ID for potential return after login
-                          setTimeout(() => {
-                            const webview = webviewMap.current[newTabId];
-                            if (webview && typeof webview.executeJavaScript === 'function') {
-                              // Monitor navigation events to detect login completion
-                              const loginMonitorScript = `
-                                (function() {
-                                  let originalTabId = '${tab.id}';
-                                  let hasReturned = false;
-                                  
-                                  // Check if current URL suggests login completion
-                                  function checkForLoginCompletion() {
-                                    const currentUrl = window.location.href;
-                                    console.log('Checking for login completion at:', currentUrl);
-                                    
-                                    // More comprehensive patterns for login completion
-                                    const hasTokenOrCode = /#access_token=|#code=|/callback|/auth/callback|state=/.test(currentUrl);
-                                    const isNotLoginFlow = !/login|signin|oauth|auth|sso|consent|account/i.test(currentUrl);
-                                    const isBackToOriginal = currentUrl.includes(window.location.origin);
-                                    
-                                    // Google OAuth often redirects back to the app with tokens
-                                    const isOAuthComplete = hasTokenOrCode && (isNotLoginFlow || isBackToOriginal);
-                                    
-                                    console.log('Login completion check:', {
-                                      hasTokenOrCode,
-                                      isNotLoginFlow,
-                                      isBackToOriginal,
-                                      isOAuthComplete,
-                                      hasReturned
-                                    });
-                                    
-                                    if (isOAuthComplete && !hasReturned) {
-                                      hasReturned = true;
-                                      console.log('Login completed, returning to original tab:', originalTabId);
-                                      // Send message to parent to return to original tab
-                                      window.parent.postMessage({
-                                        type: 'login-completed',
-                                        originalTabId: originalTabId,
-                                        returnUrl: currentUrl
-                                      }, '*');
-                                    }
-                                  }
-                                  
-                                  // Monitor URL changes
-                                  let lastUrl = window.location.href;
-                                  setInterval(() => {
-                                    if (window.location.href !== lastUrl) {
-                                      lastUrl = window.location.href;
-                                      checkForLoginCompletion();
-                                    }
-                                  }, 1000);
-                                  
-                                  // Initial check
-                                  checkForLoginCompletion();
-                                })();
-                              `;
-                              
-                              webview.executeJavaScript(loginMonitorScript).catch(() => undefined);
-                            }
-                          }, 2000); // Wait 2 seconds for tab to fully load
-                        }
-                      }
-                    };
-
-                    wv.didNavigateHandler = didNavigateHandler as (
-                      e: WebviewNavigationEvent,
-                    ) => void;
-                    wv.didNavigateInPageHandler = didNavigateInPageHandler as (
-                      e: WebviewNavigationEvent,
-                    ) => void;
-                    wv.didStartLoadingHandler = didStartLoadingHandler;
-                    wv.didFailLoadHandler = didFailLoadHandler as (
-                      e: WebviewDidFailLoadEvent,
-                    ) => void;
-                    wv.domReadyHandler = domReadyHandler;
-                    wv.didPageTitleUpdatedHandler = didPageTitleUpdatedHandler as (
-                      e: WebviewPageTitleUpdatedEvent,
-                    ) => void;
-                    wv.pageFaviconUpdatedHandler = pageFaviconUpdatedHandler as (
-                      e: WebviewPageFaviconUpdatedEvent,
-                    ) => void;
-                    wv.foundInPageHandler = foundInPageHandler as (
-                      e: WebviewFoundInPageEvent,
-                    ) => void;
-                    wv.contextMenuHandler = contextMenuHandler as (
-                      e: WebviewContextMenuEvent,
-                    ) => void;
-                    wv.newWindowHandler = newWindowHandler as (e: WebviewNewWindowEvent) => void;
-
-                    wv.addEventListener('did-navigate', didNavigateHandler);
-                    wv.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
-                    wv.addEventListener('did-start-loading', didStartLoadingHandler);
-                    wv.addEventListener('did-fail-load', didFailLoadHandler);
-                    wv.addEventListener('dom-ready', domReadyHandler);
-                    wv.addEventListener('page-title-updated', didPageTitleUpdatedHandler);
-                    wv.addEventListener('page-favicon-updated', pageFaviconUpdatedHandler);
-                    wv.addEventListener('found-in-page', foundInPageHandler);
-                    wv.addEventListener('context-menu', contextMenuHandler);
-                    wv.addEventListener('new-window', newWindowHandler);
-
-                    const trackedSrc = wv.getAttribute(WEBVIEW_TRACKED_SRC_ATTR) ?? '';
-                    const nextSrc = normalizeComparableUrl(tab.url);
-                    if (trackedSrc !== nextSrc) {
-                      wv.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, nextSrc);
-                      wv.src = tab.url;
-                    }
-                  }}
+                  ref={getWebviewRefCallback(tab.id)}
                   style={{ flex: 1, width: '100%', height: '100%' }}
                 />
                 {(() => {
