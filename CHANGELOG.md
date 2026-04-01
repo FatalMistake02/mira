@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.0.0 - 2026-04-01
+
 - Add report issue button in settings
 - Fullscreen hides top bar and tabs
 - Localhost urls work
