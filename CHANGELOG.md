@@ -9,6 +9,10 @@
 - Windows stack correctly
 - Add open in new window option to the taskbar context menu (Windows)
 - Tabs can be dragged out into a new window
+- Fix tab animations
+- Fix included themes not showing
+- Fix nested bookmark folders
+- Change tab sleeping indicator
 
 ## v0.14.0 - 2026-03-22
 
