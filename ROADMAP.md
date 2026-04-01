@@ -6,7 +6,7 @@
 - [x] Change context menu for vertical tabs
 - [x] Fix bookmarks context menu
 - [x] Bookmarks menu and folders
-- [ ] Issues
+- [x] Issues
   
 ## v1.1.0
 - [ ] Ad blocker blocks Youtube videos
