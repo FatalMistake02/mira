@@ -1,18 +1,19 @@
 # Roadmap
 
 ## v1.1.0
-- [ ] Ad blocker blocks Youtube videos
 - [x] Bookmarks and favorites
       Bookmark page: Ctrl+D
       Bookmark all tabs: Ctrl+Shift+D
       Show/hide bookmarks bar: Ctrl+Shift+B
       Bookmark manager: Ctrl+Shift+O
-- [ ] Site settings
+- [x] Site settings
 - [x] HTTPS first and http warning page
-- [ ] Site permissions controls
+- [x] Site permissions controls
 - [x] Tracker blocking
 - [ ] Private mode
       New private window: Ctrl+Shift+N
+- [ ] Finish cookies and site data
+- [ ] Clean up ui
 
 ## v1.2.0
 - [ ] Tab groups and colors

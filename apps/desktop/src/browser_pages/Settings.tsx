@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronUp, Shield } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
 import { useDownloads } from '../features/downloads/DownloadProvider';
 import { clearHistoryEntries } from '../features/history/clientHistory';
@@ -103,7 +103,9 @@ type SetDefaultBrowserResponse = {
   };
 };
 
-type SettingsSectionId = 'general' | 'search' | 'appearance' | 'app' | 'dev';
+type SettingsSectionId = 'general' | 'search' | 'appearance' | 'privacy-security' | 'app' | 'dev';
+
+type PrivacySecuritySubsection = 'site-permissions' | 'cookies';
 
 const SETTINGS_SECTION_TABS: Array<{
   id: SettingsSectionId;
@@ -122,6 +124,10 @@ const SETTINGS_SECTION_TABS: Array<{
     label: 'Appearance',
   },
   {
+    id: 'privacy-security',
+    label: 'Privacy & Security',
+  },
+  {
     id: 'app',
     label: 'App',
   },
@@ -132,6 +138,26 @@ const APP_DATA_STORAGE_KEYS = [
   'mira.themes.custom.v1',
   'mira.layouts.custom.v1',
   'mira.session.tabs.v1',
+];
+
+// All site permission IDs and labels for detail view
+const ALL_SITE_PERMISSIONS: Array<{ id: string; label: string }> = [
+  { id: 'camera', label: 'Camera' },
+  { id: 'microphone', label: 'Microphone' },
+  { id: 'location', label: 'Location' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'fullscreen', label: 'Fullscreen' },
+  { id: 'clipboard', label: 'Clipboard' },
+  { id: 'pointer-lock', label: 'Pointer Lock' },
+  { id: 'screen-capture', label: 'Screen Capture' },
+  { id: 'midi', label: 'MIDI' },
+  { id: 'storage-access', label: 'Storage Access' },
+  { id: 'window-management', label: 'Window Management' },
+  { id: 'idle-detection', label: 'Idle Detection' },
+  { id: 'speaker-selection', label: 'Speaker Selection' },
+  { id: 'keyboard-lock', label: 'Keyboard Lock' },
+  { id: 'external-apps', label: 'External Apps' },
+  { id: 'file-system', label: 'File System' },
 ];
 
 const parseHashParams = (hash: string) => {
@@ -249,6 +275,7 @@ export default function Settings() {
   const [showPerfOverlay, setShowPerfOverlay] = useState(() => initialSettings.showPerfOverlay);
   const [showBookmarkButton, setShowBookmarkButton] = useState(() => initialSettings.showBookmarkButton);
   const [showBookmarksBar, setShowBookmarksBar] = useState(() => initialSettings.showBookmarksBar);
+  const [cookiesEnabled, setCookiesEnabled] = useState(() => initialSettings.cookiesEnabled);
   const [themes, setThemes] = useState<ThemeEntry[]>(() => getAllThemes());
   const [layouts, setLayouts] = useState<LayoutEntry[]>(() => getAllLayouts());
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -271,6 +298,7 @@ export default function Settings() {
   const [onboardingResetStatus, setOnboardingResetStatus] = useState('');
   const [appDataResetStatus, setAppDataResetStatus] = useState('');
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
+  const [privacySecuritySubsection, setPrivacySecuritySubsection] = useState<PrivacySecuritySubsection>('site-permissions');
   const [isDefaultBrowser, setIsDefaultBrowser] = useState<boolean | null>(null);
   const [canAttemptDefaultBrowserRegistration, setCanAttemptDefaultBrowserRegistration] =
     useState(true);
@@ -281,6 +309,180 @@ export default function Settings() {
   const clearSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { navigate, tabs, activeId } = useTabs();
   const { clear: clearDownloads } = useDownloads();
+
+  // Site permissions state
+  const [sitePermissions, setSitePermissions] = useState<Array<{
+    origin: string;
+    siteLabel: string;
+    permissions: Array<{ id: string; label: string; decision: string }>;
+  }>>([]);
+  const [isLoadingSitePermissions, setIsLoadingSitePermissions] = useState(false);
+  const [sitePermissionStatus, setSitePermissionStatus] = useState('');
+  const [selectedSiteOrigin, setSelectedSiteOrigin] = useState<string | null>(null);
+
+  // Cookies state
+  const [cookiesData, setCookiesData] = useState<Array<{
+    origin: string;
+    siteLabel: string;
+    cookieCount: number;
+  }>>([]);
+  const [isLoadingCookies, setIsLoadingCookies] = useState(false);
+  const [cookiesStatus, setCookiesStatus] = useState('');
+
+  const loadSitePermissions = useCallback(async () => {
+    if (!electron?.ipcRenderer) {
+      setSitePermissionStatus('Site permissions are only available in the desktop app.');
+      return;
+    }
+
+    setIsLoadingSitePermissions(true);
+    setSitePermissionStatus('');
+    try {
+      const response = await electron.ipcRenderer.invoke<{
+        ok: boolean;
+        origins?: Array<{
+          origin: string;
+          siteLabel: string;
+          permissions: Array<{ id: string; label: string; decision: string }>;
+        }>;
+      }>('site-permissions-get-all');
+
+      if (response.ok && response.origins) {
+        setSitePermissions(response.origins);
+        // Clear selected site if it's no longer in the list
+        if (selectedSiteOrigin && !response.origins.some(s => s.origin === selectedSiteOrigin)) {
+          setSelectedSiteOrigin(null);
+        }
+      } else {
+        setSitePermissions([]);
+        setSelectedSiteOrigin(null);
+      }
+    } catch {
+      setSitePermissionStatus('Failed to load site permissions.');
+    } finally {
+      setIsLoadingSitePermissions(false);
+    }
+  }, [selectedSiteOrigin]);
+
+  const deleteSitePermission = async (origin: string) => {
+    if (!electron?.ipcRenderer) return;
+
+    try {
+      const response = await electron.ipcRenderer.invoke<{ ok: boolean }>(
+        'site-permissions-delete',
+        { origin }
+      );
+
+      if (response.ok) {
+        setSitePermissions((current) => current.filter((site) => site.origin !== origin));
+        if (selectedSiteOrigin === origin) {
+          setSelectedSiteOrigin(null);
+        }
+      }
+    } catch {
+      setSitePermissionStatus('Failed to delete site permissions.');
+    }
+  };
+
+  const deleteAllSitePermissions = async () => {
+    const confirmed = window.confirm('This will clear all site permissions. Continue?');
+    if (!confirmed) return;
+
+    if (!electron?.ipcRenderer) return;
+
+    try {
+      const response = await electron.ipcRenderer.invoke<{ ok: boolean }>(
+        'site-permissions-delete-all'
+      );
+
+      if (response.ok) {
+        setSitePermissions([]);
+        setSelectedSiteOrigin(null);
+        setSitePermissionStatus('All site permissions cleared.');
+      }
+    } catch {
+      setSitePermissionStatus('Failed to clear all site permissions.');
+    }
+  };
+
+  const loadCookies = useCallback(async () => {
+    if (!electron?.ipcRenderer) {
+      setCookiesStatus('Cookie management is only available in the desktop app.');
+      return;
+    }
+
+    setIsLoadingCookies(true);
+    setCookiesStatus('');
+    try {
+      const response = await electron.ipcRenderer.invoke<{
+        ok: boolean;
+        origins?: Array<{
+          origin: string;
+          siteLabel: string;
+          cookieCount: number;
+        }>;
+      }>('cookies-get-all');
+
+      if (response.ok && response.origins) {
+        setCookiesData(response.origins);
+      } else {
+        setCookiesData([]);
+      }
+    } catch {
+      setCookiesStatus('Failed to load cookies.');
+    } finally {
+      setIsLoadingCookies(false);
+    }
+  }, []);
+
+  const deleteSiteCookies = async (origin: string) => {
+    if (!electron?.ipcRenderer) return;
+
+    try {
+      const response = await electron.ipcRenderer.invoke<{ ok: boolean }>(
+        'cookies-delete',
+        { origin }
+      );
+
+      if (response.ok) {
+        setCookiesData((current) => current.filter((site) => site.origin !== origin));
+      }
+    } catch {
+      setCookiesStatus('Failed to delete cookies.');
+    }
+  };
+
+  const updateSitePermission = async (origin: string, permissionId: string, decision: 'allow' | 'ask' | 'block') => {
+    if (!electron?.ipcRenderer) return;
+
+    try {
+      const response = await electron.ipcRenderer.invoke<{
+        ok?: boolean;
+        snapshot?: {
+          canManage: boolean;
+          origin: string;
+          siteLabel: string;
+          permissions: Array<{ id: string; label: string; decision: string }>;
+        };
+      }>('site-permissions-update', {
+        origin,
+        permissionId,
+        decision,
+      });
+
+      if (response?.ok && response.snapshot) {
+        setSitePermissions((current) =>
+          current.map((site) =>
+            site.origin === origin
+              ? { ...site, permissions: response.snapshot!.permissions.filter(p => p.decision !== 'ask') }
+              : site
+          )
+        );
+      }
+    } catch {
+      setSitePermissionStatus('Failed to update permission.');
+    }
+  };
 
   useEffect(() => {
     if (!electron?.ipcRenderer) return;
@@ -435,6 +637,7 @@ export default function Settings() {
     tabStripPosition,
     showBookmarkButton,
     showBookmarksBar,
+    cookiesEnabled,
   ]);
 
   useEffect(() => {
@@ -825,7 +1028,7 @@ export default function Settings() {
   }, [activeTabUrl, isSettingsTab, settingsSectionIds]);
 
   useEffect(() => {
-    if (!isSettingsTab || hasTriggeredUpdateCheckRef.current) return;
+    if (!isSettingsTab) return;
     const hash = activeTabUrl.includes('#') ? activeTabUrl.slice(activeTabUrl.indexOf('#')) : '';
     const params = parseHashParams(hash);
     const checkUpdatesParam = (params.checkupdates ?? '').toLowerCase();
@@ -837,13 +1040,70 @@ export default function Settings() {
 
   useEffect(() => {
     if (!isSettingsTab) return;
+    const hash = activeTabUrl.includes('#') ? activeTabUrl.slice(activeTabUrl.indexOf('#')) : '';
+    const params = parseHashParams(hash);
+    const subsectionParam = params.subsection ?? '';
+    if (subsectionParam === 'site-permissions' || subsectionParam === 'cookies') {
+      setPrivacySecuritySubsection(subsectionParam as PrivacySecuritySubsection);
+    } else {
+      setPrivacySecuritySubsection(null as unknown as PrivacySecuritySubsection);
+    }
+  }, [activeTabUrl, isSettingsTab]);
+
+  // Handle site parameter for pre-selecting a site in permissions
+  useEffect(() => {
+    if (!isSettingsTab) return;
+    if (activeSection !== 'privacy-security') return;
+    if (privacySecuritySubsection !== 'site-permissions') return;
+    
+    const hash = activeTabUrl.includes('#') ? activeTabUrl.slice(activeTabUrl.indexOf('#')) : '';
+    const params = parseHashParams(hash);
+    const siteParam = params.site;
+    
+    // Only update state if different to prevent loops
+    if (siteParam && siteParam !== selectedSiteOrigin) {
+      setSelectedSiteOrigin(siteParam);
+    } else if (!siteParam && selectedSiteOrigin) {
+      setSelectedSiteOrigin(null);
+    }
+    
+    // Load permissions if not already loaded - ALWAYS load when entering this page
+    if (sitePermissions.length === 0 && !isLoadingSitePermissions) {
+      void loadSitePermissions();
+    }
+  }, [activeSection, privacySecuritySubsection, activeTabUrl, isSettingsTab, sitePermissions.length, isLoadingSitePermissions, loadSitePermissions, selectedSiteOrigin]);
+
+  // Navigate to site permission detail
+  const navigateToSitePermission = (site: string | null) => {
+    const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
+    if (site) {
+      navigate(`${baseUrl}#section=privacy-security&subsection=site-permissions&site=${encodeURIComponent(site)}`);
+    } else {
+      navigate(`${baseUrl}#section=privacy-security&subsection=site-permissions`);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSettingsTab) return;
     if (isSyncingFromUrlRef.current) {
       isSyncingFromUrlRef.current = false;
       return;
     }
+    
+    const hash = activeTabUrl.includes('#') ? activeTabUrl.slice(activeTabUrl.indexOf('#')) : '';
+    const params = parseHashParams(hash);
+    const currentSection = params.section ?? '';
+    
+    // Don't navigate if section already matches
+    if (currentSection === activeSection) return;
+    
     const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
+    
+    // Build URL - only sync section, don't add/remove site param
     const nextUrl = `${baseUrl}#section=${activeSection}`;
-    if (activeTabUrl && activeTabUrl !== nextUrl) {
+    
+    if (activeTabUrl && activeTabUrl !== nextUrl && !activeTabUrl.includes('site=')) {
+      isSyncingFromUrlRef.current = true;
       navigate(nextUrl);
     }
   }, [activeSection, activeTabUrl, isSettingsTab, navigate]);
@@ -1551,6 +1811,331 @@ export default function Settings() {
 
               {!!importMessage && (
                 <div className="theme-text2 settings-inline-message">{importMessage}</div>
+              )}
+            </>
+          )}
+
+          {activeSection === 'privacy-security' && (
+            <>
+              {!privacySecuritySubsection && (
+                /* Main Privacy & Security landing page */
+                <section className="theme-panel settings-card">
+                  <div className="settings-card-header">
+                    <h2 className="settings-card-title">Privacy & Security</h2>
+                  </div>
+                  <div className="settings-privacy-security-menu">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrivacySecuritySubsection('site-permissions');
+                        const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
+                        navigate(`${baseUrl}#section=privacy-security&subsection=site-permissions`);
+                      }}
+                      className="theme-btn theme-btn-nav settings-privacy-security-menu-btn"
+                    >
+                      <div className="settings-privacy-security-menu-btn-content">
+                        <span className="settings-privacy-security-menu-btn-title">Site Permissions</span>
+                        <span className="settings-privacy-security-menu-btn-desc">
+                          Manage permissions for individual websites
+                        </span>
+                      </div>
+                      <ChevronRight size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrivacySecuritySubsection('cookies');
+                        const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
+                        navigate(`${baseUrl}#section=privacy-security&subsection=cookies`);
+                      }}
+                      className="theme-btn theme-btn-nav settings-privacy-security-menu-btn"
+                    >
+                      <div className="settings-privacy-security-menu-btn-content">
+                        <span className="settings-privacy-security-menu-btn-title">Cookies and Site Data</span>
+                        <span className="settings-privacy-security-menu-btn-desc">
+                          Manage cookies and stored site data
+                        </span>
+                      </div>
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {privacySecuritySubsection === 'cookies' && (
+                <section className="theme-panel settings-card">
+                  <div className="settings-card-header">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrivacySecuritySubsection(null as unknown as PrivacySecuritySubsection);
+                        const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
+                        navigate(`${baseUrl}#section=privacy-security`);
+                      }}
+                      className="theme-btn theme-btn-nav settings-permission-back-btn"
+                      style={{ marginBottom: '12px' }}
+                    >
+                      ← Back to Privacy & Security
+                    </button>
+                    <h2 className="settings-card-title">Cookies and Site Data</h2>
+                  </div>
+                  
+                  {/* Cookie Settings */}
+                  <label htmlFor="cookies-enabled" className="settings-setting-row">
+                    <span className="settings-setting-meta">
+                      <span className="settings-setting-label">Allow cookies</span>
+                      <span className="settings-setting-description">
+                        Allow websites to store cookies and site data.
+                      </span>
+                    </span>
+                    <input
+                      id="cookies-enabled"
+                      type="checkbox"
+                      className="settings-toggle settings-setting-control"
+                      checked={cookiesEnabled}
+                      onChange={(e) => {
+                        setCookiesEnabled(e.currentTarget.checked);
+                        setSaveStatus('saving');
+                      }}
+                    />
+                  </label>
+
+                  {/* Sites with Cookies */}
+                  <div className="settings-setting-row" style={{ marginTop: '16px' }}>
+                    <div className="settings-setting-meta">
+                      <span className="settings-setting-label">Sites with cookies</span>
+                      <span className="settings-setting-description">
+                        Manage stored cookies and site data for individual websites.
+                      </span>
+                    </div>
+                    <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                      <button
+                        type="button"
+                        onClick={loadCookies}
+                        className="theme-btn theme-btn-nav settings-btn-pad"
+                        disabled={isLoadingCookies}
+                      >
+                        {isLoadingCookies ? 'Loading...' : 'Refresh'}
+                      </button>
+                      {cookiesData.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={deleteAllCookies}
+                          className="theme-btn theme-btn-nav settings-btn-pad"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {!!cookiesStatus && (
+                    <div className="theme-text2 settings-status">{cookiesStatus}</div>
+                  )}
+                  
+                  {cookiesData.length === 0 && !isLoadingCookies && !cookiesStatus && (
+                    <div className="settings-permissions-empty-state">
+                      <div className="settings-permissions-empty-title">No Cookies</div>
+                      <div className="settings-permissions-empty-description">
+                        No cookies or site data stored yet. Visit websites to store cookies.
+                      </div>
+                    </div>
+                  )}
+                  
+                  {cookiesData.length > 0 && (
+                    <div className="settings-permissions-list-full" style={{ marginTop: '12px' }}>
+                      {cookiesData.map((site) => (
+                        <div
+                          key={site.origin}
+                          className="settings-permission-site-row"
+                        >
+                          <div className="settings-permission-site-row-info">
+                            <div className="settings-permission-site-row-label">{site.siteLabel}</div>
+                            <div className="settings-permission-site-row-origin">{site.origin.replace(/^https?:\/\//, '')}</div>
+                          </div>
+                          <div className="settings-permission-site-row-actions">
+                            <span className="settings-permission-site-row-count">
+                              {site.cookieCount} cookie{site.cookieCount !== 1 ? 's' : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => deleteSiteCookies(site.origin)}
+                              className="theme-btn theme-btn-nav settings-btn-pad"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {privacySecuritySubsection === 'site-permissions' && (
+                <section className="theme-panel settings-card">
+                  <div className="settings-card-header">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrivacySecuritySubsection(null as unknown as PrivacySecuritySubsection);
+                        const baseUrl = activeTabUrl ? activeTabUrl.split('#')[0] : 'mira://Settings';
+                        navigate(`${baseUrl}#section=privacy-security`);
+                      }}
+                      className="theme-btn theme-btn-nav settings-permission-back-btn"
+                      style={{ marginBottom: '12px' }}
+                    >
+                      ← Back to Privacy & Security
+                    </button>
+                    <h2 className="settings-card-title">Site Permissions</h2>
+                  </div>
+                  
+                  {/* Detail view for selected site */}
+                  {selectedSiteOrigin ? (
+                    (() => {
+                      // Normalize for comparison - strip protocol if present
+                      const normalizedSelected = selectedSiteOrigin.replace(/^https?:\/\//, '');
+                      const site = sitePermissions.find(s => 
+                        s.origin === selectedSiteOrigin || 
+                        s.origin.replace(/^https?:\/\//, '') === normalizedSelected
+                      );
+                      if (!site) {
+                        return (
+                          <div className="settings-permission-detail-empty">
+                            <div className="theme-text2 settings-status">Site not found.</div>
+                            <button
+                              type="button"
+                              onClick={() => navigateToSitePermission(null)}
+                              className="theme-btn theme-btn-nav settings-btn-pad"
+                            >
+                              Back to List
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="settings-permission-detail-full">
+                          <div className="settings-permission-detail-header">
+                            <button
+                              type="button"
+                              onClick={() => navigateToSitePermission(null)}
+                              className="theme-btn theme-btn-nav settings-permission-back-btn"
+                            >
+                              ← Back
+                            </button>
+                            <div className="settings-permission-detail-title-group">
+                              <div className="settings-permission-detail-title">{site.siteLabel}</div>
+                              <div className="settings-permission-detail-origin">{site.origin.replace(/^https?:\/\//, '')}</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteSitePermission(site.origin)}
+                              className="theme-btn theme-btn-nav settings-btn-pad"
+                            >
+                              Remove All
+                            </button>
+                          </div>
+                          <div className="settings-permission-detail-list">
+                            {(() => {
+                              // Build complete permission list with site data
+                              const sitePermissionMap = new Map(site.permissions.map(p => [p.id, p.decision]));
+                              const allPermissions = ALL_SITE_PERMISSIONS.map(perm => ({
+                                ...perm,
+                                decision: sitePermissionMap.get(perm.id) ?? 'ask',
+                              }));
+                              return allPermissions.map((perm) => (
+                                <div key={perm.id} className="settings-permission-detail-row">
+                                  <span className="settings-permission-detail-label">{perm.label}</span>
+                                  <div className="settings-permission-detail-actions">
+                                    {(['allow', 'ask', 'block'] as const).map((decision) => (
+                                      <button
+                                        key={decision}
+                                        type="button"
+                                        className={`theme-btn site-settings-choice ${
+                                          perm.decision === decision ? 'site-settings-choice-active' : ''
+                                        }`}
+                                        onClick={() => updateSitePermission(site.origin, perm.id, decision)}
+                                      >
+                                        {decision === 'allow'
+                                          ? 'Allow'
+                                          : decision === 'block'
+                                            ? 'Block'
+                                            : 'Ask'}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    /* List view */
+                    <>
+                      <div className="settings-setting-row">
+                        <div className="settings-setting-meta">
+                          <span className="settings-setting-label">Manage site permissions</span>
+                          <span className="settings-setting-description">
+                            Click a site to manage its permissions. Each domain has separate permissions.
+                          </span>
+                        </div>
+                        <div className="settings-actions-row settings-setting-control settings-setting-control-grow settings-setting-control-right">
+                          <button
+                            type="button"
+                            onClick={loadSitePermissions}
+                            className="theme-btn theme-btn-nav settings-btn-pad"
+                            disabled={isLoadingSitePermissions}
+                          >
+                            {isLoadingSitePermissions ? 'Loading...' : 'Refresh'}
+                          </button>
+                          {sitePermissions.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={deleteAllSitePermissions}
+                              className="theme-btn theme-btn-nav settings-btn-pad"
+                            >
+                              Clear All
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {!!sitePermissionStatus && (
+                        <div className="theme-text2 settings-status">{sitePermissionStatus}</div>
+                      )}
+                      {sitePermissions.length === 0 && !isLoadingSitePermissions && !sitePermissionStatus && (
+                        <div className="settings-permissions-empty-state">
+                          <Shield className="settings-permissions-empty-icon" size={48} />
+                          <div className="settings-permissions-empty-title">No Site Permissions</div>
+                          <div className="settings-permissions-empty-description">
+                            Visit websites and manage permissions from the site settings button in the address bar.
+                          </div>
+                        </div>
+                      )}
+                      {sitePermissions.length > 0 && (
+                        <div className="settings-permissions-list-full">
+                          {sitePermissions.map((site) => (
+                            <button
+                              key={site.origin}
+                              type="button"
+                              onClick={() => navigateToSitePermission(site.origin.replace(/^https?:\/\//, ''))}
+                              className="settings-permission-site-row"
+                            >
+                              <div className="settings-permission-site-row-info">
+                                <div className="settings-permission-site-row-label">{site.siteLabel}</div>
+                                <div className="settings-permission-site-row-origin">{site.origin.replace(/^https?:\/\//, '')}</div>
+                              </div>
+                              <div className="settings-permission-site-row-count">
+                                {site.permissions.length} permission{site.permissions.length !== 1 ? 's' : ''}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
               )}
             </>
           )}

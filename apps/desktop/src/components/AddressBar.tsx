@@ -5,12 +5,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  FileText,
+  Globe,
   History,
+  Lock,
   Plus,
   Printer,
   RotateCw,
   Settings2,
   SquareArrowOutUpRight,
+  TriangleAlert,
   X,
 } from 'lucide-react';
 import { useTabs } from '../features/tabs/TabsProvider';
@@ -50,6 +54,76 @@ type AddressMenuAction = {
   onSelect: () => void;
 };
 
+type SitePermissionRequestPayload = {
+  requestId: string;
+  webContentsId: number;
+  origin: string;
+  siteLabel: string;
+  label: string;
+  permissionIds: string[];
+  url: string;
+};
+
+type SiteSettingsPageInfo =
+  | {
+      kind: 'internal' | 'file' | 'unsupported';
+      siteLabel: string;
+      statusLabel: string;
+      origin?: undefined;
+    }
+  | {
+      kind: 'site';
+      siteLabel: string;
+      statusLabel: string;
+      origin: string;
+      secure: boolean;
+    };
+
+function stripViewSourcePrefix(url: string): string {
+  return url.startsWith('view-source:') ? url.slice('view-source:'.length) : url;
+}
+
+function readSiteSettingsPageInfo(url: string | undefined): SiteSettingsPageInfo {
+  const normalized = stripViewSourcePrefix(url?.trim() ?? '');
+  if (!normalized || normalized.startsWith('mira://')) {
+    return {
+      kind: 'internal',
+      siteLabel: 'Mira page',
+      statusLabel: 'Internal pages do not use site permissions.',
+    };
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol === 'http:' || protocol === 'https:') {
+      return {
+        kind: 'site',
+        siteLabel: parsed.hostname || parsed.origin,
+        statusLabel: protocol === 'https:' ? 'Connection is secure' : 'Connection is not secure',
+        origin: parsed.origin,
+        secure: protocol === 'https:',
+      };
+    }
+
+    if (protocol === 'file:') {
+      return {
+        kind: 'file',
+        siteLabel: 'Local file',
+        statusLabel: 'Local files do not use site permission controls.',
+      };
+    }
+  } catch {
+    // Fall through to unsupported below.
+  }
+
+  return {
+    kind: 'unsupported',
+    siteLabel: 'This page',
+    statusLabel: 'Site settings are not available for this address.',
+  };
+}
+
 export default function AddressBar({ inputRef }: AddressBarProps) {
   const {
     tabs,
@@ -62,9 +136,6 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     openHistory,
     openDownloads,
     openBookmarks,
-    toggleBookmarksBar,
-    bookmarkCurrentPage,
-    bookmarkAllTabs,
     setActive,
     printPage,
   } = useTabs();
@@ -72,6 +143,8 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   const [input, setInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
+  const [siteSettingsOpen, setSiteSettingsOpen] = useState(false);
+  const [permissionRequests, setPermissionRequests] = useState<SitePermissionRequestPayload[]>([]);
   const [animationsEnabled, setAnimationsEnabled] = useState(
     () => getBrowserSettings().animationsEnabled,
   );
@@ -79,6 +152,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     () => getBrowserSettings().showBookmarkButton,
   );
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const siteSettingsRef = useRef<HTMLDivElement | null>(null);
   const menuCloseTimerRef = useRef<number | null>(null);
 
   const clearMenuCloseTimer = useCallback(() => {
@@ -119,6 +193,10 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       setInput(activeTab.url);
     }
   }, [tabs, activeId]);
+
+  const activeTab = tabs.find((t) => t.id === activeId);
+  const activePageInfo = readSiteSettingsPageInfo(activeTab?.url);
+  const activePermissionRequest = permissionRequests[0] ?? null;
 
   const isSupportedProtocol = (value: string) => {
     const schemeMatch = value.match(/^([a-z][a-z0-9+.-]*:)/i);
@@ -215,7 +293,6 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     navigate(finalUrl);
   };
 
-  const activeTab = tabs.find((t) => t.id === activeId);
   const canGoBack = activeTab && activeTab.historyIndex > 0;
   const canGoForward = activeTab && activeTab.historyIndex < activeTab.history.length - 1;
 
@@ -271,6 +348,29 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
     window.close();
   };
 
+  const respondToPermissionRequest = useCallback(
+    async (decision: 'allow' | 'block') => {
+      const pendingRequest = activePermissionRequest;
+      if (!pendingRequest) return;
+
+      const ipc = electron?.ipcRenderer;
+      setPermissionRequests((current) => current.filter((entry) => entry.requestId !== pendingRequest.requestId));
+      if (!ipc) return;
+
+      try {
+        await ipc.invoke<{
+          ok?: boolean;
+        }>('site-permission-request-respond', {
+          requestId: pendingRequest.requestId,
+          decision,
+        });
+      } catch {
+        // Ignore request-response failures. The request has already been removed from the queue.
+      }
+    },
+    [activePermissionRequest],
+  );
+
   useEffect(() => {
     const syncSettings = () => {
       setAnimationsEnabled(getBrowserSettings().animationsEnabled);
@@ -289,19 +389,78 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
 
   useEffect(() => {
     const menuVisible = menuOpen || menuClosing;
-    if (!menuVisible) return;
+    if (!menuVisible && !siteSettingsOpen) return;
 
     const onPointerDown = (event: MouseEvent) => {
-      if (!menuRef.current) return;
-      if (menuRef.current.contains(event.target as Node)) return;
-      closeMenu();
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (siteSettingsRef.current?.contains(target)) return;
+      if (menuVisible) {
+        closeMenu();
+      }
+      setSiteSettingsOpen(false);
+    };
+
+    // Close popups when clicking on webview (window loses focus)
+    const onBlur = () => {
+      if (menuVisible) {
+        closeMenu();
+      }
+      setSiteSettingsOpen(false);
     };
 
     window.addEventListener('mousedown', onPointerDown);
-    return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [menuOpen, menuClosing, closeMenu]);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [menuOpen, menuClosing, closeMenu, siteSettingsOpen]);
 
-  const openSettings = () => {
+  useEffect(() => {
+    setSiteSettingsOpen(false);
+  }, [activeId]);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onSitePermissionRequest = (_event: unknown, payload: unknown) => {
+      if (typeof payload !== 'object' || !payload) return;
+      const candidate = payload as Partial<SitePermissionRequestPayload>;
+      const requestId = typeof candidate.requestId === 'string' ? candidate.requestId.trim() : '';
+      const origin = typeof candidate.origin === 'string' ? candidate.origin.trim() : '';
+      const siteLabel = typeof candidate.siteLabel === 'string' ? candidate.siteLabel.trim() : '';
+      const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+      const permissionIds = Array.isArray(candidate.permissionIds)
+        ? candidate.permissionIds.filter((entry): entry is string => typeof entry === 'string')
+        : [];
+      const url = typeof candidate.url === 'string' ? candidate.url.trim() : '';
+      const webContentsId =
+        typeof candidate.webContentsId === 'number' && Number.isFinite(candidate.webContentsId)
+          ? Math.floor(candidate.webContentsId)
+          : -1;
+
+      if (!requestId || !origin || !label || webContentsId <= 0) return;
+      setPermissionRequests((current) => {
+        if (current.some((entry) => entry.requestId === requestId)) return current;
+        return current.concat({
+          requestId,
+          webContentsId,
+          origin,
+          siteLabel: siteLabel || origin,
+          label,
+          permissionIds,
+          url,
+        });
+      });
+    };
+
+    ipc.on('site-permission-request', onSitePermissionRequest);
+    return () => ipc.off('site-permission-request', onSitePermissionRequest);
+  }, []);
+
+  const openBrowserSettingsPage = () => {
     const existingSettingsTab = tabs.find((tab) => tab.url === 'mira://Settings');
 
     if (existingSettingsTab) {
@@ -310,6 +469,21 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       navigate('mira://Settings');
     } else {
       newTab('mira://Settings');
+    }
+  };
+
+  const openBrowserSettingsPageWithOrigin = (origin: string) => {
+    const url = `mira://Settings#section=privacy-security&subsection=site-permissions&site=${encodeURIComponent(origin)}`;
+    const existingSettingsTab = tabs.find((tab) => tab.url.startsWith('mira://Settings'));
+
+    if (existingSettingsTab) {
+      // Navigate the existing settings tab and activate it
+      navigate(url, existingSettingsTab.id);
+      setActive(existingSettingsTab.id);
+    } else if (activeTab?.url === newTabPage) {
+      navigate(url);
+    } else {
+      newTab(url);
     }
   };
 
@@ -360,7 +534,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       id: 'settings',
       label: 'Settings',
       icon: Settings2,
-      onSelect: openSettings,
+      onSelect: openBrowserSettingsPage,
     },
     {
       id: 'close-window',
@@ -377,10 +551,30 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
   };
 
   const menuVisible = menuOpen || menuClosing;
+  const toggleSiteSettingsPanel = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSiteSettingsOpen((current) => {
+      const nextOpen = !current;
+      if (nextOpen) {
+        closeMenu();
+      }
+      return nextOpen;
+    });
+  };
+
+  const siteSettingsStatusIcon = activePageInfo.kind === 'site'
+    ? activePageInfo.secure
+      ? Lock
+      : TriangleAlert
+    : activePageInfo.kind === 'file'
+      ? FileText
+      : Globe;
+  const SiteSettingsStatusIcon = siteSettingsStatusIcon;
 
   return (
     <div
       style={{
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         padding: 'var(--layoutAddressBarPaddingY, 6px)',
@@ -435,6 +629,72 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
       >
         <ReloadIcon />
       </button>
+
+      <div ref={siteSettingsRef} style={{ position: 'relative' }}>
+        <button
+          onClick={(e) => toggleSiteSettingsPanel(e)}
+          title="Site settings"
+          className={`theme-btn theme-btn-nav nav-icon-btn site-settings-trigger ${
+            siteSettingsOpen ? 'site-settings-trigger-open' : ''
+          }`}
+          aria-haspopup="dialog"
+          aria-expanded={siteSettingsOpen}
+          style={{
+            padding: '4px 8px',
+            height: 'var(--layoutNavButtonHeight, 30px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Settings2 size={16} strokeWidth={2} aria-hidden="true" />
+        </button>
+
+        {siteSettingsOpen && (
+          <div className="theme-panel site-settings-panel">
+            <div className="site-settings-panel-header">
+              <div className="site-settings-panel-title-row">
+                <span
+                  className={`site-settings-panel-status-icon site-settings-panel-status-icon-${
+                    activePageInfo.kind === 'site' && activePageInfo.secure
+                      ? 'secure'
+                      : activePageInfo.kind === 'site'
+                        ? 'warning'
+                        : 'neutral'
+                  }`}
+                >
+                  <SiteSettingsStatusIcon size={15} strokeWidth={2} aria-hidden="true" />
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="site-settings-panel-title">{activePageInfo.siteLabel}</div>
+                  <div className="site-settings-panel-subtitle">{activePageInfo.statusLabel}</div>
+                </div>
+              </div>
+              {activePageInfo.kind === 'site' && (
+                <div className="site-settings-panel-origin">{activePageInfo.origin}</div>
+              )}
+            </div>
+
+            {activePageInfo.kind !== 'site' ? (
+              <div className="site-settings-panel-empty">{activePageInfo.statusLabel}</div>
+            ) : (
+              <div className="site-settings-panel-content">
+                {/* Button to open settings */}
+                <button
+                  type="button"
+                  className="theme-btn theme-btn-nav site-settings-open-settings-btn"
+                  onClick={() => {
+                    setSiteSettingsOpen(false);
+                    openBrowserSettingsPageWithOrigin(activePageInfo.siteLabel);
+                  }}
+                >
+                  Manage Permissions for This Site
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div style={{ position: 'relative', flex: 1 }}>
         <input
@@ -513,6 +773,7 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
               closeMenu();
               return;
             }
+            setSiteSettingsOpen(false);
             openMenu();
           }}
           title="Menu"
@@ -595,6 +856,38 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
           </div>
         )}
       </div>
+
+      {activePermissionRequest && (
+        <div className="theme-panel site-permission-prompt">
+          <div className="site-permission-prompt-title-row">
+            <div className="site-permission-prompt-title">{activePermissionRequest.siteLabel}</div>
+            <div className="site-permission-prompt-origin">{activePermissionRequest.origin}</div>
+          </div>
+          <div className="site-permission-prompt-message">
+            Wants permission to {activePermissionRequest.label.toLowerCase()}.
+          </div>
+          <div className="site-permission-prompt-actions">
+            <button
+              type="button"
+              onClick={() => {
+                void respondToPermissionRequest('block');
+              }}
+              className="theme-btn theme-btn-nav site-permission-prompt-btn"
+            >
+              Block
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void respondToPermissionRequest('allow');
+              }}
+              className="theme-btn theme-btn-go site-permission-prompt-btn"
+            >
+              Allow
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

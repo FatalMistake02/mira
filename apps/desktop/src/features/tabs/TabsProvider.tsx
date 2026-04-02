@@ -41,6 +41,9 @@ type FindInPageMatchState = {
 };
 
 type WebviewElement = {
+  loadURL?: (url: string, options?: unknown) => void;
+  goBack?: () => void;
+  goForward?: () => void;
   reload: () => void;
   reloadIgnoringCache?: () => void;
   stop?: () => void;
@@ -130,7 +133,7 @@ type TabsContextType = {
     position?: DetachedTabWindowPosition,
     options?: MoveTabToNewWindowOptions,
   ) => void;
-  navigate: (url: string, tabId?: string) => void;
+  navigate: (url: string, tabId?: string, options?: { fromWebview?: boolean }) => void;
   navigateToNewTabPage: () => void;
   goBack: () => void;
   goForward: () => void;
@@ -424,7 +427,9 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const activeIdRef = useRef(initialTabRef.current.id);
   const lastFindQueryByTabRef = useRef<Record<string, string>>({});
   const activeFindRequestIdByTabRef = useRef<Record<string, number>>({});
-  const navigateRef = useRef<(url: string, tabId?: string) => void>(() => undefined);
+  const navigateRef = useRef<
+    (url: string, tabId?: string, options?: { fromWebview?: boolean }) => void
+  >(() => undefined);
   const newTabRef = useRef<(url?: string) => void>(() => undefined);
   const tabSleepTimerRef = useRef<number | null>(null);
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
@@ -774,6 +779,24 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       } catch {
         continue;
       }
+    }
+
+    return undefined;
+  }, []);
+
+  const getWebContentsIdForTab = useCallback((id: string): number | undefined => {
+    if (!id) return undefined;
+
+    const webview = webviewMap.current[id];
+    if (!webview || typeof webview.getWebContentsId !== 'function') return undefined;
+
+    try {
+      const candidate = webview.getWebContentsId();
+      if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
+        return Math.floor(candidate);
+      }
+    } catch {
+      return undefined;
     }
 
     return undefined;
@@ -1163,6 +1186,30 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 
   const closeWindow = useCallback(() => {
     const ipc = electron?.ipcRenderer;
+    const activeTab = tabsRef.current.find((tab) => tab.id === activeIdRef.current);
+    const activeWebContentsId = getWebContentsIdForTab(activeIdRef.current);
+
+    if (
+      ipc
+      && tabsRef.current.length === 1
+      && activeTab
+      && !activeTab.url.startsWith('mira://')
+      && activeWebContentsId !== undefined
+    ) {
+      ipc
+        .invoke<boolean>('webview-request-close-window', {
+          webContentsId: activeWebContentsId,
+        })
+        .then((started) => {
+          if (started) return;
+          ipc.invoke('window-close').catch(() => undefined);
+        })
+        .catch(() => {
+          ipc.invoke('window-close').catch(() => undefined);
+        });
+      return;
+    }
+
     if (ipc) {
       ipc.invoke('session-save-window', null).catch(() => undefined);
       ipc.invoke('window-close').catch(() => undefined);
@@ -1175,7 +1222,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       // Ignore storage failures.
     }
     window.close();
-  }, []);
+  }, [getWebContentsIdForTab]);
 
   const clearTabRuntimeState = useCallback(
     (id: string) => {
@@ -1206,24 +1253,26 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     );
   }, []);
 
-  const closeTab = (id: string) => {
-    const shouldCloseWindow = tabs.length === 1 && tabs[0]?.id === id;
+  const finalizeTabClose = useCallback((id: string) => {
+    const currentTabs = tabsRef.current;
+    const currentActiveId = activeIdRef.current;
+    const shouldCloseWindow = currentTabs.length === 1 && currentTabs[0]?.id === id;
     if (shouldCloseWindow) {
       closeWindow();
       return;
     }
 
-    const tabToClose = tabs.find((tab) => tab.id === id);
+    const tabToClose = currentTabs.find((tab) => tab.id === id);
     if (tabToClose) {
       rememberRecentlyClosedTabs([tabToClose]);
     }
     clearTabRuntimeState(id);
 
-    setTabs((t) => {
-      const next = t.filter((tab) => tab.id !== id);
-      if (id !== activeId || !next.length) return next;
+    setTabs((existingTabs) => {
+      const next = existingTabs.filter((tab) => tab.id !== id);
+      if (id !== currentActiveId || !next.length) return next;
 
-      const closingIndex = t.findIndex((tab) => tab.id === id);
+      const closingIndex = existingTabs.findIndex((tab) => tab.id === id);
       const nextIndex =
         closingIndex >= 0 ? Math.min(closingIndex, next.length - 1) : next.length - 1;
       const nextActive = next[nextIndex];
@@ -1235,7 +1284,41 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         tab.id === nextActiveId ? { ...tab, isSleeping: false, lastActiveAt: now } : tab,
       );
     });
-  };
+  }, [clearTabRuntimeState, closeWindow, rememberRecentlyClosedTabs]);
+
+  const closeTab = useCallback((id: string) => {
+    const currentTabs = tabsRef.current;
+    const shouldCloseWindow = currentTabs.length === 1 && currentTabs[0]?.id === id;
+    if (shouldCloseWindow) {
+      closeWindow();
+      return;
+    }
+
+    const tabToClose = currentTabs.find((tab) => tab.id === id);
+    const webContentsId = getWebContentsIdForTab(id);
+    if (
+      tabToClose
+      && !tabToClose.url.startsWith('mira://')
+      && webContentsId !== undefined
+      && electron?.ipcRenderer
+    ) {
+      electron.ipcRenderer
+        .invoke<boolean>('webview-request-close-tab', {
+          tabId: id,
+          webContentsId,
+        })
+        .then((started) => {
+          if (started) return;
+          finalizeTabClose(id);
+        })
+        .catch(() => {
+          finalizeTabClose(id);
+        });
+      return;
+    }
+
+    finalizeTabClose(id);
+  }, [closeWindow, finalizeTabClose, getWebContentsIdForTab]);
 
   const closeOtherTabs = useCallback(
     (id: string) => {
@@ -1598,7 +1681,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   );
 
   const navigate = useCallback(
-    (url: string, tabId?: string) => {
+    (url: string, tabId?: string, options?: { fromWebview?: boolean }) => {
       const targetTabId = tabId ?? activeId;
       const requestedUrl = url.trim();
       if (isMailtoNavigationUrl(requestedUrl)) {
@@ -1607,6 +1690,26 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
           applyResolvedNavigation(targetTabId, resolved.url, resolved.title);
         });
         return;
+      }
+
+      const normalizedRequestedUrl = normalizeTabNavigationUrl(requestedUrl);
+      const targetTab = tabsRef.current.find((tab) => tab.id === targetTabId);
+      const targetWebview = webviewMap.current[targetTabId];
+      const shouldUseLiveWebview =
+        options?.fromWebview !== true
+        && !!targetTab
+        && !!targetWebview
+        && !targetTab.url.startsWith('mira://')
+        && !normalizedRequestedUrl.startsWith('mira://')
+        && typeof targetWebview.loadURL === 'function';
+
+      if (shouldUseLiveWebview) {
+        try {
+          targetWebview.loadURL?.(normalizedRequestedUrl);
+          return;
+        } catch {
+          // Fall back to state-based navigation below.
+        }
       }
 
       applyResolvedNavigation(targetTabId, requestedUrl);
@@ -1662,6 +1765,22 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   }, [newTab]);
 
   const goBack = () => {
+    const activeTab = tabsRef.current.find((tab) => tab.id === activeId);
+    const activeWebview = webviewMap.current[activeId];
+    if (
+      activeTab
+      && !activeTab.url.startsWith('mira://')
+      && activeWebview
+      && typeof activeWebview.goBack === 'function'
+    ) {
+      try {
+        activeWebview.goBack();
+        return;
+      } catch {
+        // Fall through to state-based history below.
+      }
+    }
+
     setTabs((t) =>
       t.map((tab) => {
         if (tab.id !== activeId) return tab;
@@ -1681,6 +1800,22 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   };
 
   const goForward = () => {
+    const activeTab = tabsRef.current.find((tab) => tab.id === activeId);
+    const activeWebview = webviewMap.current[activeId];
+    if (
+      activeTab
+      && !activeTab.url.startsWith('mira://')
+      && activeWebview
+      && typeof activeWebview.goForward === 'function'
+    ) {
+      try {
+        activeWebview.goForward();
+        return;
+      } catch {
+        // Fall through to state-based history below.
+      }
+    }
+
     setTabs((t) =>
       t.map((tab) => {
         if (tab.id !== activeId) return tab;
@@ -2259,6 +2394,22 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     ipc.on('open-url-in-current-tab', onOpenUrlInCurrentTab);
     return () => ipc.off('open-url-in-current-tab', onOpenUrlInCurrentTab);
   }, []);
+
+  useEffect(() => {
+    const ipc = electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const onWebviewCloseResult = (_event: unknown, payload: unknown) => {
+      if (typeof payload !== 'object' || !payload) return;
+      const candidate = payload as { tabId?: unknown; closed?: unknown };
+      const tabId = typeof candidate.tabId === 'string' ? candidate.tabId.trim() : '';
+      if (!tabId || candidate.closed !== true) return;
+      finalizeTabClose(tabId);
+    };
+
+    ipc.on('webview-close-result', onWebviewCloseResult);
+    return () => ipc.off('webview-close-result', onWebviewCloseResult);
+  }, [finalizeTabClose]);
 
   useEffect(() => {
     const ipc = electron?.ipcRenderer;

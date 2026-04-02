@@ -12,7 +12,12 @@ import {
 } from 'electron';
 import { execFileSync, spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
-import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'electron';
+import type {
+  DownloadItem,
+  MenuItemConstructorOptions,
+  MessageBoxSyncOptions,
+  WebContents,
+} from 'electron';
 import { appendFileSync, promises as fs, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import os from 'node:os';
 import path from 'path';
@@ -29,6 +34,7 @@ const isWindows = process.platform === 'win32';
 const ENABLE_APP_DEBUG_LOGS = true; // Set to false for shipping builds.
 const incomingBrowserUrlQueue: string[] = [];
 const APP_STATE_FILE = 'app-state.json';
+const SITE_PERMISSIONS_FILE = 'site-permissions.json';
 
 interface HistoryEntry {
   id: string;
@@ -93,6 +99,44 @@ interface PersistedAppState {
   onboardingCompleted?: boolean;
 }
 
+type SitePermissionSetting = 'allow' | 'ask' | 'block';
+
+type SitePermissionId =
+  | 'camera'
+  | 'microphone'
+  | 'location'
+  | 'notifications'
+  | 'fullscreen'
+  | 'clipboard'
+  | 'pointer-lock'
+  | 'screen-capture'
+  | 'midi'
+  | 'storage-access'
+  | 'window-management'
+  | 'idle-detection'
+  | 'speaker-selection'
+  | 'keyboard-lock'
+  | 'external-apps'
+  | 'file-system'
+  | 'unknown';
+
+interface PersistedSitePermissions {
+  origins?: Record<string, Partial<Record<SitePermissionId, SitePermissionSetting>>>;
+}
+
+interface PendingSitePermissionRequest {
+  callback: (permissionGranted: boolean) => void;
+  origin: string;
+  permissionIds: SitePermissionId[];
+  hostWindowId: number | null;
+}
+
+interface PendingWebviewCloseRequest {
+  type: 'tab' | 'window';
+  tabId?: string;
+  hostWindowId: number | null;
+}
+
 type SessionRestoreMode = 'tabs' | 'windows';
 
 interface GitHubReleaseAsset {
@@ -142,6 +186,8 @@ const activeDetachedWindowDragBySourceWindowId = new Map<number, DetachedWindowD
 const SHORTCUT_DEVTOOLS_SUPPRESS_MS = 500;
 const activeWebContentsByWindow = new Map<number, WebContents>();
 const suppressHostDevToolsUntilByWindowId = new Map<number, number>();
+const pendingSitePermissionRequests = new Map<string, PendingSitePermissionRequest>();
+const pendingWebviewCloseRequestsByWebContentsId = new Map<number, PendingWebviewCloseRequest>();
 const windowSessionCache = new Map<number, WindowSessionSnapshot>();
 const bootRestoreByWindowId = new Map<number, WindowSessionSnapshot>();
 let pendingRestoreSession: PersistedSessionSnapshot | null = null;
@@ -154,6 +200,47 @@ let trackerBlockEnabled = false;
 let quitOnLastWindowClose = false;
 let hasAttemptedLaunchAutoUpdate = false;
 let hasAttemptedCloseAutoUpdate = false;
+let persistedSitePermissions: Record<string, Partial<Record<SitePermissionId, SitePermissionSetting>>> = {};
+
+const SITE_SETTINGS_PERMISSION_ORDER: SitePermissionId[] = [
+  'camera',
+  'microphone',
+  'location',
+  'notifications',
+  'fullscreen',
+  'clipboard',
+  'pointer-lock',
+  'screen-capture',
+  'midi',
+  'storage-access',
+  'window-management',
+  'idle-detection',
+  'speaker-selection',
+  'keyboard-lock',
+  'external-apps',
+  'file-system',
+  'unknown',
+];
+
+const SITE_PERMISSION_LABELS: Record<SitePermissionId, string> = {
+  camera: 'Camera',
+  microphone: 'Microphone',
+  location: 'Location',
+  notifications: 'Notifications',
+  fullscreen: 'Fullscreen',
+  clipboard: 'Clipboard',
+  'pointer-lock': 'Pointer lock',
+  'screen-capture': 'Screen capture',
+  midi: 'MIDI devices',
+  'storage-access': 'Storage access',
+  'window-management': 'Window management',
+  'idle-detection': 'Idle detection',
+  'speaker-selection': 'Speaker selection',
+  'keyboard-lock': 'Keyboard lock',
+  'external-apps': 'External apps',
+  'file-system': 'File system',
+  unknown: 'Other permission',
+};
 
 type AutoUpdateMode =
   | 'off'
@@ -1324,6 +1411,325 @@ function getAppStateFilePath() {
   return path.join(app.getPath('userData'), APP_STATE_FILE);
 }
 
+function getSitePermissionsFilePath() {
+  return path.join(app.getPath('userData'), SITE_PERMISSIONS_FILE);
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isSitePermissionId(value: unknown): value is SitePermissionId {
+  return typeof value === 'string' && SITE_SETTINGS_PERMISSION_ORDER.includes(value as SitePermissionId);
+}
+
+function normalizeSitePermissionSetting(value: unknown): SitePermissionSetting {
+  if (value === 'allow' || value === 'ask' || value === 'block') {
+    return value;
+  }
+  return 'ask';
+}
+
+function normalizeSitePermissionOrigin(rawValue: string): string | null {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol === 'http:' || protocol === 'https:') {
+      // Return just the hostname (no protocol) - includes subdomains
+      return parsed.hostname.toLowerCase();
+    }
+  } catch {
+    // If URL parsing fails, try to extract hostname directly
+    const withoutProtocol = trimmed.replace(/^https?:\/\//i, '');
+    const hostnameMatch = withoutProtocol.match(/^([^/\s:]+)/);
+    if (hostnameMatch) {
+      return hostnameMatch[1].toLowerCase();
+    }
+  }
+
+  return null;
+}
+
+function normalizePersistedSitePermissions(
+  value: unknown,
+): Record<string, Partial<Record<SitePermissionId, SitePermissionSetting>>> {
+  if (!isObjectRecord(value)) return {};
+
+  const source =
+    isObjectRecord(value.origins)
+      ? value.origins
+      : value;
+  const normalized: Record<string, Partial<Record<SitePermissionId, SitePermissionSetting>>> = {};
+
+  for (const [rawOrigin, rawPermissions] of Object.entries(source)) {
+    const origin = normalizeSitePermissionOrigin(rawOrigin);
+    if (!origin || !isObjectRecord(rawPermissions)) continue;
+
+    const nextPermissions: Partial<Record<SitePermissionId, SitePermissionSetting>> = {};
+    for (const [rawPermissionId, rawSetting] of Object.entries(rawPermissions)) {
+      if (!isSitePermissionId(rawPermissionId)) continue;
+
+      const normalizedSetting = normalizeSitePermissionSetting(rawSetting);
+      if (normalizedSetting === 'ask') continue;
+      nextPermissions[rawPermissionId] = normalizedSetting;
+    }
+
+    if (Object.keys(nextPermissions).length > 0) {
+      normalized[origin] = nextPermissions;
+    }
+  }
+
+  return normalized;
+}
+
+function readSitePermissionSetting(
+  origin: string,
+  permissionId: SitePermissionId,
+): SitePermissionSetting {
+  const normalizedOrigin = normalizeSitePermissionOrigin(origin);
+  if (!normalizedOrigin) return 'ask';
+  return persistedSitePermissions[normalizedOrigin]?.[permissionId] ?? 'ask';
+}
+
+function writeSitePermissionSetting(
+  origin: string,
+  permissionId: SitePermissionId,
+  setting: SitePermissionSetting,
+): void {
+  const normalizedOrigin = normalizeSitePermissionOrigin(origin);
+  if (!normalizedOrigin) return;
+
+  const existing = persistedSitePermissions[normalizedOrigin] ?? {};
+  const next = { ...existing };
+
+  if (setting === 'ask') {
+    delete next[permissionId];
+  } else {
+    next[permissionId] = setting;
+  }
+
+  if (Object.keys(next).length === 0) {
+    delete persistedSitePermissions[normalizedOrigin];
+    return;
+  }
+
+  persistedSitePermissions[normalizedOrigin] = next;
+}
+
+function summarizeSitePermissionDecision(
+  origin: string,
+  permissionIds: SitePermissionId[],
+): SitePermissionSetting {
+  if (!permissionIds.length) return 'ask';
+
+  let allAllowed = true;
+  for (const permissionId of permissionIds) {
+    const decision = readSitePermissionSetting(origin, permissionId);
+    if (decision === 'block') return 'block';
+    if (decision !== 'allow') {
+      allAllowed = false;
+    }
+  }
+
+  return allAllowed ? 'allow' : 'ask';
+}
+
+function buildSitePermissionsSnapshot(origin: string) {
+  const normalizedOrigin = normalizeSitePermissionOrigin(origin);
+  if (!normalizedOrigin) {
+    return {
+      canManage: false,
+      origin: '',
+      siteLabel: '',
+      permissions: [],
+    };
+  }
+
+  return {
+    canManage: true,
+    origin: normalizedOrigin,
+    siteLabel: getSiteDisplayLabel(normalizedOrigin),
+    permissions: SITE_SETTINGS_PERMISSION_ORDER.map((permissionId) => ({
+      id: permissionId,
+      label: SITE_PERMISSION_LABELS[permissionId],
+      decision: readSitePermissionSetting(normalizedOrigin, permissionId),
+    })),
+  };
+}
+
+function extractPermissionOrigin(
+  webContents: WebContents | null | undefined,
+  details: {
+    requestingUrl?: string;
+    securityOrigin?: string;
+    externalURL?: string;
+  },
+): string | null {
+  const candidates = [
+    details.securityOrigin,
+    details.requestingUrl,
+    details.externalURL,
+    webContents?.getURL?.(),
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const normalized = normalizeSitePermissionOrigin(candidate);
+    if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+function mapPermissionIdsFromDetails(
+  permission: string,
+  details: {
+    mediaType?: 'video' | 'audio' | 'unknown';
+    mediaTypes?: Array<'video' | 'audio'>;
+  },
+): SitePermissionId[] {
+  if (permission === 'media') {
+    const requestedMediaTypes = Array.isArray(details.mediaTypes) && details.mediaTypes.length > 0
+      ? details.mediaTypes
+      : details.mediaType && details.mediaType !== 'unknown'
+        ? [details.mediaType]
+        : [];
+
+    const permissionIds = new Set<SitePermissionId>();
+    for (const mediaType of requestedMediaTypes) {
+      if (mediaType === 'video') permissionIds.add('camera');
+      if (mediaType === 'audio') permissionIds.add('microphone');
+    }
+    if (permissionIds.size === 0) {
+      permissionIds.add('camera');
+      permissionIds.add('microphone');
+    }
+    return Array.from(permissionIds);
+  }
+
+  switch (permission) {
+    case 'geolocation':
+      return ['location'];
+    case 'notifications':
+      return ['notifications'];
+    case 'fullscreen':
+      return ['fullscreen'];
+    case 'clipboard-read':
+    case 'clipboard-sanitized-write':
+      return ['clipboard'];
+    case 'pointerLock':
+      return ['pointer-lock'];
+    case 'display-capture':
+      return ['screen-capture'];
+    case 'midi':
+    case 'midiSysex':
+    case 'mediaKeySystem':
+      return ['midi'];
+    case 'storage-access':
+    case 'top-level-storage-access':
+      return ['storage-access'];
+    case 'window-management':
+      return ['window-management'];
+    case 'idle-detection':
+      return ['idle-detection'];
+    case 'speaker-selection':
+      return ['speaker-selection'];
+    case 'keyboardLock':
+      return ['keyboard-lock'];
+    case 'openExternal':
+      return ['external-apps'];
+    case 'fileSystem':
+      return ['file-system'];
+    default:
+      return ['unknown'];
+  }
+}
+
+function describeSitePermissionRequest(permissionIds: SitePermissionId[]): string {
+  const filtered = permissionIds.filter((permissionId) => permissionId !== 'unknown');
+  if (filtered.length === 2 && filtered.includes('camera') && filtered.includes('microphone')) {
+    return 'Use your camera and microphone';
+  }
+
+  const firstPermissionId = filtered[0] ?? permissionIds[0] ?? 'unknown';
+  switch (firstPermissionId) {
+    case 'camera':
+      return 'Use your camera';
+    case 'microphone':
+      return 'Use your microphone';
+    case 'location':
+      return 'Know your location';
+    case 'notifications':
+      return 'Show notifications';
+    case 'fullscreen':
+      return 'Enter fullscreen';
+    case 'clipboard':
+      return 'Access your clipboard';
+    case 'pointer-lock':
+      return 'Lock your pointer';
+    case 'screen-capture':
+      return 'Capture your screen';
+    case 'midi':
+      return 'Use MIDI devices';
+    case 'storage-access':
+      return 'Use storage access';
+    case 'window-management':
+      return 'Manage your windows';
+    case 'idle-detection':
+      return 'Detect when you are idle';
+    case 'speaker-selection':
+      return 'Choose your speaker';
+    case 'keyboard-lock':
+      return 'Capture keyboard shortcuts';
+    case 'external-apps':
+      return 'Open external apps';
+    case 'file-system':
+      return 'Access files on this device';
+    case 'unknown':
+    default:
+      return 'Use a restricted browser permission';
+  }
+}
+
+function normalizeDialogMessage(value: unknown): string {
+  const normalized = typeof value === 'string'
+    ? value
+    : value == null
+      ? ''
+      : String(value);
+  return normalized.trim().slice(0, 4000);
+}
+
+function showMessageBoxSyncForWindow(
+  targetWindow: BrowserWindow | null,
+  options: MessageBoxSyncOptions,
+): number {
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    return dialog.showMessageBoxSync(targetWindow, options);
+  }
+  return dialog.showMessageBoxSync(options);
+}
+
+async function loadPersistedSitePermissions(): Promise<void> {
+  try {
+    const raw = await fs.readFile(getSitePermissionsFilePath(), 'utf-8');
+    const parsed = JSON.parse(raw) as unknown;
+    persistedSitePermissions = normalizePersistedSitePermissions(parsed);
+  } catch {
+    persistedSitePermissions = {};
+  }
+}
+
+async function persistSitePermissions(): Promise<void> {
+  const payload: PersistedSitePermissions = {
+    origins: persistedSitePermissions,
+  };
+  await fs.writeFile(getSitePermissionsFilePath(), JSON.stringify(payload, null, 2), 'utf-8');
+}
+
 function normalizeAppState(value: unknown): PersistedAppState {
   if (typeof value !== 'object' || value === null) return {};
   const candidate = value as PersistedAppState;
@@ -2343,14 +2749,75 @@ function setupWebviewTabOpenHandler() {
       }
     }
 
+    if (contents.getType() === 'window') {
+      contents.on('will-attach-webview', (_event, webPreferences) => {
+        // Lock guest pages to our trusted preload and current sandbox defaults.
+        webPreferences.preload = path.join(__dirname, 'webview-preload.js');
+        webPreferences.nodeIntegration = false;
+        webPreferences.contextIsolation = true;
+        webPreferences.sandbox = true;
+      });
+    }
+
+    contents.once('destroyed', () => {
+      const pendingCloseRequest = pendingWebviewCloseRequestsByWebContentsId.get(contents.id);
+      if (!pendingCloseRequest) return;
+      pendingWebviewCloseRequestsByWebContentsId.delete(contents.id);
+
+      const hostWindow = pendingCloseRequest.hostWindowId !== null
+        ? BrowserWindow.fromId(pendingCloseRequest.hostWindowId)
+        : null;
+      if (!hostWindow || hostWindow.isDestroyed()) return;
+
+      if (pendingCloseRequest.type === 'tab') {
+        hostWindow.webContents.send('webview-close-result', {
+          tabId: pendingCloseRequest.tabId,
+          closed: true,
+        });
+        return;
+      }
+
+      windowSessionCache.delete(hostWindow.id);
+      scheduleSessionPersist();
+      hostWindow.close();
+    });
+
+    contents.on('will-prevent-unload', (event) => {
+      const hostWindow = getHostWindowForContents(contents);
+      const siteLabel = getSiteDisplayLabel(contents.getURL());
+      const response = showMessageBoxSyncForWindow(hostWindow, {
+        type: 'question',
+        buttons: ['Leave', 'Stay'],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+        title: 'Leave Site?',
+        message: 'Leave this site?',
+        detail: `${siteLabel} says changes you made may not be saved.`,
+      });
+      const allowUnload = response === 0;
+      if (allowUnload) {
+        event.preventDefault();
+      }
+
+      const pendingCloseRequest = pendingWebviewCloseRequestsByWebContentsId.get(contents.id);
+      if (pendingCloseRequest && !allowUnload) {
+        pendingWebviewCloseRequestsByWebContentsId.delete(contents.id);
+        if (hostWindow && !hostWindow.isDestroyed() && pendingCloseRequest.type === 'tab') {
+          hostWindow.webContents.send('webview-close-result', {
+            tabId: pendingCloseRequest.tabId,
+            closed: false,
+          });
+        }
+      }
+    });
+
     contents.on('will-navigate', (event, url) => {
       const normalizedMailtoUrl = normalizeMailtoUrl(url);
       if (!normalizedMailtoUrl) return;
 
       event.preventDefault();
-      const host =
-        contents.hostWebContents
-        ?? (contents.getType() === 'window' ? contents : null);
+      const host = getHostWebContents(contents);
       if (!host || host.isDestroyed()) return;
       host.send('open-url-in-new-tab', {
         url: normalizedMailtoUrl,
@@ -2650,9 +3117,7 @@ function setupWebviewTabOpenHandler() {
     });
 
     contents.setWindowOpenHandler(({ url, disposition, features, frameName }) => {
-      const host =
-        contents.hostWebContents
-        ?? (contents.getType() === 'window' ? contents : null);
+      const host = getHostWebContents(contents);
       if (!host) return { action: 'deny' };
       const normalized = (url ?? '').trim();
       const normalizedFeatures = typeof features === 'string' ? features.trim() : '';
@@ -2726,6 +3191,414 @@ function setupWebviewTabOpenHandler() {
       }
       return { action: 'deny' };
     });
+  });
+}
+
+function setupSitePermissionHandlers() {
+  const ses = session.defaultSession;
+
+  ses.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    const origin = extractPermissionOrigin(webContents, {
+      requestingUrl: details.requestingUrl,
+      securityOrigin: details.securityOrigin || requestingOrigin,
+    });
+    if (!origin) return false;
+
+    const permissionIds = mapPermissionIdsFromDetails(permission, {
+      mediaType: details.mediaType,
+    });
+    return summarizeSitePermissionDecision(origin, permissionIds) === 'allow';
+  });
+
+  ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const origin = extractPermissionOrigin(webContents, {
+      requestingUrl: details.requestingUrl,
+      securityOrigin: 'securityOrigin' in details ? details.securityOrigin : undefined,
+      externalURL: 'externalURL' in details ? details.externalURL : undefined,
+    });
+    if (!origin) {
+      callback(false);
+      return;
+    }
+
+    const permissionIds = mapPermissionIdsFromDetails(permission, {
+      mediaType: 'mediaType' in details ? details.mediaType : undefined,
+      mediaTypes: 'mediaTypes' in details ? details.mediaTypes : undefined,
+    });
+    if (!permissionIds.length) {
+      callback(false);
+      return;
+    }
+
+    const storedDecision = summarizeSitePermissionDecision(origin, permissionIds);
+    if (storedDecision === 'allow') {
+      callback(true);
+      return;
+    }
+    if (storedDecision === 'block') {
+      callback(false);
+      return;
+    }
+
+    const hostWindow = getHostWindowForContents(webContents);
+    if (!hostWindow || hostWindow.isDestroyed()) {
+      callback(false);
+      return;
+    }
+
+    const requestId = uuidv4();
+    pendingSitePermissionRequests.set(requestId, {
+      callback,
+      origin,
+      permissionIds,
+      hostWindowId: hostWindow.id,
+    });
+
+    hostWindow.webContents.send('site-permission-request', {
+      requestId,
+      webContentsId: webContents.id,
+      origin,
+      siteLabel: getSiteDisplayLabel(origin),
+      label: describeSitePermissionRequest(permissionIds),
+      permissionIds,
+      url: typeof details.requestingUrl === 'string' ? details.requestingUrl : webContents.getURL(),
+    });
+  });
+
+  ipcMain.handle('site-permissions-get', (_event, rawValue: unknown) => {
+    const target = typeof rawValue === 'string' ? rawValue.trim() : '';
+    const origin = normalizeSitePermissionOrigin(target);
+    return origin ? buildSitePermissionsSnapshot(origin) : {
+      canManage: false,
+      origin: '',
+      siteLabel: '',
+      permissions: [],
+    };
+  });
+
+  ipcMain.handle('site-permissions-update', async (_event, payload: unknown) => {
+    if (!isObjectRecord(payload)) {
+      return {
+        ok: false,
+        snapshot: {
+          canManage: false,
+          origin: '',
+          siteLabel: '',
+          permissions: [],
+        },
+      };
+    }
+
+    const origin = typeof payload.origin === 'string' ? payload.origin.trim() : '';
+    const permissionId = payload.permissionId;
+    const decision = normalizeSitePermissionSetting(payload.decision);
+    const normalizedOrigin = normalizeSitePermissionOrigin(origin);
+    if (!normalizedOrigin || !isSitePermissionId(permissionId)) {
+      return {
+        ok: false,
+        snapshot: {
+          canManage: false,
+          origin: '',
+          siteLabel: '',
+          permissions: [],
+        },
+      };
+    }
+
+    writeSitePermissionSetting(normalizedOrigin, permissionId, decision);
+    await persistSitePermissions().catch(() => undefined);
+    return {
+      ok: true,
+      snapshot: buildSitePermissionsSnapshot(normalizedOrigin),
+    };
+  });
+
+  ipcMain.handle('site-permission-request-respond', async (_event, payload: unknown) => {
+    if (!isObjectRecord(payload)) return { ok: false };
+
+    const requestId = typeof payload.requestId === 'string' ? payload.requestId.trim() : '';
+    const decision = payload.decision === 'allow' ? 'allow' : 'block';
+    if (!requestId) return { ok: false };
+
+    const pendingRequest = pendingSitePermissionRequests.get(requestId);
+    if (!pendingRequest) return { ok: false };
+
+    pendingSitePermissionRequests.delete(requestId);
+    for (const permissionId of pendingRequest.permissionIds) {
+      writeSitePermissionSetting(pendingRequest.origin, permissionId, decision);
+    }
+    await persistSitePermissions().catch(() => undefined);
+    pendingRequest.callback(decision === 'allow');
+
+    return {
+      ok: true,
+      snapshot: buildSitePermissionsSnapshot(pendingRequest.origin),
+    };
+  });
+
+  // Global site permissions management handlers
+  ipcMain.handle('site-permissions-get-all', () => {
+    const origins = Object.keys(persistedSitePermissions).sort();
+    return {
+      ok: true,
+      origins: origins.map((origin) => ({
+        origin,
+        siteLabel: getSiteDisplayLabel(origin),
+        permissions: SITE_SETTINGS_PERMISSION_ORDER.map((permissionId) => ({
+          id: permissionId,
+          label: SITE_PERMISSION_LABELS[permissionId],
+          decision: readSitePermissionSetting(origin, permissionId),
+        })).filter((p) => p.decision !== 'ask'),
+      })).filter((site) => site.permissions.length > 0),
+    };
+  });
+
+  ipcMain.handle('site-permissions-delete', async (_event, payload: unknown) => {
+    if (!isObjectRecord(payload)) return { ok: false };
+
+    const origin = typeof payload.origin === 'string' ? payload.origin.trim() : '';
+    const normalizedOrigin = normalizeSitePermissionOrigin(origin);
+    if (!normalizedOrigin) return { ok: false };
+
+    delete persistedSitePermissions[normalizedOrigin];
+    await persistSitePermissions().catch(() => undefined);
+    return { ok: true };
+  });
+
+  ipcMain.handle('site-permissions-delete-all', async () => {
+    persistedSitePermissions = {};
+    await persistSitePermissions().catch(() => undefined);
+    return { ok: true };
+  });
+
+  // Cookie management handlers
+  ipcMain.handle('cookies-get-all', async () => {
+    try {
+      const ses = session.defaultSession;
+      const cookies = await ses.cookies.get({});
+      
+      // Group cookies by origin
+      const originsMap = new Map<string, { origin: string; siteLabel: string; cookieCount: number }>();
+      
+      for (const cookie of cookies) {
+        const domain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+        const origin = domain.toLowerCase();
+        
+        if (!originsMap.has(origin)) {
+          originsMap.set(origin, {
+            origin,
+            siteLabel: getSiteDisplayLabel(origin),
+            cookieCount: 0,
+          });
+        }
+        
+        const entry = originsMap.get(origin)!;
+        entry.cookieCount++;
+      }
+      
+      return {
+        ok: true,
+        origins: Array.from(originsMap.values()).sort((a, b) => a.origin.localeCompare(b.origin)),
+      };
+    } catch {
+      return { ok: false, origins: [] };
+    }
+  });
+
+  ipcMain.handle('cookies-delete', async (_event, payload: unknown) => {
+    if (!isObjectRecord(payload)) return { ok: false };
+
+    const origin = typeof payload.origin === 'string' ? payload.origin.trim() : '';
+    if (!origin) return { ok: false };
+
+    try {
+      const ses = session.defaultSession;
+      const cookies = await ses.cookies.get({});
+      
+      // Delete cookies matching the origin
+      for (const cookie of cookies) {
+        const domain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+        if (domain.toLowerCase() === origin.toLowerCase()) {
+          const url = `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`;
+          await ses.cookies.remove(url, cookie.name);
+        }
+      }
+      
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+  ipcMain.handle('cookies-delete-all', async () => {
+    try {
+      const ses = session.defaultSession;
+      const cookies = await ses.cookies.get({});
+      
+      // Delete all cookies
+      for (const cookie of cookies) {
+        const url = `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`;
+        await ses.cookies.remove(url, cookie.name);
+      }
+      
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+  // Track actively-used permissions (camera/microphone currently in use)
+  const activeMediaStreamsByWebContents = new Map<number, Set<string>>();
+
+  ipcMain.handle('site-permissions-get-active', (_event, webContentsId: unknown) => {
+    const id = typeof webContentsId === 'number' && Number.isFinite(webContentsId)
+      ? Math.floor(webContentsId)
+      : -1;
+    if (id <= 0) return { permissions: [] };
+
+    const activePermissions = activeMediaStreamsByWebContents.get(id);
+    return {
+      permissions: activePermissions ? Array.from(activePermissions) : [],
+    };
+  });
+
+  ipcMain.on('webview-media-started', (event, payload: unknown) => {
+    const sourceContents = event.sender;
+    const candidate = isObjectRecord(payload) ? payload : {};
+    const permissionId = typeof candidate.permissionId === 'string' ? candidate.permissionId.trim() : '';
+
+    if (!permissionId || !['camera', 'microphone', 'screen-capture'].includes(permissionId)) return;
+
+    const existing = activeMediaStreamsByWebContents.get(sourceContents.id);
+    if (existing) {
+      existing.add(permissionId);
+    } else {
+      activeMediaStreamsByWebContents.set(sourceContents.id, new Set([permissionId]));
+    }
+
+    // Notify host window about active permission change
+    const hostWindow = getHostWindowForContents(sourceContents);
+    if (hostWindow && !hostWindow.isDestroyed()) {
+      hostWindow.webContents.send('site-permissions-active-changed', {
+        webContentsId: sourceContents.id,
+        permissions: Array.from(activeMediaStreamsByWebContents.get(sourceContents.id) || []),
+      });
+    }
+  });
+
+  ipcMain.on('webview-media-stopped', (event, payload: unknown) => {
+    const sourceContents = event.sender;
+    const candidate = isObjectRecord(payload) ? payload : {};
+    const permissionId = typeof candidate.permissionId === 'string' ? candidate.permissionId.trim() : '';
+
+    if (!permissionId) return;
+
+    const existing = activeMediaStreamsByWebContents.get(sourceContents.id);
+    if (existing) {
+      existing.delete(permissionId);
+      if (existing.size === 0) {
+        activeMediaStreamsByWebContents.delete(sourceContents.id);
+      }
+    }
+
+    // Notify host window about active permission change
+    const hostWindow = getHostWindowForContents(sourceContents);
+    if (hostWindow && !hostWindow.isDestroyed()) {
+      hostWindow.webContents.send('site-permissions-active-changed', {
+        webContentsId: sourceContents.id,
+        permissions: Array.from(existing || []),
+      });
+    }
+  });
+
+  // Cleanup when webview is destroyed
+  ipcMain.on('webview-destroyed', (event) => {
+    const sourceContents = event.sender;
+    activeMediaStreamsByWebContents.delete(sourceContents.id);
+  });
+
+  ipcMain.on('webview-site-dialog-sync', (event, payload: unknown) => {
+    const sourceContents = event.sender;
+    const hostWindow = getHostWindowForContents(sourceContents);
+    const siteLabel = getSiteDisplayLabel(sourceContents.getURL());
+
+    const candidate = isObjectRecord(payload) ? payload : {};
+    const dialogType = candidate.type === 'confirm' ? 'confirm' : 'alert';
+    const dialogMessage = normalizeDialogMessage(candidate.message);
+    const options: MessageBoxSyncOptions = dialogType === 'confirm'
+      ? {
+          type: 'question',
+          buttons: ['OK', 'Cancel'],
+          defaultId: 0,
+          cancelId: 1,
+          noLink: true,
+          title: 'Confirm',
+          message: `${siteLabel} says`,
+          detail: dialogMessage || ' ',
+        }
+      : {
+          type: 'info',
+          buttons: ['OK'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+          title: 'Alert',
+          message: `${siteLabel} says`,
+          detail: dialogMessage || ' ',
+        };
+
+    const response = showMessageBoxSyncForWindow(hostWindow, options);
+    event.returnValue = dialogType === 'confirm' ? response === 0 : true;
+  });
+
+  ipcMain.handle('webview-request-close-tab', (event, payload: unknown) => {
+    if (!isObjectRecord(payload)) return false;
+
+    const tabId = typeof payload.tabId === 'string' ? payload.tabId.trim() : '';
+    const webContentsId =
+      typeof payload.webContentsId === 'number' && Number.isFinite(payload.webContentsId)
+        ? Math.floor(payload.webContentsId)
+        : -1;
+    if (!tabId || webContentsId <= 0) return false;
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return false;
+
+    const host = target.hostWebContents;
+    if (!host || host.isDestroyed() || host.id !== event.sender.id) return false;
+
+    const hostWindow = BrowserWindow.fromWebContents(host);
+    pendingWebviewCloseRequestsByWebContentsId.set(webContentsId, {
+      type: 'tab',
+      tabId,
+      hostWindowId: hostWindow && !hostWindow.isDestroyed() ? hostWindow.id : null,
+    });
+    target.close({ waitForBeforeUnload: true });
+    return true;
+  });
+
+  ipcMain.handle('webview-request-close-window', (event, payload: unknown) => {
+    if (!isObjectRecord(payload)) return false;
+
+    const webContentsId =
+      typeof payload.webContentsId === 'number' && Number.isFinite(payload.webContentsId)
+        ? Math.floor(payload.webContentsId)
+        : -1;
+    if (webContentsId <= 0) return false;
+
+    const target = electronWebContents.fromId(webContentsId);
+    if (!target || target.isDestroyed()) return false;
+
+    const host = target.hostWebContents;
+    if (!host || host.isDestroyed() || host.id !== event.sender.id) return false;
+
+    const hostWindow = BrowserWindow.fromWebContents(host);
+    pendingWebviewCloseRequestsByWebContentsId.set(webContentsId, {
+      type: 'window',
+      hostWindowId: hostWindow && !hostWindow.isDestroyed() ? hostWindow.id : null,
+    });
+    target.close({ waitForBeforeUnload: true });
+    return true;
   });
 }
 
@@ -3060,6 +3933,17 @@ function triggerNewWindowFromShortcut(sourceWindow: BrowserWindow): void {
 
   recentNewWindowShortcutByWindow.set(windowId, now);
   createWindow(sourceWindow);
+}
+
+function getHostWebContents(target: WebContents): WebContents | null {
+  return target.hostWebContents ?? (target.getType() === 'window' ? target : null);
+}
+
+function getHostWindowForContents(target: WebContents): BrowserWindow | null {
+  const host = getHostWebContents(target);
+  if (!host) return null;
+  const hostWindow = BrowserWindow.fromWebContents(host);
+  return hostWindow && !hostWindow.isDestroyed() ? hostWindow : null;
 }
 
 function markHostDevToolsSuppressedForShortcut(win: BrowserWindow): void {
@@ -3474,7 +4358,6 @@ function setupWindowControlsHandlers() {
     if (!bookmarkId) return false;
 
     const hasUrl = candidate.hasUrl === true;
-    const isFolder = candidate.isFolder === true;
     const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x)
       ? Math.max(0, Math.floor(candidate.x))
       : null;
@@ -3485,7 +4368,7 @@ function setupWindowControlsHandlers() {
     const hostWindow = BrowserWindow.fromWebContents(event.sender);
     if (!hostWindow || hostWindow.isDestroyed()) return false;
 
-    const sendCommand = (command: string, data?: any) => {
+    const sendCommand = (command: string, data?: unknown) => {
       hostWindow.webContents.send('bookmark-native-context-command', { command, bookmarkId, data });
     };
 
@@ -4683,6 +5566,15 @@ function createWindow(
 
   win.on('closed', () => {
     stopDetachedWindowDragSession(win.id);
+    for (const [requestId, pendingRequest] of pendingSitePermissionRequests.entries()) {
+      if (pendingRequest.hostWindowId !== win.id) continue;
+      pendingSitePermissionRequests.delete(requestId);
+      pendingRequest.callback(false);
+    }
+    for (const [webContentsId, pendingCloseRequest] of pendingWebviewCloseRequestsByWebContentsId.entries()) {
+      if (pendingCloseRequest.hostWindowId !== win.id) continue;
+      pendingWebviewCloseRequestsByWebContentsId.delete(webContentsId);
+    }
     const pendingDetachedTransfer = pendingDetachedTabTransferByWindowId.get(win.id);
     if (pendingDetachedTransfer) {
       stopDetachedWindowDragSession(pendingDetachedTransfer.sourceWindowId);
@@ -4969,12 +5861,14 @@ app.whenReady().then(async () => {
   await loadCachedAdBlockHosts().catch(() => undefined);
   await loadBundledTrackerBlockHosts().catch(() => undefined);
   await loadPersistedAppState().catch(() => undefined);
+  await loadPersistedSitePermissions().catch(() => undefined);
   await loadPersistedSessionSnapshot().catch(() => undefined);
   setupHistoryHandlers();
   setupVersionExposure();
   setupVersionHandlers();
   setupPerformanceHandlers();
   setupSessionHandlers();
+  setupSitePermissionHandlers();
   setupUpdateHandlers();
   setupWebviewTabOpenHandler();
   setupAdBlocker();
@@ -5020,6 +5914,11 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  for (const pendingRequest of pendingSitePermissionRequests.values()) {
+    pendingRequest.callback(false);
+  }
+  pendingSitePermissionRequests.clear();
+  pendingWebviewCloseRequestsByWebContentsId.clear();
   for (const timer of pendingClosedWindowCleanupTimers.values()) {
     clearTimeout(timer);
   }

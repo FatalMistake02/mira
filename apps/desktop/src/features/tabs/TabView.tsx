@@ -645,7 +645,7 @@ export default function TabView() {
       const webviewEvent = event as WebviewNavigationEvent;
       webview.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(webviewEvent.url));
       clearExternalErrorForTab(tabId);
-      navigate(webviewEvent.url, tabId);
+      navigate(webviewEvent.url, tabId, { fromWebview: true });
       applyRawFileDarkModeStyle(webview, shouldApplyRawFileDarkMode);
       maybeReturnFromAuthFlow(tabId, webviewEvent.url);
     },
