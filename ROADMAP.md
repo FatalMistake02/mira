@@ -1,13 +1,5 @@
 # Roadmap
 
-## v1.0.0 — Stable Release
-- [x] Fix default browser
-- [x] Fix target="_blank" links
-- [x] Change context menu for vertical tabs
-- [x] Fix bookmarks context menu
-- [x] Bookmarks menu and folders
-- [x] Issues
-  
 ## v1.1.0
 - [ ] Ad blocker blocks Youtube videos
 - [x] Bookmarks and favorites
