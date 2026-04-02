@@ -120,6 +120,14 @@ interface UpdateCheckResult {
   downloadUrl: string;
 }
 
+type KnownWebmailProviderId = 'gmail' | 'outlook' | 'proton';
+
+interface MailtoNavigationTarget {
+  kind: 'browser-tab' | 'internal-tab' | 'external-os';
+  url: string;
+  title: string;
+}
+
 let historyCache: HistoryEntry[] = [];
 const OPEN_TAB_DEDUPE_WINDOW_MS = 500;
 const recentOpenTabByHost = new Map<number, { url: string; openedAt: number }>();
@@ -741,12 +749,147 @@ function normalizeIncomingBrowserFilePath(rawValue: string): string | null {
   }
 }
 
+function normalizeMailtoUrl(rawUrl: string): string | null {
+  const trimmed = normalizeIncomingBrowserArgValue(rawUrl);
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol.toLowerCase() !== 'mailto:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function toInternalMailtoUrl(rawUrl: string): string | null {
+  const normalizedMailtoUrl = normalizeMailtoUrl(rawUrl);
+  if (!normalizedMailtoUrl) return null;
+  return `mira://mailto?url=${encodeURIComponent(normalizedMailtoUrl)}`;
+}
+
+function resolveMailtoProviderTarget(
+  mailtoUrl: string,
+  candidateUrl: string,
+): { id: KnownWebmailProviderId; title: string; url: string } | null {
+  try {
+    const parsedCandidate = new URL(candidateUrl.trim());
+    if (parsedCandidate.protocol.toLowerCase() !== 'https:') return null;
+
+    const host = parsedCandidate.hostname.toLowerCase();
+    if (host === 'mail.google.com') {
+      return {
+        id: 'gmail',
+        title: 'Compose Email',
+        url: `https://mail.google.com/mail/?extsrc=mailto&url=${encodeURIComponent(mailtoUrl)}`,
+      };
+    }
+
+    if (
+      host === 'outlook.live.com'
+      || host === 'outlook.office.com'
+      || host === 'outlook.office365.com'
+    ) {
+      return {
+        id: 'outlook',
+        title: 'Compose Email',
+        url: `${parsedCandidate.origin}/mail/deeplink/compose?mailtouri=${encodeURIComponent(mailtoUrl)}`,
+      };
+    }
+
+    if (host === 'mail.proton.me' || host === 'mail.protonmail.com') {
+      return {
+        id: 'proton',
+        title: 'Compose Email',
+        url: `https://mail.proton.me/inbox/#mailto=${encodeURIComponent(mailtoUrl)}`,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getRecentMailProviderCandidates(): Array<{ url: string; timestamp: number }> {
+  const latestTimestampByUrl = new Map<string, number>();
+
+  for (const snapshot of windowSessionCache.values()) {
+    const savedAt = Number.isFinite(snapshot.savedAt) ? snapshot.savedAt : 0;
+    for (const tab of snapshot.tabs) {
+      const url = typeof tab.url === 'string' ? tab.url.trim() : '';
+      if (!url) continue;
+      const lastActiveAt = Number.isFinite(tab.lastActiveAt) ? tab.lastActiveAt : 0;
+      const activeBoost = tab.id === snapshot.activeId ? 1 : 0;
+      const timestamp = Math.max(savedAt, lastActiveAt) + activeBoost;
+      const previous = latestTimestampByUrl.get(url) ?? 0;
+      if (timestamp > previous) {
+        latestTimestampByUrl.set(url, timestamp);
+      }
+    }
+  }
+
+  for (const entry of historyCache) {
+    const url = typeof entry.url === 'string' ? entry.url.trim() : '';
+    if (!url) continue;
+    const visitedAt = Number.isFinite(entry.visitedAt) ? entry.visitedAt : 0;
+    const previous = latestTimestampByUrl.get(url) ?? 0;
+    if (visitedAt > previous) {
+      latestTimestampByUrl.set(url, visitedAt);
+    }
+  }
+
+  return Array.from(latestTimestampByUrl.entries())
+    .map(([url, timestamp]) => ({ url, timestamp }))
+    .sort((a, b) => b.timestamp - a.timestamp);
+}
+
+function resolveMailtoNavigationTarget(
+  rawUrl: string,
+  options?: { allowExternalFallback?: boolean },
+): MailtoNavigationTarget | null {
+  const normalizedMailtoUrl = normalizeMailtoUrl(rawUrl);
+  if (!normalizedMailtoUrl) return null;
+
+  for (const candidate of getRecentMailProviderCandidates()) {
+    const target = resolveMailtoProviderTarget(normalizedMailtoUrl, candidate.url);
+    if (target) {
+      return {
+        kind: 'browser-tab',
+        url: target.url,
+        title: target.title,
+      };
+    }
+  }
+
+  const allowExternalFallback = options?.allowExternalFallback !== false;
+  if (allowExternalFallback && !isDefaultForProtocol('mailto')) {
+    return {
+      kind: 'external-os',
+      url: normalizedMailtoUrl,
+      title: 'Compose Email',
+    };
+  }
+
+  const fallbackUrl = toInternalMailtoUrl(normalizedMailtoUrl);
+  if (!fallbackUrl) return null;
+
+  return {
+    kind: 'internal-tab',
+    url: fallbackUrl,
+    title: 'Compose Email',
+  };
+}
+
 function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
   const fileUrl = normalizeIncomingBrowserFilePath(rawUrl);
   if (fileUrl) return fileUrl;
 
   const trimmed = normalizeIncomingBrowserArgValue(rawUrl);
   if (!trimmed) return null;
+
+  const normalizedMailtoUrl = normalizeMailtoUrl(trimmed);
+  if (normalizedMailtoUrl) return normalizedMailtoUrl;
 
   try {
     const parsed = new URL(trimmed);
@@ -2200,6 +2343,21 @@ function setupWebviewTabOpenHandler() {
       }
     }
 
+    contents.on('will-navigate', (event, url) => {
+      const normalizedMailtoUrl = normalizeMailtoUrl(url);
+      if (!normalizedMailtoUrl) return;
+
+      event.preventDefault();
+      const host =
+        contents.hostWebContents
+        ?? (contents.getType() === 'window' ? contents : null);
+      if (!host || host.isDestroyed()) return;
+      host.send('open-url-in-new-tab', {
+        url: normalizedMailtoUrl,
+        sourceWebContentsId: contents.id,
+      });
+    });
+
     contents.on('before-input-event', (event, input) => {
       const host = contents.hostWebContents;
       if (!host) return;
@@ -2501,6 +2659,16 @@ function setupWebviewTabOpenHandler() {
       const normalizedFrameName = typeof frameName === 'string' ? frameName.trim() : '';
       const hostWindow = BrowserWindow.fromWebContents(host);
       if (!normalized) {
+        return { action: 'deny' };
+      }
+
+      const normalizedMailtoUrl = normalizeMailtoUrl(normalized);
+      if (normalizedMailtoUrl) {
+        host.send('open-url-in-new-tab', {
+          url: normalizedMailtoUrl,
+          sourceWebContentsId: contents.id,
+          disposition,
+        });
         return { action: 'deny' };
       }
 
@@ -3949,6 +4117,52 @@ function setupWindowControlsHandlers() {
   );
 }
 
+function setupMailtoHandlers() {
+  ipcMain.handle('mailto-dispatch', async (_event, payload: unknown) => {
+    if (typeof payload !== 'object' || payload === null) {
+      return { handled: false };
+    }
+
+    const candidate = payload as {
+      url?: unknown;
+      allowExternalFallback?: unknown;
+    };
+    const rawUrl = typeof candidate.url === 'string' ? candidate.url.trim() : '';
+    const allowExternalFallback = candidate.allowExternalFallback !== false;
+    const target = resolveMailtoNavigationTarget(rawUrl, { allowExternalFallback });
+    if (!target) {
+      return { handled: false };
+    }
+
+    if (target.kind === 'external-os') {
+      try {
+        await shell.openExternal(target.url);
+        return {
+          handled: true,
+          openedExternally: true,
+        };
+      } catch {
+        const fallbackUrl = toInternalMailtoUrl(target.url);
+        if (!fallbackUrl) {
+          return { handled: false };
+        }
+
+        return {
+          handled: true,
+          url: fallbackUrl,
+          title: 'Compose Email',
+        };
+      }
+    }
+
+    return {
+      handled: true,
+      url: target.url,
+      title: target.title,
+    };
+  });
+}
+
 function setupDefaultBrowserHandlers() {
   ipcMain.handle('default-browser-status', () => {
     const support = getDefaultBrowserSupportInfo();
@@ -4766,6 +4980,7 @@ app.whenReady().then(async () => {
   setupAdBlocker();
   setupMainFrameHttpErrorReporter();
   setupWindowControlsHandlers();
+  setupMailtoHandlers();
   setupDefaultBrowserHandlers();
   setupIncomingUrlHandlers();
   setupOnboardingHandlers();

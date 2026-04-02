@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Registers for more files and link types
+- Support MAILTO links
 
 ## v1.0.0 - 2026-04-01
 

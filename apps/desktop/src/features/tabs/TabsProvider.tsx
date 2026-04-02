@@ -85,6 +85,7 @@ type MoveTabToNewWindowOptions = {
 
 type NewTabToRightOptions = {
   activate?: boolean;
+  activateDelayMs?: number;
   authFlowSourceTabId?: string;
   authFlowInitialUrl?: string;
 };
@@ -94,6 +95,13 @@ type DetachedTabTransferPayload = {
   tab: Tab;
   guestInstance?: string;
   webContentsId?: number;
+};
+
+type MailtoDispatchResponse = {
+  handled?: boolean;
+  openedExternally?: boolean;
+  url?: string;
+  title?: string;
 };
 
 type TabsContextType = {
@@ -209,11 +217,48 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function normalizeMailtoNavigationUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol.toLowerCase() !== 'mailto:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function toInternalMailtoTabUrl(url: string): string | null {
+  const normalizedMailtoUrl = normalizeMailtoNavigationUrl(url);
+  if (!normalizedMailtoUrl) return null;
+  return `mira://mailto?url=${encodeURIComponent(normalizedMailtoUrl)}`;
+}
+
+function isMailtoNavigationUrl(url: string): boolean {
+  return normalizeMailtoNavigationUrl(url) !== null;
+}
+
+function normalizeTabNavigationUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
 function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
   if (!isRecord(value)) return null;
 
   const id = typeof value.id === 'string' ? value.id : crypto.randomUUID();
-  const url = typeof value.url === 'string' && value.url.trim() ? value.url : defaultTabUrl;
+  const url = normalizeTabNavigationUrl(
+    typeof value.url === 'string' && value.url.trim() ? value.url : defaultTabUrl,
+  );
   const title =
     typeof value.title === 'string' && value.title.trim()
       ? value.title.trim()
@@ -228,7 +273,7 @@ function normalizeTab(value: unknown, defaultTabUrl: string): Tab | null {
   const historyRaw = Array.isArray(value.history) ? value.history : [url];
   const history = historyRaw.filter(
     (entry): entry is string => typeof entry === 'string' && !!entry.trim(),
-  );
+  ).map((entry) => normalizeTabNavigationUrl(entry));
   const normalizedHistory = history.length ? history : [url];
   const historyIndexRaw =
     typeof value.historyIndex === 'number' ? value.historyIndex : normalizedHistory.length - 1;
@@ -263,14 +308,14 @@ function normalizeOpenUrlInNewTabRequest(
   value: unknown,
 ): { url: string; sourceWebContentsId?: number } | null {
   if (typeof value === 'string') {
-    const normalizedUrl = value.trim();
+    const normalizedUrl = normalizeTabNavigationUrl(value);
     if (!normalizedUrl || normalizedUrl.toLowerCase() === 'about:blank') return null;
     return { url: normalizedUrl };
   }
 
   if (!isRecord(value)) return null;
 
-  const normalizedUrl = typeof value.url === 'string' ? value.url.trim() : '';
+  const normalizedUrl = typeof value.url === 'string' ? normalizeTabNavigationUrl(value.url) : '';
   if (!normalizedUrl || normalizedUrl.toLowerCase() === 'about:blank') return null;
 
   const sourceWebContentsId =
@@ -385,8 +430,6 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const recentlyClosedTabsRef = useRef<Tab[]>([]);
   const lastReopenClosedTabAtRef = useRef(0);
   const reopenTabActivationTimerRef = useRef<number | null>(null);
-  const ipcOpenTabActivateTimerRef = useRef<number | null>(null);
-  const ipcOpenTabNavigateTimerRef = useRef<number | null>(null);
   const zoomFactorByTabRef = useRef<Record<string, number>>({});
   const bootDetachedTransferHandledRef = useRef(false);
   const activeFindInPageMatches = findInPageMatchesByTab[activeId] ?? {
@@ -736,39 +779,128 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     return undefined;
   }, []);
 
-  function miraUrlToName(url?: string) {
+  const miraUrlToName = useCallback((url?: string) => {
     if (!url?.startsWith('mira://')) {
       throw new Error(`Invalid mira url: '${url}'`);
     }
     const sanitized = url.slice(7);
-    switch (sanitized.toLowerCase()) {
+    const route = sanitized.split(/[?#]/, 1)[0];
+    switch (route.toLowerCase()) {
       case 'newtab':
         return 'New Tab';
+      case 'mailto':
+        return 'Compose Email';
       case 'themecreator':
         return 'Theme Creator';
       default:
         // return a capitalized version of the url
-        return sanitized.charAt(0).toUpperCase() + sanitized.split("#")[0].slice(1);
+        return route.charAt(0).toUpperCase() + route.slice(1);
     }
-  }
+  }, []);
 
-  const newTab = useCallback(
-    (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => {
+  const resolveMailtoTabTarget = useCallback(
+    async (
+      url: string,
+      options?: { allowExternalFallback?: boolean },
+    ): Promise<{ url: string; title?: string } | null> => {
+      const normalizedMailtoUrl = normalizeMailtoNavigationUrl(url);
+      if (!normalizedMailtoUrl) return null;
+
+      const fallbackUrl = toInternalMailtoTabUrl(normalizedMailtoUrl);
+      const ipc = electron?.ipcRenderer;
+      if (!ipc) {
+        return fallbackUrl ? { url: fallbackUrl, title: 'Compose Email' } : null;
+      }
+
+      try {
+        const response = await ipc.invoke<MailtoDispatchResponse>('mailto-dispatch', {
+          url: normalizedMailtoUrl,
+          allowExternalFallback: options?.allowExternalFallback !== false,
+        });
+        const resolvedUrl =
+          typeof response?.url === 'string' ? normalizeTabNavigationUrl(response.url) : '';
+        if (resolvedUrl) {
+          return {
+            url: resolvedUrl,
+            title:
+              typeof response?.title === 'string' && response.title.trim()
+                ? response.title.trim()
+                : undefined,
+          };
+        }
+        if (response?.openedExternally) return null;
+      } catch {
+        // Fall back to the internal compose page below.
+      }
+
+      return fallbackUrl ? { url: fallbackUrl, title: 'Compose Email' } : null;
+    },
+    [],
+  );
+
+  const applyResolvedNavigation = useCallback(
+    (targetTabId: string, targetUrl: string, explicitTitle?: string) => {
+      const normalized = normalizeTabNavigationUrl(targetUrl);
+      if (!normalized) return;
+
+      if (!normalized.startsWith('mira://')) {
+        addHistoryEntry(normalized, normalized).catch(() => undefined);
+      }
+
+      setTabs((t) =>
+        t.map((tab) => {
+          if (tab.id !== targetTabId) return tab;
+
+          const currentUrl = tab.history[tab.historyIndex];
+          if (currentUrl === normalized) {
+            return tab;
+          }
+
+          const newHistory = tab.history.slice(0, tab.historyIndex + 1).concat(normalized);
+          const defaultTitle =
+            explicitTitle?.trim()
+            || (normalized.startsWith('mira://') ? miraUrlToName(normalized) : normalized);
+          return {
+            ...tab,
+            url: normalized,
+            title: defaultTitle,
+            favicon: normalized.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+            history: newHistory,
+            historyIndex: newHistory.length - 1,
+            reloadToken: tab.reloadToken,
+          };
+        }),
+      );
+    },
+    [miraUrlToName],
+  );
+
+  const openResolvedNewTab = useCallback(
+    (
+      targetUrl: string,
+      options?: { activate?: boolean; activateDelayMs?: number },
+      explicitTitle?: string,
+    ) => {
       const shouldActivate = options?.activate !== false;
       const activateDelayMsRaw = options?.activateDelayMs;
       const activateDelayMs =
         typeof activateDelayMsRaw === 'number' && Number.isFinite(activateDelayMsRaw)
           ? Math.max(0, Math.floor(activateDelayMsRaw))
           : 0;
-      const defaultNewTabUrl = getBrowserSettings().newTabPage;
-      const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+      const normalizedTargetUrl = normalizeTabNavigationUrl(targetUrl);
+      if (!normalizedTargetUrl) return;
+
       const now = Date.now();
       const newEntry: Tab = {
         id: crypto.randomUUID(),
-        url: targetUrl,
-        title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
-        favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
-        history: [targetUrl],
+        url: normalizedTargetUrl,
+        title:
+          explicitTitle?.trim()
+          || (normalizedTargetUrl.startsWith('mira://')
+            ? miraUrlToName(normalizedTargetUrl)
+            : normalizedTargetUrl),
+        favicon: normalizedTargetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+        history: [normalizedTargetUrl],
         historyIndex: 0,
         reloadToken: 0,
         isSleeping: false,
@@ -789,16 +921,27 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         }
       }
     },
-    [activeId],
+    [activeId, miraUrlToName],
   );
 
-  const newTabToRight = useCallback(
-    (id: string, url?: string, options?: NewTabToRightOptions) => {
+  const openResolvedNewTabToRight = useCallback(
+    (
+      id: string,
+      targetUrl: string,
+      options?: NewTabToRightOptions,
+      explicitTitle?: string,
+    ) => {
       if (!id) return;
 
       const shouldActivate = options?.activate !== false;
-      const defaultNewTabUrl = getBrowserSettings().newTabPage;
-      const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+      const activateDelayMsRaw = options?.activateDelayMs;
+      const activateDelayMs =
+        typeof activateDelayMsRaw === 'number' && Number.isFinite(activateDelayMsRaw)
+          ? Math.max(0, Math.floor(activateDelayMsRaw))
+          : 0;
+      const normalizedTargetUrl = normalizeTabNavigationUrl(targetUrl);
+      if (!normalizedTargetUrl) return;
+
       const authFlowSourceTabId =
         typeof options?.authFlowSourceTabId === 'string' && options.authFlowSourceTabId.trim()
           ? options.authFlowSourceTabId.trim()
@@ -807,15 +950,19 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         authFlowSourceTabId
           ? typeof options?.authFlowInitialUrl === 'string' && options.authFlowInitialUrl.trim()
             ? options.authFlowInitialUrl.trim()
-            : targetUrl
+            : normalizedTargetUrl
           : undefined;
       const now = Date.now();
       const newEntry: Tab = {
         id: crypto.randomUUID(),
-        url: targetUrl,
-        title: targetUrl.startsWith('mira://') ? miraUrlToName(targetUrl) : targetUrl,
-        favicon: targetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
-        history: [targetUrl],
+        url: normalizedTargetUrl,
+        title:
+          explicitTitle?.trim()
+          || (normalizedTargetUrl.startsWith('mira://')
+            ? miraUrlToName(normalizedTargetUrl)
+            : normalizedTargetUrl),
+        favicon: normalizedTargetUrl.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
+        history: [normalizedTargetUrl],
         historyIndex: 0,
         reloadToken: 0,
         isSleeping: false,
@@ -836,11 +983,55 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       });
 
       if (shouldActivate) {
-        setActiveId(newEntry.id);
+        if (activateDelayMs > 0) {
+          window.setTimeout(() => {
+            setActiveId(newEntry.id);
+          }, activateDelayMs);
+        } else {
+          setActiveId(newEntry.id);
+        }
       }
       return newEntry.id;
     },
-    [activeId],
+    [activeId, miraUrlToName],
+  );
+
+  const newTab = useCallback(
+    (url?: string, options?: { activate?: boolean; activateDelayMs?: number }) => {
+      const defaultNewTabUrl = getBrowserSettings().newTabPage;
+      const requestedUrl =
+        typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+      if (isMailtoNavigationUrl(requestedUrl)) {
+        void resolveMailtoTabTarget(requestedUrl).then((resolved) => {
+          if (!resolved) return;
+          openResolvedNewTab(resolved.url, options, resolved.title);
+        });
+        return;
+      }
+
+      openResolvedNewTab(requestedUrl, options);
+    },
+    [openResolvedNewTab, resolveMailtoTabTarget],
+  );
+
+  const newTabToRight = useCallback(
+    (id: string, url?: string, options?: NewTabToRightOptions) => {
+      if (!id) return;
+
+      const defaultNewTabUrl = getBrowserSettings().newTabPage;
+      const requestedUrl =
+        typeof url === 'string' && url.trim() ? url.trim() : defaultNewTabUrl;
+      if (isMailtoNavigationUrl(requestedUrl)) {
+        void resolveMailtoTabTarget(requestedUrl).then((resolved) => {
+          if (!resolved) return;
+          openResolvedNewTabToRight(id, resolved.url, options, resolved.title);
+        });
+        return undefined;
+      }
+
+      return openResolvedNewTabToRight(id, requestedUrl, options);
+    },
+    [openResolvedNewTabToRight, resolveMailtoTabTarget],
   );
 
   const duplicateTab = useCallback(
@@ -1409,37 +1600,18 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   const navigate = useCallback(
     (url: string, tabId?: string) => {
       const targetTabId = tabId ?? activeId;
-      const normalized = url.trim();
-      if (normalized && !normalized.startsWith('mira://')) {
-        addHistoryEntry(normalized, normalized).catch(() => undefined);
+      const requestedUrl = url.trim();
+      if (isMailtoNavigationUrl(requestedUrl)) {
+        void resolveMailtoTabTarget(requestedUrl).then((resolved) => {
+          if (!resolved) return;
+          applyResolvedNavigation(targetTabId, resolved.url, resolved.title);
+        });
+        return;
       }
 
-      setTabs((t) =>
-        t.map((tab) => {
-          if (tab.id !== targetTabId) return tab;
-
-          const currentUrl = tab.history[tab.historyIndex];
-          if (currentUrl === normalized) {
-            return tab;
-          }
-
-          const newHistory = tab.history.slice(0, tab.historyIndex + 1).concat(normalized);
-          const defaultTitle = normalized.startsWith('mira://')
-            ? miraUrlToName(normalized)
-            : normalized;
-          return {
-            ...tab,
-            url: normalized,
-            title: defaultTitle,
-            favicon: normalized.startsWith('mira://') ? INTERNAL_FAVICON_URL : undefined,
-            history: newHistory,
-            historyIndex: newHistory.length - 1,
-            reloadToken: tab.reloadToken,
-          };
-        }),
-      );
+      applyResolvedNavigation(targetTabId, requestedUrl);
     },
-    [activeId],
+    [activeId, applyResolvedNavigation, resolveMailtoTabTarget],
   );
 
   const navigateToNewTabPage = useCallback(() => {
@@ -1987,13 +2159,21 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      if (ipcOpenTabActivateTimerRef.current !== null) {
-        window.clearTimeout(ipcOpenTabActivateTimerRef.current);
-        ipcOpenTabActivateTimerRef.current = null;
-      }
-      if (ipcOpenTabNavigateTimerRef.current !== null) {
-        window.clearTimeout(ipcOpenTabNavigateTimerRef.current);
-        ipcOpenTabNavigateTimerRef.current = null;
+      if (isMailtoNavigationUrl(normalized)) {
+        newTabToRight(
+          sourceTabId,
+          normalized,
+          shouldTrackAuthFlow
+            ? {
+                activateDelayMs: IPC_OPEN_TAB_ACTIVATE_DELAY_MS,
+                authFlowSourceTabId: sourceTabId,
+                authFlowInitialUrl: normalized,
+              }
+            : {
+                activateDelayMs: IPC_OPEN_TAB_ACTIVATE_DELAY_MS,
+              },
+        );
+        return;
       }
 
       const nowForTab = Date.now();
@@ -2032,8 +2212,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
         return updatedTabs;
       });
 
-      ipcOpenTabActivateTimerRef.current = window.setTimeout(() => {
-        ipcOpenTabActivateTimerRef.current = null;
+      window.setTimeout(() => {
         if (!tabsRef.current.some((tab) => tab.id === stagedTabId)) return;
         setActiveId(stagedTabId);
       }, IPC_OPEN_TAB_ACTIVATE_DELAY_MS);
@@ -2054,21 +2233,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     }
 
     return () => ipc.off('open-url-in-new-tab', onOpenUrlInNewTab);
-  }, [findTabIdForWebContentsId, isBootstrapReady]);
+  }, [findTabIdForWebContentsId, isBootstrapReady, miraUrlToName, newTabToRight]);
 
   useEffect(
     () => () => {
       if (reopenTabActivationTimerRef.current !== null) {
         window.clearTimeout(reopenTabActivationTimerRef.current);
         reopenTabActivationTimerRef.current = null;
-      }
-      if (ipcOpenTabActivateTimerRef.current !== null) {
-        window.clearTimeout(ipcOpenTabActivateTimerRef.current);
-        ipcOpenTabActivateTimerRef.current = null;
-      }
-      if (ipcOpenTabNavigateTimerRef.current !== null) {
-        window.clearTimeout(ipcOpenTabNavigateTimerRef.current);
-        ipcOpenTabNavigateTimerRef.current = null;
       }
     },
     [],
