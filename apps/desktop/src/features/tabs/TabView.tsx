@@ -218,6 +218,7 @@ function canOpenInNewTab(url: string): boolean {
       protocol === 'http:' ||
       protocol === 'https:' ||
       protocol === 'file:' ||
+      protocol === 'mailto:' ||
       protocol === 'about:' ||
       protocol === 'mira:' ||
       protocol === 'view-source:'

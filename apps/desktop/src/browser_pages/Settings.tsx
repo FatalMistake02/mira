@@ -723,7 +723,7 @@ export default function Settings() {
           response.support?.message ||
           (response.ok
             ? response.requiresUserAction
-              ? 'Mira was registered for web links. Confirm Mira in your OS default apps settings, then refresh status.'
+              ? 'Mira was registered for web links and additional handlers. Confirm Mira in your OS default apps settings, then refresh status.'
               : 'Mira is now set as your default browser.'
             : 'Could not set Mira as default browser. Check your OS default apps settings.'),
       );

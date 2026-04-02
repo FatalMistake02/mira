@@ -41,7 +41,9 @@
         "name": "Mira URL Handler",
         "schemes": [
           "http",
-          "https"
+          "https",
+          "mailto",
+          "mira"
         ]
       }
     ],
@@ -53,12 +55,53 @@
           "ext": [
             "htm",
             "html",
-            "shtml",
-            "xhtml"
+            "shtml"
           ],
           "name": "HTML Document",
           "role": "Viewer",
           "mimeType": "text/html"
+        },
+        {
+          "ext": [
+            "xht",
+            "xhtml"
+          ],
+          "name": "XHTML Document",
+          "role": "Viewer",
+          "mimeType": "application/xhtml+xml"
+        },
+        {
+          "ext": [
+            "pdf"
+          ],
+          "name": "PDF Document",
+          "role": "Viewer",
+          "mimeType": "application/pdf"
+        },
+        {
+          "ext": [
+            "svg"
+          ],
+          "name": "SVG Document",
+          "role": "Viewer",
+          "mimeType": "image/svg+xml"
+        },
+        {
+          "ext": [
+            "mht",
+            "mhtml"
+          ],
+          "name": "MHTML Document",
+          "role": "Viewer",
+          "mimeType": "multipart/related"
+        },
+        {
+          "ext": [
+            "xml"
+          ],
+          "name": "XML Document",
+          "role": "Viewer",
+          "mimeType": "application/xml"
         }
       ],
       "target": [
@@ -82,12 +125,53 @@
           "ext": [
             "htm",
             "html",
-            "shtml",
-            "xhtml"
+            "shtml"
           ],
           "name": "HTML Document",
           "role": "Viewer",
           "mimeType": "text/html"
+        },
+        {
+          "ext": [
+            "xht",
+            "xhtml"
+          ],
+          "name": "XHTML Document",
+          "role": "Viewer",
+          "mimeType": "application/xhtml+xml"
+        },
+        {
+          "ext": [
+            "pdf"
+          ],
+          "name": "PDF Document",
+          "role": "Viewer",
+          "mimeType": "application/pdf"
+        },
+        {
+          "ext": [
+            "svg"
+          ],
+          "name": "SVG Document",
+          "role": "Viewer",
+          "mimeType": "image/svg+xml"
+        },
+        {
+          "ext": [
+            "mht",
+            "mhtml"
+          ],
+          "name": "MHTML Document",
+          "role": "Viewer",
+          "mimeType": "multipart/related"
+        },
+        {
+          "ext": [
+            "xml"
+          ],
+          "name": "XML Document",
+          "role": "Viewer",
+          "mimeType": "application/xml"
         }
       ],
       "target": [
@@ -105,7 +189,11 @@
       ],
       "mimeTypes": [
         "text/html",
-        "application/xhtml+xml"
+        "application/xhtml+xml",
+        "application/pdf",
+        "image/svg+xml",
+        "multipart/related",
+        "application/xml"
       ],
       "fileAssociations": [
         {
@@ -124,9 +212,39 @@
           "mimeType": "text/html"
         },
         {
-          "ext": "xhtml",
-          "name": "HTML Document",
+          "ext": "xht",
+          "name": "XHTML Document",
           "mimeType": "application/xhtml+xml"
+        },
+        {
+          "ext": "xhtml",
+          "name": "XHTML Document",
+          "mimeType": "application/xhtml+xml"
+        },
+        {
+          "ext": "pdf",
+          "name": "PDF Document",
+          "mimeType": "application/pdf"
+        },
+        {
+          "ext": "svg",
+          "name": "SVG Document",
+          "mimeType": "image/svg+xml"
+        },
+        {
+          "ext": "mht",
+          "name": "MHTML Document",
+          "mimeType": "multipart/related"
+        },
+        {
+          "ext": "mhtml",
+          "name": "MHTML Document",
+          "mimeType": "multipart/related"
+        },
+        {
+          "ext": "xml",
+          "name": "XML Document",
+          "mimeType": "application/xml"
         }
       ],
       "category": "Utility"

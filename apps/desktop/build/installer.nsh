@@ -6,6 +6,7 @@
 !define MIRA_REGAPP_KEY "Software\RegisteredApplications"
 !define MIRA_HTML_PROGID "${APP_ID}.HTML"
 !define MIRA_URL_PROGID "${APP_ID}.URL"
+!define MIRA_CUSTOM_PROTOCOL "mira"
 !define MIRA_EXECUTABLE_FILENAME "${PRODUCT_FILENAME}.exe"
 
 !ifndef BUILD_UNINSTALLER
@@ -80,13 +81,17 @@ FunctionEnd
 
 Function RegisterDefaultBrowser
   ; ProgIDs
-  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}" "" "${PRODUCT_NAME} HTML Document"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}" "" "${PRODUCT_NAME} Document"
   WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}\DefaultIcon" "" "$INSTDIR\${MIRA_EXECUTABLE_FILENAME},0"
   WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}\shell\open\command" "" '"$INSTDIR\${MIRA_EXECUTABLE_FILENAME}" "%1"'
   WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}" "" "${PRODUCT_NAME} URL"
   WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}" "URL Protocol" ""
   WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}\DefaultIcon" "" "$INSTDIR\${MIRA_EXECUTABLE_FILENAME},0"
   WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}\shell\open\command" "" '"$INSTDIR\${MIRA_EXECUTABLE_FILENAME}" "%1"'
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_CUSTOM_PROTOCOL}" "" "URL:${PRODUCT_NAME} URL"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_CUSTOM_PROTOCOL}" "URL Protocol" ""
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_CUSTOM_PROTOCOL}\DefaultIcon" "" "$INSTDIR\${MIRA_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\${MIRA_CUSTOM_PROTOCOL}\shell\open\command" "" '"$INSTDIR\${MIRA_EXECUTABLE_FILENAME}" "%1"'
 
   ; Start menu internet registration
   WriteRegStr SHELL_CONTEXT "${MIRA_STARTMENU_KEY}" "" "${PRODUCT_NAME}"
@@ -100,9 +105,17 @@ Function RegisterDefaultBrowser
   WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".htm" "${MIRA_HTML_PROGID}"
   WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".html" "${MIRA_HTML_PROGID}"
   WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".shtml" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".xht" "${MIRA_HTML_PROGID}"
   WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".xhtml" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".pdf" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".svg" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".mht" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".mhtml" "${MIRA_HTML_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\FileAssociations" ".xml" "${MIRA_HTML_PROGID}"
   WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\URLAssociations" "http" "${MIRA_URL_PROGID}"
   WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\URLAssociations" "https" "${MIRA_URL_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\URLAssociations" "mailto" "${MIRA_URL_PROGID}"
+  WriteRegStr SHELL_CONTEXT "${MIRA_CAPABILITIES_KEY}\URLAssociations" "mira" "${MIRA_CUSTOM_PROTOCOL}"
   WriteRegStr SHELL_CONTEXT "${MIRA_REGAPP_KEY}" "${PRODUCT_NAME}" "${MIRA_CAPABILITIES_KEY}"
 
   ; Notify shell to refresh registered apps
@@ -131,6 +144,7 @@ FunctionEnd
 !macro customUninstall
   DeleteRegKey SHELL_CONTEXT "Software\Classes\${MIRA_HTML_PROGID}"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\${MIRA_URL_PROGID}"
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\${MIRA_CUSTOM_PROTOCOL}"
   DeleteRegKey SHELL_CONTEXT "${MIRA_STARTMENU_KEY}"
   DeleteRegValue SHELL_CONTEXT "${MIRA_REGAPP_KEY}" "${PRODUCT_NAME}"
   System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'

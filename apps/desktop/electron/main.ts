@@ -13,7 +13,7 @@ import {
 import { execFileSync, spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import type { DownloadItem, MenuItemConstructorOptions, WebContents } from 'electron';
-import { appendFileSync, promises as fs, readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { appendFileSync, promises as fs, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import os from 'node:os';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -720,8 +720,32 @@ function getHistoryFilePath() {
   return path.join(app.getPath('userData'), 'history.json');
 }
 
+function normalizeIncomingBrowserArgValue(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function normalizeIncomingBrowserFilePath(rawValue: string): string | null {
+  const trimmed = normalizeIncomingBrowserArgValue(rawValue);
+  if (!trimmed || !path.isAbsolute(trimmed)) return null;
+
+  try {
+    const stats = statSync(trimmed);
+    if (!stats.isFile()) return null;
+    return pathToFileURL(trimmed).toString();
+  } catch {
+    return null;
+  }
+}
+
 function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
-  const trimmed = rawUrl.trim();
+  const fileUrl = normalizeIncomingBrowserFilePath(rawUrl);
+  if (fileUrl) return fileUrl;
+
+  const trimmed = normalizeIncomingBrowserArgValue(rawUrl);
   if (!trimmed) return null;
 
   try {
@@ -731,6 +755,7 @@ function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
       protocol !== 'http:' &&
       protocol !== 'https:' &&
       protocol !== 'file:' &&
+      protocol !== 'mailto:' &&
       protocol !== 'about:' &&
       protocol !== 'mira:'
     ) {
@@ -744,6 +769,7 @@ function normalizeIncomingBrowserUrl(rawUrl: string): string | null {
 
 function extractIncomingBrowserUrlFromArgv(argv: string[]): string | null {
   for (let i = argv.length - 1; i >= 0; i -= 1) {
+    if (i === 0 || (process.defaultApp && i === 1)) continue;
     const candidate = normalizeIncomingBrowserUrl(argv[i] ?? '');
     if (candidate) return candidate;
   }
@@ -891,6 +917,7 @@ function isDefaultBrowser(): boolean {
 }
 
 let cachedBuildAppId: string | null | undefined;
+let cachedBuildProductName: string | null | undefined;
 
 function getBuildAppId(): string | null {
   if (cachedBuildAppId !== undefined) return cachedBuildAppId;
@@ -940,8 +967,11 @@ function getWindowsUserChoiceProgId(protocol: 'http' | 'https'): string | null {
 
 function getWindowsRegisteredProtocolProgId(protocol: 'http' | 'https'): string | null {
   const candidates: string[] = [];
+  const buildProductName = getBuildProductName();
+  if (buildProductName) candidates.push(buildProductName);
+
   const appName = app.getName();
-  if (appName) candidates.push(appName);
+  if (appName && !candidates.includes(appName)) candidates.push(appName);
   try {
     const exeName = path.basename(app.getPath('exe'), path.extname(app.getPath('exe')));
     if (exeName && !candidates.includes(exeName)) candidates.push(exeName);
@@ -1015,7 +1045,9 @@ function getWindowsDefaultAppsSettingsUri(): string {
 
 function openWindowsDefaultAppsSettings(): void {
   if (!isWindows) return;
+
   const uri = getWindowsDefaultAppsSettingsUri();
+
   void shell.openExternal(uri).catch(() => {
     void shell.openExternal('ms-settings:defaultapps');
   });
@@ -1454,6 +1486,21 @@ function sendDetachedTabBootstrapToWindow(win: BrowserWindow): void {
     win.webContents.send('window-detached-tab-bootstrap', pending);
   } catch {
     // Ignore send failures during window bootstrap/teardown.
+  }
+}
+
+function getBuildProductName(): string | null {
+  if (cachedBuildProductName !== undefined) return cachedBuildProductName;
+  try {
+    const raw = readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8');
+    const parsed = JSON.parse(raw) as { build?: { productName?: unknown } };
+    const productName =
+      typeof parsed?.build?.productName === 'string' ? parsed.build.productName.trim() : '';
+    cachedBuildProductName = productName || null;
+    return cachedBuildProductName;
+  } catch {
+    cachedBuildProductName = null;
+    return null;
   }
 }
 
@@ -3458,6 +3505,7 @@ function setupWindowControlsHandlers() {
           protocol === 'http:' ||
           protocol === 'https:' ||
           protocol === 'file:' ||
+          protocol === 'mailto:' ||
           protocol === 'about:' ||
           protocol === 'mira:' ||
           protocol === 'view-source:'
@@ -3935,6 +3983,8 @@ function setupDefaultBrowserHandlers() {
 
     const didSetHttp = setAsDefaultForProtocol('http');
     const didSetHttps = setAsDefaultForProtocol('https');
+    setAsDefaultForProtocol('mailto');
+    setAsDefaultForProtocol('mira');
     const ok = didSetHttp && didSetHttps;
     const isDefault = isDefaultBrowser();
 
@@ -3965,6 +4015,11 @@ function setupDefaultBrowserHandlers() {
           : 'Mira was registered for http/https. Confirm Mira in your OS default apps settings, then refresh status.';
     } else {
       message = 'Mira is now set as your default browser.';
+    }
+
+    if (ok && requiresUserAction && isWindows) {
+      message =
+        'Mira was registered for web links and additional handlers. Windows still requires confirmation in Default apps. The Settings app should now open to Mira; click Set default there to claim its supported link and file types, then refresh status.';
     }
 
     logDefaultBrowserDebug('default-browser-set', {
