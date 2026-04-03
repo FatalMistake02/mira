@@ -30,7 +30,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-node.ps1
 
 **macOS/Linux:** 
 ```bash
-bash scripts/install-node.sh
+./scripts/install-node.sh
 ```
 
 Then run
