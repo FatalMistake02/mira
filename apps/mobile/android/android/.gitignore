@@ -1,0 +1,46 @@
+.gradle
+.gradle/
+.idea
+*.iml
+*.apk
+*.aapt2
+*.dex
+*.jar
+*.so
+.DS_Store
+.classpath
+.project
+.pydevproject
+.settings
+local.properties
+
+# Build
+build/
+release/
+dist/
+
+# Gradle cache
+.gradle/
+gradle-app.setting
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# IDE
+.idea/
+.vscode/
+*.iws
+*.iml
+*.ipr
+
+# Java
+*.class
+*.jar
+*.war
+
+# Keystore
+*.keystore
+*.jks
+
+# Misc
+*.log

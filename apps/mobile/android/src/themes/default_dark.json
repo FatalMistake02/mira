@@ -1,0 +1,14 @@
+{
+  "name": "default_dark",
+  "colors": {
+    "primary": "#007AFF",
+    "secondary": "#5AC8FA",
+    "background": "#1C1C1E",
+    "surface": "#2C2C2E",
+    "text": "#FFFFFF",
+    "border": "#3A3A3C",
+    "success": "#34C759",
+    "warning": "#FF9500",
+    "error": "#FF3B30"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "default_compact",
+  "tabBarPosition": "bottom",
+  "addressBarPosition": "top",
+  "compactMode": true
+}

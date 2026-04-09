@@ -1,0 +1,14 @@
+{
+  "name": "default_light",
+  "colors": {
+    "primary": "#007AFF",
+    "secondary": "#5AC8FA",
+    "background": "#F2F2F7",
+    "surface": "#FFFFFF",
+    "text": "#000000",
+    "border": "#E5E5EA",
+    "success": "#34C759",
+    "warning": "#FF9500",
+    "error": "#FF3B30"
+  }
+}

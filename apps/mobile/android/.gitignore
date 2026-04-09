@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Android
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Metro
+.metro-redirector-root
+
+# Build
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db

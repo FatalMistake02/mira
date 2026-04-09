@@ -1,0 +1,5 @@
+<!-- Android notch and status bar layout -->
+<resources xmlns:android="http://schemas.android.com/apk/res/android">
+    <dimen name="status_bar_height">24dp</dimen>
+    <dimen name="navigation_bar_height">48dp</dimen>
+</resources>

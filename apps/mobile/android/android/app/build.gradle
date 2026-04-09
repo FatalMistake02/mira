@@ -1,0 +1,46 @@
+apply plugin: 'com.android.application'
+apply plugin: 'com.facebook.react'
+
+android {
+    namespace = "com.fatalmistake02.mira"
+    compileSdkVersion = 34
+
+    defaultConfig {
+        applicationId = "com.fatalmistake02.mira"
+        minSdkVersion = 21
+        targetSdkVersion = 34
+        versionCode = 1
+        versionName = "1.0.0"
+    }
+
+    buildTypes {
+        debug {
+            signingConfig = signingConfigs.debug
+        }
+        release {
+            minifyEnabled = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig = signingConfigs.release
+        }
+    }
+
+    packagingOptions {
+        pickFirst "lib/armeabi-v7a/libc++_shared.so"
+        pickFirst "lib/arm64-v8a/libc++_shared.so"
+        pickFirst "lib/x86/libc++_shared.so"
+        pickFirst "lib/x86_64/libc++_shared.so"
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'com.facebook.react:react-android'
+    implementation 'com.facebook.react:hermes-android'
+}
+
+project.ext.react = [
+    enableHermes: true,
+]

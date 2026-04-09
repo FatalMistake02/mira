@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+##############################################################################
+##
+##  Gradle start up script for UN*X
+##
+##############################################################################
+
+# Attempt to set APP_HOME
+# Resolve links: $0 may be a link
+PRG="$0"
+# Need this for relative symlinks.
+while [ -h "$PRG" ] ; do
+    ls -ld "$PRG"
+    link=$(expr "$PRG" : '.*-> \(.*\)$')
+    if expr "$link" : '/.*' > /dev/null; then
+        PRG="$link"
+    else
+        PRG=$(dirname "$PRG")"/$link"
+    fi
+done
+SAVED="$(cd "$(dirname "$PRG")" && pwd)"
+cd "$SAVED" || exit
+
+export JAVA_HOME=/opt/java/openjdk
+export PATH=$JAVA_HOME/bin:$PATH
+
+exec gradle "$@"

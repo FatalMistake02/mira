@@ -1,0 +1,10 @@
+{
+  "name": "mira",
+  "displayName": "Mira Browser",
+  "version": "1.0.0",
+  "description": "A fast and private mobile browser",
+  "author": "Mira Community",
+  "license": "MIT",
+  "repository": "https://github.com/Mira-Studios/mira",
+  "homepage": "https://mira.fatalmistake02.com"
+}
