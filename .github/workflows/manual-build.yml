@@ -144,7 +144,7 @@ jobs:
         run: npm ci
 
       - name: Build Windows app
-        run: npm run build --workspace apps/desktop -- --publish never
+        run: npm run build --workspace apps/desktop -- --win --x64 --arm64 --publish never
         env:
           VITE_DEV: "false"
 
@@ -167,22 +167,22 @@ jobs:
             throw "release directory not found"
           }
           
-          $portableFiles = Get-ChildItem -Path $releaseDir -File -Filter *.exe | Where-Object {
-            $_.Name -notmatch "setup"
-          }
-          for ($i = 0; $i -lt $portableFiles.Count; $i++) {
-            $suffix = if ($portableFiles.Count -gt 1) { "-$($i + 1)" } else { "" }
-            $target = Join-Path $releaseDir ("$prefix-win$suffix.exe")
-            Move-Item -Path $portableFiles[$i].FullName -Destination $target -Force
-          }
-          
-          $setupFiles = Get-ChildItem -Path $releaseDir -File -Filter *.exe | Where-Object {
-            $_.Name -match "setup"
-          }
-          for ($i = 0; $i -lt $setupFiles.Count; $i++) {
-            $suffix = if ($setupFiles.Count -gt 1) { "-$($i + 1)" } else { "" }
-            $target = Join-Path $releaseDir ("$prefix-win-setup$suffix.exe")
-            Move-Item -Path $setupFiles[$i].FullName -Destination $target -Force
+          # Process all exe files and extract architecture from filename
+          Get-ChildItem -Path $releaseDir -File -Filter *.exe | ForEach-Object {
+            $filename = $_.Name
+            # Match filenames like: Mira-1.0.0-win-x64.exe or Mira-1.0.0-win-arm64-setup.exe
+            if ($filename -match 'win-(x64|arm64)(?:-setup)?\.exe$') {
+              $arch = $matches[1]
+              $isSetup = $filename -match 'setup'
+              
+              if ($isSetup) {
+                $target = "$prefix-win-$arch-setup.exe"
+              } else {
+                $target = "$prefix-win-$arch.exe"
+              }
+              
+              Move-Item -Path $_.FullName -Destination (Join-Path $releaseDir $target) -Force
+            }
           }
 
       - name: Upload Windows artifacts
@@ -291,7 +291,7 @@ jobs:
         run: npm ci
 
       - name: Build Linux app
-        run: npm run build --workspace apps/desktop -- --linux --x64 --publish never
+        run: npm run build --workspace apps/desktop -- --linux --x64 --arm64 --publish never
         env:
           VITE_DEV: "false"
 
@@ -315,29 +315,16 @@ jobs:
             exit 1
           fi
           
-          # Rename AppImage files
-          for file in "$release_dir"/*.AppImage; do
-            if [[ -f "$file" ]]; then
-              filename=$(basename "$file")
-              target="$release_dir/$prefix-linux-$filename"
-              mv "$file" "$target"
-            fi
-          done
-          
-          # Rename DEB files
-          for file in "$release_dir"/*.deb; do
-            if [[ -f "$file" ]]; then
-              filename=$(basename "$file")
-              target="$release_dir/$prefix-linux-$filename"
-              mv "$file" "$target"
-            fi
-          done
-          
-          # Rename RPM files
-          for file in "$release_dir"/*.rpm; do
-            if [[ -f "$file" ]]; then
-              filename=$(basename "$file")
-              target="$release_dir/$prefix-linux-$filename"
+          # Extract architecture from filename and rename accordingly
+          for file in "$release_dir"/*{.AppImage,.deb,.rpm}; do
+            [[ ! -f "$file" ]] && continue
+            
+            filename=$(basename "$file")
+            # Extract architecture and extension
+            if [[ "$filename" =~ linux-([^.]+)\.(AppImage|deb|rpm)$ ]]; then
+              arch="${BASH_REMATCH[1]}"
+              ext="${BASH_REMATCH[2]}"
+              target="$release_dir/$prefix-linux-$arch.$ext"
               mv "$file" "$target"
             fi
           done

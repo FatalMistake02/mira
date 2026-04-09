@@ -48,7 +48,7 @@
       }
     ],
     "win": {
-      "artifactName": "${productName}-${version}-win.${ext}",
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
       "icon": "assets/app_icons/app_icons.ico",
       "fileAssociations": [
         {
@@ -110,7 +110,7 @@
       ]
     },
     "nsis": {
-      "artifactName": "${productName}-${version}-win-setup.${ext}",
+      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
@@ -181,7 +181,7 @@
       "category": "public.app-category.utilities"
     },
     "linux": {
-      "artifactName": "${productName}-${version}-linux.${ext}",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "target": [
         "AppImage",
         "deb",
