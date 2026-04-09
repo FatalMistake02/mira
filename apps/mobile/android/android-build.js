@@ -13,7 +13,7 @@ const gradleCmd = isWindows ? 'gradlew.bat' : './gradlew';
 const buildType = process.argv[2] || 'assembleRelease';
 
 const result = spawnSync(gradleCmd, [buildType], {
-  cwd: __dirname,
+  cwd: path.join(__dirname, 'android'),
   stdio: 'inherit',
   shell: true,
 });
