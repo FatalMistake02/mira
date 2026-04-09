@@ -7,9 +7,9 @@
   "scripts": {
     "start": "react-native start",
     "android": "react-native run-android",
-    "android:build": "cd android && gradlew.bat assembleRelease",
-    "android:build:debug": "cd android && gradlew.bat assembleDebug",
-    "android:clean": "cd android && gradlew.bat clean",
+    "android:build": "node android-build.js assembleRelease",
+    "android:build:debug": "node android-build.js assembleDebug",
+    "android:clean": "node android-build.js clean",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "typecheck": "tsc"
