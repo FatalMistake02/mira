@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 
-const { spawnSync } = require('child_process');
-const path = require('path');
-const os = require('os');
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import os from 'os';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const isWindows = os.platform() === 'win32';
 const gradleCmd = isWindows ? 'gradlew.bat' : './gradlew';
