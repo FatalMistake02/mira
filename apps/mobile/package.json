@@ -1,0 +1,47 @@
+{
+  "name": "com.fatalmistake02.mira.mobile",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "android": "set \"JAVA_HOME=C:\\Program Files\\Java\\jdk-17.0.2\" && react-native run-android",
+    "android:dev": "concurrently \"npm run start\" \"npm run android\" --names \"METRO,ANDROID\" --prefix-colors blue,green",
+    "ios": "react-native run-ios",
+    "lint": "node -e \"process.env.ESLINT_USE_FLAT_CONFIG='false'; const result = require('child_process').spawnSync('eslint',['.'],{stdio:'inherit',shell:true,env:process.env}); process.exit(result.status ?? 1);\"",
+    "start": "react-native start",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "lucide-react-native": "^0.487.0",
+    "react": "19.2.3",
+    "react-native": "0.85.0",
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-svg": "^15.11.2",
+    "react-native-webview": "^13.16.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native-community/cli-platform-ios": "20.1.0",
+    "@react-native/babel-preset": "0.85.0",
+    "@react-native/eslint-config": "0.85.0",
+    "@react-native/jest-preset": "0.85.0",
+    "@react-native/metro-config": "0.85.0",
+    "@react-native/typescript-config": "0.85.0",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^19.2.0",
+    "@types/react-test-renderer": "^19.1.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^8.19.0",
+    "jest": "^29.6.3",
+    "prettier": "2.8.8",
+    "react-test-renderer": "19.2.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">= 22.11.0"
+  }
+}

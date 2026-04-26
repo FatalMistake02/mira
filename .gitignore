@@ -48,5 +48,3 @@ dist/
 # Build output
 release/
 
-# Ignore mobile app for now
-apps/mobile/

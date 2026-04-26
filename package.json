@@ -6,6 +6,14 @@
     "apps/desktop",
     "apps/mobile"
   ],
+  "engines": {
+    "node": ">= 22.11.0"
+  },
+  "overrides": {
+    "lucide-react-native": {
+      "react": "^19.0.0"
+    }
+  },
   "scripts": {
     "dev": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:dev\\''); process.exit(1)\"",
     "build": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:build\\''); process.exit(1)\"",
@@ -25,7 +33,7 @@
     "desktop:format": "npm run format --workspace apps/desktop",
     "mobile:start": "npm run start --workspace apps/mobile",
     "mobile:android": "npm run android --workspace apps/mobile",
+    "mobile:android:dev": "npm run android:dev --workspace apps/mobile",
     "mobile:ios": "npm run ios --workspace apps/mobile"
-  },
-  "dependencies": {}
+  }
 }
