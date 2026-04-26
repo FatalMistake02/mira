@@ -80,36 +80,38 @@ export default function NewTabPage({
         flex: 1,
         backgroundColor: theme.colors.background,
         alignItems: 'center',
-        paddingTop: '12%',
+        paddingTop: 40,
         paddingHorizontal: 20,
       }}
     >
-      {shouldRenderBranding && (
-        <>
-          <Animated.Image
-            source={miraLogo}
-            style={{
-              width: 180,
-              height: 180,
-              resizeMode: 'contain',
-              opacity: logoOpacity,
-              transform: [{ translateY: logoTranslateY }],
-            }}
-          />
-          <Animated.View style={{ opacity: textOpacity, marginTop: 20 }}>
-            <Text
+      <View style={{ height: 244, alignItems: 'center', justifyContent: 'flex-start' }}>
+        {shouldRenderBranding && (
+          <>
+            <Animated.Image
+              source={miraLogo}
               style={{
-                fontSize: 32,
-                fontWeight: '700',
-                color: theme.colors.text,
-                letterSpacing: 0.5,
+                width: 180,
+                height: 180,
+                resizeMode: 'contain',
+                opacity: logoOpacity,
+                transform: [{ translateY: logoTranslateY }],
               }}
-            >
-              Welcome to Mira
-            </Text>
-          </Animated.View>
-        </>
-      )}
+            />
+            <Animated.View style={{ opacity: textOpacity, marginTop: 12 }}>
+              <Text
+                style={{
+                  fontSize: 32,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                  letterSpacing: 0.5,
+                }}
+              >
+                Welcome to Mira
+              </Text>
+            </Animated.View>
+          </>
+        )}
+      </View>
       <TextInput
         value={query}
         onChangeText={setQuery}
@@ -118,7 +120,6 @@ export default function NewTabPage({
         style={{
           width: '100%',
           maxWidth: 400,
-          marginTop: shouldRenderBranding ? 28 : 40,
           paddingVertical: 14,
           paddingHorizontal: 16,
           fontSize: 17,

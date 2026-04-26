@@ -58,7 +58,6 @@ type TabsContextType = {
   openThemeCreator: () => void;
   openLayoutCreator: () => void;
   openUpdates: () => void;
-  toggleBookmarksBar: () => void;
   bookmarkCurrentPage: () => void;
   bookmarkAllTabs: () => void;
   closeTab: (id: string) => void;
@@ -701,13 +700,6 @@ export default function TabsProvider({ children }: { children: ReactNode }) {
   const openLayoutCreator = useCallback(() => openOrFocusInternalTab('mira://layoutcreator'), [openOrFocusInternalTab]);
   const openUpdates = useCallback(() => openOrFocusInternalTab('mira://updates'), [openOrFocusInternalTab]);
 
-  const toggleBookmarksBar = useCallback(() => {
-    const current = getBrowserSettings();
-    saveBrowserSettings({
-      showBookmarksBar: !current.showBookmarksBar,
-    });
-  }, []);
-
   const bookmarkCurrentPage = useCallback(() => {
     if (!activeTab || !activeTab.url || activeTab.url.startsWith('mira://errors/')) return;
 
@@ -871,7 +863,6 @@ export default function TabsProvider({ children }: { children: ReactNode }) {
       openThemeCreator,
       openLayoutCreator,
       openUpdates,
-      toggleBookmarksBar,
       bookmarkCurrentPage,
       bookmarkAllTabs,
       closeTab,
@@ -926,7 +917,6 @@ export default function TabsProvider({ children }: { children: ReactNode }) {
       stopFindInPage,
       stopLoading,
       tabs,
-      toggleBookmarksBar,
       updateTabMetadata,
       updateTabNavigationState,
       updateTabProgress,

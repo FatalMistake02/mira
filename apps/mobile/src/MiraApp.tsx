@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -225,35 +225,6 @@ function Sheet({
   );
 }
 
-function BookmarksStrip({ theme }: { theme: MobileTheme }) {
-  const styles = stylesFor(theme);
-  const { bookmarks } = useBookmarks();
-  const { navigate, openBookmarks } = useTabs();
-  const topLevel = bookmarks.slice(0, 10);
-
-  if (!topLevel.length) return null;
-
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
-      {topLevel.map((bookmark) => (
-        <Pressable
-          key={bookmark.id}
-          style={styles.chip}
-          onPress={() => {
-            if (bookmark.type === 'folder') {
-              openBookmarks();
-              return;
-            }
-            if (bookmark.url) navigate(bookmark.url);
-          }}
-        >
-          <Text style={styles.chipText}>{bookmark.title}</Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
-
 function MobileWebTab({
   tab,
   settings,
@@ -296,10 +267,16 @@ function MobileWebTab({
       onLoadProgress={(event) => updateTabProgress(tab.id, event.nativeEvent.progress)}
       onShouldStartLoadWithRequest={(request) => {
         const url = request.url.trim();
+        const isMainFrame = (request as any).isMainFrame ?? true;
+        const navigationType = (request as any).navigationType;
+
+        // Handle internal mira:// URLs
         if (url.startsWith('mira://')) {
           navigate(url, tab.id, { skipInputNormalization: true, fromWebView: true });
           return false;
         }
+
+        // Handle mailto: links
         if (url.startsWith('mailto:')) {
           navigate(`mira://mailto?url=${encodeURIComponent(url)}`, tab.id, {
             skipInputNormalization: true,
@@ -307,17 +284,42 @@ function MobileWebTab({
           });
           return false;
         }
-        if (url.startsWith('http://')) {
+
+        // HTTPS-First: Handle HTTP URLs
+        if (url.startsWith('http://') && isMainFrame) {
+          // Try to upgrade to HTTPS first
+          const httpsUrl = url.replace(/^http:/i, 'https:');
+
+          // If this is a link click or redirect from HTTPS page, try HTTPS upgrade
+          if (tab.url?.startsWith('https://')) {
+            // This is an HTTPS -> HTTP downgrade, try HTTPS first
+            navigate(httpsUrl, tab.id, { skipInputNormalization: true, fromWebView: true });
+            return false;
+          }
+
+          // If user typed HTTP directly or clicked HTTP link from non-HTTPS page,
+          // try HTTPS first anyway (HTTPS-First policy)
+          if (navigationType === 'other' || navigationType === 'link') {
+            // Navigate to HTTPS version instead
+            navigate(httpsUrl, tab.id, { skipInputNormalization: true, fromWebView: true });
+            return false;
+          }
+
+          // For form submissions or other navigations, show warning
           navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(url)}`, tab.id, {
             skipInputNormalization: true,
             fromWebView: true,
           });
           return false;
         }
+
+        // Block non-HTTPS protocols on main frame (external apps handle these)
         if (
+          isMainFrame &&
           !url.startsWith('https://')
           && !url.startsWith('about:blank')
           && !url.startsWith('data:')
+          && !url.startsWith('http://') // Already handled above
         ) {
           Linking.openURL(url).catch(() => undefined);
           return false;
@@ -434,10 +436,36 @@ function BrowserChrome({
   const [menuOpen, setMenuOpen] = useState(false);
   const [findSheetOpen, setFindSheetOpen] = useState(false);
   const [findValue, setFindValue] = useState('');
+  const initialUrlHandledRef = useRef(false);
 
   useEffect(() => {
     setAddressValue(activeTab?.url ?? settings.newTabPage);
   }, [activeTab?.url, settings.newTabPage]);
+
+  // Handle incoming URLs from external apps (when set as default browser)
+  useEffect(() => {
+    // Get initial URL that launched the app - only handle once
+    if (!initialUrlHandledRef.current) {
+      initialUrlHandledRef.current = true;
+      Linking.getInitialURL().then((url) => {
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+          newTab(url, { activate: true });
+        }
+      }).catch(() => undefined);
+    }
+
+    // Listen for URLs when app is already running
+    const subscription = Linking.addEventListener('url', (event) => {
+      const url = event.url;
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        newTab(url, { activate: true });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [newTab]);
 
   return (
     <SafeAreaView style={styles.page}>
@@ -456,7 +484,6 @@ function BrowserChrome({
               onSubmitEditing={() => navigate(addressValue)}
             />
           </View>
-          {settings.showBookmarksBar && <BookmarksStrip theme={theme} />}
         </View>
       )}
       <View style={{ flex: 1 }}>

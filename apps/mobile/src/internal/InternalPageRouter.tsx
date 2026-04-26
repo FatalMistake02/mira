@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import type { BrowserSettings } from '../features/settings/browserSettings';
 import { useTabs } from '../features/tabs/TabsProvider';
 import type { MobileTheme } from './shared';
@@ -51,7 +52,14 @@ export default function InternalPageRouter({
     case 'bookmarks':
       return <BookmarksPage theme={mobileTheme} />;
     case 'settings':
-      return <SettingsPage theme={mobileTheme} settings={settings} updateSettings={updateSettings} />;
+      return (
+        <SettingsPage
+          theme={mobileTheme}
+          settings={settings}
+          updateSettings={updateSettings}
+          section={(parsed.searchParams.get('section') ?? '').toLowerCase()}
+        />
+      );
     case 'themecreator':
       return (
         <ThemeCreatorPage theme={mobileTheme} settings={settings} updateSettings={updateSettings} />
@@ -65,23 +73,37 @@ export default function InternalPageRouter({
     case 'mailto':
       return <MailtoPage theme={mobileTheme} mailtoUrl={parsed.searchParams.get('url') ?? ''} />;
     case 'errors/unsecure-site':
+      const unsafeUrl = parsed.searchParams.get('url') ?? '';
+      const httpsUpgradeUrl = unsafeUrl.replace(/^http:/i, 'https:');
       return (
         <ErrorPage
           theme={mobileTheme}
-          title="Unsecure Site"
-          description="Mira Mobile blocks plain HTTP when you manually enter a site. Continue only if you trust it."
+          title="HTTPS-First Warning"
+          description="Mira protects your connection by using HTTPS. This site attempted to load over an unsecure HTTP connection."
         >
-          <AppButton
-            theme={mobileTheme}
-            label="Continue to HTTP"
-            primary
-            onPress={() => {
-              navigate(parsed.searchParams.get('url') ?? '', undefined, {
-                skipInputNormalization: true,
-                fromWebView: true,
-              });
-            }}
-          />
+          <View style={{ gap: mobileTheme.metrics.spacing, marginTop: mobileTheme.metrics.spacing }}>
+            <AppButton
+              theme={mobileTheme}
+              label="Try HTTPS Version"
+              primary
+              onPress={() => {
+                navigate(httpsUpgradeUrl, undefined, {
+                  skipInputNormalization: true,
+                  fromWebView: true,
+                });
+              }}
+            />
+            <AppButton
+              theme={mobileTheme}
+              label="Continue to HTTP (Unsafe)"
+              onPress={() => {
+                navigate(unsafeUrl, undefined, {
+                  skipInputNormalization: true,
+                  fromWebView: true,
+                });
+              }}
+            />
+          </View>
         </ErrorPage>
       );
     case 'errors/crash':
