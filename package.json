@@ -12,7 +12,9 @@
   "overrides": {
     "lucide-react-native": {
       "react": "^19.0.0"
-    }
+    },
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   },
   "scripts": {
     "dev": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run desktop:dev\\''); process.exit(1)\"",
