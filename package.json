@@ -34,8 +34,13 @@
     "desktop:preview": "npm run preview --workspace apps/desktop",
     "desktop:format": "npm run format --workspace apps/desktop",
     "mobile:start": "npm run start --workspace apps/mobile",
+    "mobile:start:reset": "npm run start:reset --workspace apps/mobile",
     "mobile:android": "npm run android --workspace apps/mobile",
     "mobile:android:dev": "npm run android:dev --workspace apps/mobile",
-    "mobile:ios": "npm run ios --workspace apps/mobile"
+    "mobile:android:release": "npm run android:release --workspace apps/mobile",
+    "mobile:android:build": "npm run android:build --workspace apps/mobile",
+    "mobile:ios": "npm run ios --workspace apps/mobile",
+    "mobile:ios:release": "npm run ios:release --workspace apps/mobile",
+    "mobile:ios:build": "npm run ios:build --workspace apps/mobile"
   }
 }
