@@ -196,6 +196,7 @@ jobs:
       - name: Build Android Release APK
         run: |
           cd apps/mobile/android
+          chmod +x gradlew
           ./gradlew assembleRelease
 
       - name: Upload Android Assets to Release
