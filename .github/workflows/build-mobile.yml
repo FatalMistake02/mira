@@ -197,7 +197,7 @@ jobs:
         run: |
           cd apps/mobile/android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease -Preact.hermesCommand=node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc
 
       - name: Upload Android Assets to Release
         uses: softprops/action-gh-release@v1
