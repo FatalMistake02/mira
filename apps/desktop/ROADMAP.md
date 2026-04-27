@@ -14,6 +14,7 @@
       New private window: Ctrl+Shift+N
 - [ ] Finish cookies and site data
 - [ ] Clean up ui
+- [ ] Fix http warning page
 
 ## v1.2.0
 - [ ] Tab groups and colors
