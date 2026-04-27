@@ -1,0 +1,98 @@
+name: Update React Native
+on:
+  schedule:
+    # Run every night at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-react-native:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get current React Native version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(npm list react-native --workspace apps/mobile --depth=0 | grep react-native | awk '{print $2}')
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Current React Native version: $CURRENT_VERSION"
+
+      - name: Get latest React Native version
+        id: latest_version
+        run: |
+          LATEST_VERSION=$(npm view react-native version)
+          echo "latest_version=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Latest React Native version: $LATEST_VERSION"
+
+      - name: Check if update is needed
+        id: check_update
+        run: |
+          CURRENT="${{ steps.current_version.outputs.current_version }}"
+          LATEST="${{ steps.latest_version.outputs.latest_version }}"
+          
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "update_needed=false" >> "$GITHUB_OUTPUT"
+            echo "React Native is up to date"
+          else
+            echo "update_needed=true" >> "$GITHUB_OUTPUT"
+            echo "React Native update available: $CURRENT -> $LATEST"
+          fi
+
+      - name: Update React Native
+        if: steps.check_update.outputs.update_needed == 'true'
+        run: |
+          npm install react-native@${{ steps.latest_version.outputs.latest_version }} --workspace apps/mobile
+          npm ci --workspace apps/mobile
+
+      - name: Create Pull Request
+        if: steps.check_update.outputs.update_needed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update React Native from ${{ steps.current_version.outputs.current_version }} to ${{ steps.latest_version.outputs.latest_version }}"
+          title: "chore: update React Native to v${{ steps.latest_version.outputs.latest_version }}"
+          body: |
+            ## React Native Update Available
+            
+            This PR updates React Native from `${{ steps.current_version.outputs.current_version }}` to `${{ steps.latest_version.outputs.latest_version }}`.
+            
+            ### Changes
+            - Updated React Native dependency in `apps/mobile/package.json`
+            - Updated `package-lock.json` with new React Native version
+            
+            ### Testing
+            Please test the following:
+            - [ ] Application builds successfully on Android
+            - [ ] Application builds successfully on iOS (if applicable)
+            - [ ] All React Native APIs work correctly
+            - [ ] No breaking changes in React Native release notes
+            
+            ### Release Notes
+            Check the [React Native release notes](https://github.com/facebook/react-native/releases/tag/v${{ steps.latest_version.outputs.latest_version }}) for detailed changes.
+            
+            ---
+            
+            🤖 This PR was created automatically by the nightly React Native update workflow.
+          branch: chore/update-react-native-${{ steps.latest_version.outputs.latest_version }}
+          delete-branch: true
+          labels: |
+            dependencies
+            react-native
+            mobile
+            automated

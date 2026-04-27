@@ -1,13 +1,13 @@
-name: Build Release
-run-name: Build Release ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+name: Build Mobile Release
+run-name: Build Mobile Release ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
 on:
   push:
     tags:
-      - "*"
+      - "mobile-v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build (example: v1.2.3)"
+        description: "Tag to build (example: mobile-v1.2.3)"
         required: true
         type: string
 
@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Resolve version from tag
         id: tag_version
@@ -42,8 +42,8 @@ jobs:
             tag="${{ github.ref_name }}"
           fi
           tag="${tag#refs/tags/}"
-          version="${tag#v}"
-          version="${version#V}"
+          version="${tag#mobile-v}"
+          version="${version#mobile-V}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag '$tag' does not contain a valid semver version."
             exit 1
@@ -52,12 +52,12 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Apply tag version to package metadata
-        run: npm version ${{ steps.tag_version.outputs.version }} --workspace apps/desktop --no-git-tag-version
+        run: npm version ${{ steps.tag_version.outputs.version }} --workspace apps/mobile --no-git-tag-version
 
       - name: Update changelog release header
         shell: bash
         run: |
-          changelog_file="apps/desktop/CHANGELOG.md"
+          changelog_file="apps/mobile/CHANGELOG.md"
           release_date="$(date -u +%Y-%m-%d)"
           release_heading="## v${{ steps.tag_version.outputs.version }} - $release_date"
 
@@ -93,9 +93,9 @@ jobs:
       - name: Upload versioned package metadata
         uses: actions/upload-artifact@v4
         with:
-          name: package-metadata
+          name: mobile-package-metadata
           path: |
-            apps/desktop/package.json
+            apps/mobile/package.json
             package-lock.json
 
       - name: Sync package version to repository
@@ -109,9 +109,9 @@ jobs:
           worktree_dir="$(mktemp -d)"
           git worktree add "$worktree_dir" "origin/$default_branch"
           cd "$worktree_dir"
-          npm version ${{ steps.tag_version.outputs.version }} --workspace apps/desktop --no-git-tag-version
+          npm version ${{ steps.tag_version.outputs.version }} --workspace apps/mobile --no-git-tag-version
 
-          changelog_file="apps/desktop/CHANGELOG.md"
+          changelog_file="apps/mobile/CHANGELOG.md"
           release_date="$(date -u +%Y-%m-%d)"
           release_heading="## v${{ steps.tag_version.outputs.version }} - $release_date"
 
@@ -141,12 +141,12 @@ jobs:
             mv "$tmp_file" "$changelog_file"
           fi
 
-          git add apps/desktop/package.json package-lock.json apps/desktop/CHANGELOG.md
+          git add apps/mobile/package.json package-lock.json apps/mobile/CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No package/changelog changes to commit."
             exit 0
           fi
-          git commit -m "chore: set desktop version to ${{ steps.tag_version.outputs.version }} from tag ${{ steps.tag_version.outputs.release_tag }}"
+          git commit -m "chore: set mobile version to ${{ steps.tag_version.outputs.version }} from tag ${{ steps.tag_version.outputs.release_tag }}"
           git push origin HEAD:"$default_branch"
 
   create-release:
@@ -158,90 +158,11 @@ jobs:
         with:
           draft: true
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
+          name: ${{ needs.prepare-version.outputs.release_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-windows:
-    needs:
-      - prepare-version
-      - create-release
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-version.outputs.release_tag }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Download versioned package metadata
-        uses: actions/download-artifact@v4
-        with:
-          name: package-metadata
-          path: .
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build app
-        run: npm run build --workspace apps/desktop -- --win --x64 --arm64 --publish never
-        env:
-          VITE_DEV: "false"
-
-      - name: Create Release and Upload Assets
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: true
-          tag_name: ${{ needs.prepare-version.outputs.release_tag }}
-          files: apps/desktop/release/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-macos:
-    needs:
-      - prepare-version
-      - create-release
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-version.outputs.release_tag }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Download versioned package metadata
-        uses: actions/download-artifact@v4
-        with:
-          name: package-metadata
-          path: .
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build app
-        run: npm run build --workspace apps/desktop -- --mac --x64 --arm64 --publish never
-        env:
-          VITE_DEV: "false"
-
-      - name: Upload macOS Assets to Existing Release
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: true
-          tag_name: ${{ needs.prepare-version.outputs.release_tag }}
-          files: |
-            apps/desktop/release/*.dmg
-            apps/desktop/release/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-linux:
+  build-android:
     needs:
       - prepare-version
       - create-release
@@ -255,30 +176,35 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Download versioned package metadata
         uses: actions/download-artifact@v4
         with:
-          name: package-metadata
+          name: mobile-package-metadata
           path: .
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build app
-        run: npm run build --workspace apps/desktop -- --linux --x64 --arm64 --publish never
-        env:
-          VITE_DEV: "false"
+      - name: Build Android Release APK
+        run: |
+          cd apps/mobile/android
+          ./gradlew assembleRelease
 
-      - name: Upload Linux Assets to Existing Release
+      - name: Upload Android Assets to Release
         uses: softprops/action-gh-release@v1
         with:
           draft: true
           tag_name: ${{ needs.prepare-version.outputs.release_tag }}
+          name: ${{ needs.prepare-version.outputs.release_tag }}
           files: |
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb
-            apps/desktop/release/*.rpm
+            apps/mobile/android/app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
