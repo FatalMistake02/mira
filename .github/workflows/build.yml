@@ -3,7 +3,7 @@ run-name: Build Release ${{ github.event_name == 'workflow_dispatch' && github.e
 on:
   push:
     tags:
-      - "*"
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
