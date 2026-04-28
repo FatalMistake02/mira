@@ -53,6 +53,8 @@ jobs:
 
       - name: Apply tag version to package metadata
         run: npm version ${{ steps.tag_version.outputs.version }} --workspace apps/mobile --no-git-tag-version
+        env:
+          ELECTRON_SKIP_DOWNLOAD: "1"
 
       - name: Update changelog release header
         shell: bash
@@ -109,7 +111,7 @@ jobs:
           worktree_dir="$(mktemp -d)"
           git worktree add "$worktree_dir" "origin/$default_branch"
           cd "$worktree_dir"
-          npm version ${{ steps.tag_version.outputs.version }} --workspace apps/mobile --no-git-tag-version
+          ELECTRON_SKIP_DOWNLOAD=1 npm version ${{ steps.tag_version.outputs.version }} --workspace apps/mobile --no-git-tag-version
 
           changelog_file="apps/mobile/CHANGELOG.md"
           release_date="$(date -u +%Y-%m-%d)"
