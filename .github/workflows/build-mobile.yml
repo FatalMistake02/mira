@@ -197,9 +197,20 @@ jobs:
 
       - name: Build Android Release APK
         run: |
+          HERMESC="$GITHUB_WORKSPACE/node_modules/react-native/sdks/hermesc/linux64-bin/hermesc"
+
+          if [ ! -f "$HERMESC" ]; then
+            echo "ERROR: hermesc not found at $HERMESC"
+            find $GITHUB_WORKSPACE/node_modules/react-native/sdks/hermesc -type f 2>/dev/null || echo "hermesc directory not found at all"
+            exit 1
+          fi
+
+          chmod +x "$HERMESC"
+
           cd apps/mobile/android
           chmod +x gradlew
-          echo "react.hermesCommand=../../../node_modules/react-native/sdks/hermesc/linux64-bin/hermesc" >> gradle.properties
+          echo "react.hermesCommand=$HERMESC" >> gradle.properties
+          cat gradle.properties | grep hermes
           ./gradlew assembleRelease
 
       - name: Upload Android Assets to Release
