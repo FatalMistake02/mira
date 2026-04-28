@@ -1,6 +1,6 @@
 {
   "name": "com.fatalmistake02.mira.mobile",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "private": true,
   "scripts": {
     "android": "set \"JAVA_HOME=C:\\Program Files\\Java\\jdk-17.0.2\" && react-native run-android",
