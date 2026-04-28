@@ -199,7 +199,7 @@ jobs:
         run: |
           cd apps/mobile/android
           chmod +x gradlew
-          echo "react.hermesCommand=../../node_modules/react-native/sdks/hermesc/linux64-bin/hermesc" >> gradle.properties
+          echo "react.hermesCommand=../../../node_modules/react-native/sdks/hermesc/linux64-bin/hermesc" >> gradle.properties
           ./gradlew assembleRelease
 
       - name: Upload Android Assets to Release
