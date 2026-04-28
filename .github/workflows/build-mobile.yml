@@ -195,22 +195,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download Hermes engine
+        run: |
+          HERMES_VERSION=$(cat node_modules/react-native/sdks/.hermesversion)
+          echo "Hermes version: $HERMES_VERSION"
+          mkdir -p node_modules/react-native/sdks/hermesc/linux64-bin
+          wget -q "https://github.com/facebook/hermes/releases/download/v${HERMES_VERSION}/hermes-cli-linux.tar.gz" -O /tmp/hermes-cli-linux.tar.gz
+          tar -tzf /tmp/hermes-cli-linux.tar.gz
+          tar -xzf /tmp/hermes-cli-linux.tar.gz -C /tmp
+          cp /tmp/hermes-cli-linux/hermesc node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
+          chmod +x node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
+          echo "hermesc ready"
+
       - name: Build Android Release APK
         run: |
           HERMESC="$GITHUB_WORKSPACE/node_modules/react-native/sdks/hermesc/linux64-bin/hermesc"
-
-          if [ ! -f "$HERMESC" ]; then
-            echo "ERROR: hermesc not found at $HERMESC"
-            find $GITHUB_WORKSPACE/node_modules/react-native/sdks/hermesc -type f 2>/dev/null || echo "hermesc directory not found at all"
-            exit 1
-          fi
-
-          chmod +x "$HERMESC"
-
           cd apps/mobile/android
           chmod +x gradlew
           echo "react.hermesCommand=$HERMESC" >> gradle.properties
-          cat gradle.properties | grep hermes
           ./gradlew assembleRelease
 
       - name: Upload Android Assets to Release
