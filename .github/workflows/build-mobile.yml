@@ -197,10 +197,10 @@ jobs:
 
       - name: Download Hermes engine
         run: |
-          HERMES_VERSION=$(cat node_modules/react-native/sdks/.hermesversion)
-          echo "Hermes version: $HERMES_VERSION"
+          HERMES_TAG=$(cat node_modules/react-native/sdks/.hermesversion)
+          echo "Hermes tag: $HERMES_TAG"
           mkdir -p node_modules/react-native/sdks/hermesc/linux64-bin
-          wget -q "https://github.com/facebook/hermes/releases/download/v${HERMES_VERSION}/hermes-cli-linux.tar.gz" -O /tmp/hermes-cli-linux.tar.gz
+          wget -q "https://github.com/facebook/hermes/releases/download/${HERMES_TAG}/hermes-cli-linux.tar.gz" -O /tmp/hermes-cli-linux.tar.gz
           tar -tzf /tmp/hermes-cli-linux.tar.gz
           tar -xzf /tmp/hermes-cli-linux.tar.gz -C /tmp
           cp /tmp/hermes-cli-linux/hermesc node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
