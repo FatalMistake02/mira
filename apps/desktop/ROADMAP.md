@@ -15,6 +15,7 @@
 - [ ] Finish cookies and site data
 - [ ] Clean up ui
 - [ ] Fix http warning page
+- [ ] Fix #74, #76, #77, and #81
 
 ## v1.2.0
 - [ ] Tab groups and colors
@@ -24,6 +25,7 @@
 - [ ] Mute tabs
 - [ ] Tab move to window
 - [ ] Cast
+- [ ] Screen share
 - [ ] Forward and backward context menu
 - [ ] Open downloads from pop up
 
@@ -33,3 +35,8 @@
 - [ ] Picture in picture
 - [ ] Page translate
 - [ ] Password manager(s)
+
+## Anytime
+- [ ] Data migration
+- [ ] Data sync and backup
+- [ ] Mira extensions
