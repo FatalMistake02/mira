@@ -6,7 +6,6 @@ A browser for desktop and mobile.
 
 ## Desktop
 
-
 [README](./apps/desktop/README.md) **|** [Roadmap](./apps/desktop/ROADMAP.md) **|** [Changelog](./apps/desktop/CHANGELOG.md)
 
 ### Features
@@ -35,6 +34,10 @@ A browser for desktop and mobile.
 
 ## Mobile
 
+[README](./apps/mobile/README.md) **|** [Roadmap](./apps/mobile/ROADMAP.md) **|** [Changelog](./apps/mobile/CHANGELOG.md)
+
+### Features
+
 - Tabs
 - Memory-saving tab sleeping
 - Default browser support
@@ -47,7 +50,7 @@ A browser for desktop and mobile.
 - Download manager
 - Search engine selection
 
-[README](./apps/mobile/README.md) **|** [Roadmap](./apps/mobile/ROADMAP.md) **|** [Changelog](./apps/mobile/CHANGELOG.md)
+
 
 Don't see a feature you want? [Request it](https://github.com/FatalMistake02/mira/issues/new?template=feature_request.md) or [contribute](https://github.com/FatalMistake02/mira/blob/main/CONTRIBUTING.md).
 
