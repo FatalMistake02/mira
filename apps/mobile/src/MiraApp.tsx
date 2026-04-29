@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Linking,
   Modal,
   Pressable,
@@ -18,7 +19,7 @@ import WebView, {
 } from 'react-native-webview';
 import { getAppState, saveAppState } from './app/appState';
 import { createId } from './app/ids';
-import { BookmarksProvider, useBookmarks } from './features/bookmarks/BookmarksProvider';
+import { BookmarksProvider } from './features/bookmarks/BookmarksProvider';
 import DownloadProvider, { useDownloads } from './features/downloads/DownloadProvider';
 import {
   DEFAULT_BROWSER_SETTINGS,
@@ -35,23 +36,11 @@ import InternalPageRouter from './internal/InternalPageRouter';
 import {
   ChevronLeft,
   ChevronRight,
-  RotateCw,
   Plus,
-  BookMarked,
-  Clock,
-  Download,
-  Settings,
-  Palette,
-  LayoutGrid,
   RefreshCw,
   X,
   Search,
   Menu,
-  Copy,
-  Trash2,
-  ArrowLeft,
-  ArrowRight,
-  Share2,
 } from 'lucide-react-native';
 import { AppButton, ChoiceChips, IconButton, MenuButton, TabCountButton, type MobileTheme, stylesFor } from './internal/shared';
 import { initializeStorageCache } from './storage/cacheStorage';
@@ -162,63 +151,262 @@ function OnboardingScreen({
   );
 }
 
+type MenuState = 'closed' | 'half-open' | 'fully-open';
+
+function MenuButtonWithGesture({
+  theme,
+  onPress,
+  children,
+}: {
+  theme: MobileTheme;
+  onPress: () => void;
+  children: React.ReactNode;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+
+  const handlePress = () => {
+    if (!isDragging) {
+      onPress();
+    }
+  };
+
+  const onTouchStart = (e: { nativeEvent: { pageY: number } }) => {
+    setIsDragging(true);
+    dragStartY.current = e.nativeEvent.pageY;
+  };
+
+  const onTouchMove = (e: { nativeEvent: { touches: Array<{ pageY: number }> } }) => {
+    if (!isDragging) return;
+    
+    const touch = e.nativeEvent.touches[0];
+    const pageY = touch?.pageY ?? 0;
+    const delta = dragStartY.current - pageY; // positive = swiping up
+    
+    // If swiping up significantly, trigger the menu open
+    if (delta > 20) {
+      setIsDragging(false);
+      onPress();
+    }
+  };
+
+  const onTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.7 : 1,
+        padding: 8,
+        borderRadius: theme.metrics.radius,
+        backgroundColor: pressed ? theme.colors.buttonBackground : 'transparent',
+      })}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
 function Sheet({
   visible,
   onClose,
   title,
   children,
   theme,
-  fullScreen = false,
 }: {
   visible: boolean;
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
   theme: MobileTheme;
-  fullScreen?: boolean;
 }) {
   const styles = stylesFor(theme);
-  const [isAtTop, setIsAtTop] = useState(true);
-  const scrollY = useRef(0);
+  const [menuState, setMenuState] = useState<MenuState>('half-open');
+  const [contentScrollEnabled, setContentScrollEnabled] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const contentScrollY = useRef(0);
+  const animatedHeight = useRef(new Animated.Value(0)).current;
 
-  const handleScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-    scrollY.current = event.nativeEvent.contentOffset.y;
-    setIsAtTop(scrollY.current <= 0);
+  // Convert menu state to height percentage
+  const getHeightPercentage = (state: MenuState): number => {
+    switch (state) {
+      case 'closed': return 0;
+      case 'half-open': return 50;
+      case 'fully-open': return 85;
+      default: return 50;
+    }
   };
 
-  const handleScrollEndDrag = (event: { nativeEvent: { velocity?: { y?: number }; contentOffset: { y: number } } }) => {
-    const velocity = event.nativeEvent.velocity?.y ?? 0;
-    const y = event.nativeEvent.contentOffset.y;
-    if (y <= 0 && velocity > 0.5) {
+  // Reset when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setMenuState('half-open');
+      setMenuState('half-open');
+      dragStartY.current = 0;
+    } else {
+      // When opening, start from closed and animate to half-open
+      animatedHeight.setValue(0);
+      Animated.timing(animatedHeight, {
+        toValue: getHeightPercentage('half-open'),
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [visible]);
+
+  // Enable/disable content scroll based on state
+  useEffect(() => {
+    setContentScrollEnabled(menuState === 'fully-open');
+  }, [menuState]);
+
+  // Animate height changes
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(animatedHeight, {
+        toValue: getHeightPercentage(menuState),
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [menuState, visible]);
+
+
+  const onTouchStart = (e: { nativeEvent: { pageY: number } }) => {
+    const pageY = e.nativeEvent.pageY;
+    setIsDragging(true);
+    dragStartY.current = pageY;
+  };
+
+  const onTouchMove = (e: { nativeEvent: { touches: Array<{ pageY: number }> } }) => {
+    if (!isDragging) return;
+
+    const touch = e.nativeEvent.touches[0];
+    const pageY = touch?.pageY ?? 0;
+    const currentHeight = getHeightPercentage(menuState);
+    const delta = dragStartY.current - pageY; // positive = swiping up, negative = swiping down
+
+    // Handle different states
+    if (menuState === 'half-open') {
+      if (delta > 0) {
+        // Swipe up from half-open -> expand to fully-open
+        const newHeight = Math.min(currentHeight + delta / 3, 85);
+        animatedHeight.setValue(newHeight);
+      } else if (delta < 0) {
+        // Swipe down from half-open -> collapse to closed
+        const absDelta = Math.abs(delta);
+        const newHeight = Math.max(currentHeight - absDelta / 3, 0);
+        animatedHeight.setValue(newHeight);
+      }
+    } else if (menuState === 'fully-open') {
+      if (delta < 0) {
+        // Swipe down from fully-open -> only if at top of content
+        if (contentScrollY.current <= 0) {
+          const absDelta = Math.abs(delta);
+          const newHeight = Math.max(currentHeight - absDelta / 3, 50);
+          animatedHeight.setValue(newHeight);
+        }
+      }
+    }
+  };
+
+  const onTouchEnd = () => {
+    if (!isDragging) return;
+    
+    setIsDragging(false);
+    // Get current animated value - using addListener to safely access the value
+    let finalHeight = 0;
+    animatedHeight.addListener(({ value }) => {
+      finalHeight = value;
+    });
+    animatedHeight.removeAllListeners();
+
+    // Determine final state based on height with forgiving thresholds
+    if (finalHeight > 65) {
+      setMenuState('fully-open');
+    } else if (finalHeight > 25) {
+      setMenuState('half-open');
+    } else {
+      setMenuState('closed');
+      onClose();
+    }
+  };
+
+  const handleScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+    contentScrollY.current = event.nativeEvent.contentOffset.y;
+  };
+
+  const handleOutsidePress = () => {
+    if (!isDragging) {
+      setMenuState('closed');
       onClose();
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' }} onPress={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' }} onPress={handleOutsidePress}>
         <Pressable
           style={{
             backgroundColor: theme.colors.surface,
-            borderTopLeftRadius: fullScreen ? 0 : theme.metrics.panelRadius,
-            borderTopRightRadius: fullScreen ? 0 : theme.metrics.panelRadius,
+            borderTopLeftRadius: theme.metrics.panelRadius,
+            borderTopRightRadius: theme.metrics.panelRadius,
             padding: theme.metrics.spacing,
             gap: theme.metrics.spacing,
-            height: fullScreen ? '100%' : '50%',
+            height: animatedHeight.interpolate({
+              inputRange: [0, 85],
+              outputRange: ['0%', '85%'],
+              extrapolate: 'clamp',
+            }),
           }}
-          onPress={() => undefined}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onPress={(e) => e.stopPropagation()}
         >
-          <Pressable style={{ alignItems: 'center', paddingBottom: 4 }} onPress={onClose}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.border }} />
-          </Pressable>
-          {title && <Text style={styles.sectionTitle}>{title}</Text>}
-          <ScrollView
-            onScroll={handleScroll}
-            onScrollEndDrag={handleScrollEndDrag}
-            scrollEventThrottle={16}
+          <Pressable
+            style={{ alignItems: 'center', paddingBottom: 4 }}
+            onPress={() => {
+              if (menuState === 'fully-open') {
+                setMenuState('closed');
+                onClose();
+              }
+            }}
+            onTouchStart={menuState === 'fully-open' ? onTouchStart : undefined}
+            onTouchMove={menuState === 'fully-open' ? onTouchMove : undefined}
+            onTouchEnd={menuState === 'fully-open' ? onTouchEnd : undefined}
           >
-            {children}
-          </ScrollView>
+            <View style={{ 
+              width: 36, 
+              height: 4, 
+              borderRadius: 2, 
+              backgroundColor: theme.colors.border,
+              opacity: menuState === 'closed' ? 0 : 1,
+              transform: [{ scale: menuState === 'closed' ? 0.8 : 1 }]
+            }} />
+          </Pressable>
+          {title && menuState !== 'closed' && <Text style={styles.sectionTitle}>{title}</Text>}
+          {menuState !== 'closed' && (
+            <View style={{ flex: 1 }}>
+              <ScrollView 
+                scrollEventThrottle={16} 
+                scrollEnabled={contentScrollEnabled} 
+                onScroll={handleScroll}
+                showsVerticalScrollIndicator={menuState === 'fully-open'}
+                nestedScrollEnabled={true}
+                style={{ opacity: 1 }}
+              >
+                <View style={{ minHeight: menuState === 'half-open' ? 200 : 300 }}>
+                  {children}
+                </View>
+              </ScrollView>
+            </View>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
@@ -421,9 +609,7 @@ function BrowserChrome({
     openUpdates,
     bookmarkAllTabs,
     bookmarkCurrentPage,
-    closeOtherTabs,
     closeTab,
-    closeTabsToRight,
     goBack,
     goForward,
     navigate,
@@ -571,7 +757,9 @@ function BrowserChrome({
         <IconButton theme={theme} icon={ChevronRight} onPress={goForward} />
         <IconButton theme={theme} icon={Plus} onPress={() => newTab()} />
         <TabCountButton theme={theme} count={tabs.length} onPress={() => setTabSheetOpen(!tabSheetOpen)} />
-        <IconButton theme={theme} icon={Menu} onPress={() => { setTabSheetOpen(false); setMenuOpen(true); }} />
+        <MenuButtonWithGesture theme={theme} onPress={() => { setTabSheetOpen(false); setMenuOpen(true); }}>
+          <Menu size={24} color={theme.colors.text} />
+        </MenuButtonWithGesture>
       </View>
 
       <Sheet visible={menuOpen} onClose={() => setMenuOpen(false)} theme={theme}>
