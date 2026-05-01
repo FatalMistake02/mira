@@ -21,6 +21,10 @@ interface WebviewNavigationEvent extends Event {
   url: string;
 }
 
+interface WebviewInPageNavigationEvent extends WebviewNavigationEvent {
+  isMainFrame?: boolean;
+}
+
 interface WebviewWillNavigateEvent extends Event {
   url?: string;
   isMainFrame?: boolean;
@@ -103,7 +107,7 @@ interface WebviewElement extends HTMLElement {
   getWebContentsId?: () => number;
   willNavigateHandler?: (e: WebviewWillNavigateEvent) => void;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
-  didNavigateInPageHandler?: (e: WebviewNavigationEvent) => void;
+  didNavigateInPageHandler?: (e: WebviewInPageNavigationEvent) => void;
   didStartLoadingHandler?: () => void;
   didFailLoadHandler?: (e: WebviewDidFailLoadEvent) => void;
   domReadyHandler?: () => void;
@@ -1009,6 +1013,8 @@ export default function TabView() {
       handleWillNavigate(tabId, event);
     };
     const didNavigateInPageHandler = (event: Event) => {
+      const webviewEvent = event as WebviewInPageNavigationEvent;
+      if (webviewEvent.isMainFrame === false) return;
       handleDidNavigate(tabId, webview, event);
     };
     const didStartLoadingHandler = () => {
@@ -1039,7 +1045,7 @@ export default function TabView() {
     webview.willNavigateHandler = willNavigateHandler as (e: WebviewWillNavigateEvent) => void;
     webview.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
     webview.didNavigateInPageHandler = didNavigateInPageHandler as (
-      e: WebviewNavigationEvent,
+      e: WebviewInPageNavigationEvent,
     ) => void;
     webview.didStartLoadingHandler = didStartLoadingHandler;
     webview.didFailLoadHandler = didFailLoadHandler as (e: WebviewDidFailLoadEvent) => void;

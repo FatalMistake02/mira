@@ -6,6 +6,7 @@
 - Support MAILTO links
 - Site permissions
 - Fix https first and http warning page
+- Url bar shows correct url
 
 ## v1.0.0 - 2026-04-01
 
