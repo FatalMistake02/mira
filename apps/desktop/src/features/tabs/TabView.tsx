@@ -10,9 +10,20 @@ import {
   shouldAllowNativePopupWindow,
   shouldReturnFromAuthPopup,
 } from './popupFlows';
+import {
+  consumePendingHttpsUpgradeHttpUrl,
+  consumeUnsecureSiteBypassOnce,
+  isUnsecureSiteAllowed,
+  toHttpsUrlFromHttp,
+} from '../security/unsecureSitePolicy';
 
 interface WebviewNavigationEvent extends Event {
   url: string;
+}
+
+interface WebviewWillNavigateEvent extends Event {
+  url?: string;
+  isMainFrame?: boolean;
 }
 
 interface WebviewDidFailLoadEvent extends Event {
@@ -90,6 +101,7 @@ interface WebviewElement extends HTMLElement {
   closeDevTools: () => void;
   isDevToolsOpened: () => boolean;
   getWebContentsId?: () => number;
+  willNavigateHandler?: (e: WebviewWillNavigateEvent) => void;
   didNavigateHandler?: (e: WebviewNavigationEvent) => void;
   didNavigateInPageHandler?: (e: WebviewNavigationEvent) => void;
   didStartLoadingHandler?: () => void;
@@ -160,7 +172,7 @@ const WEBVIEW_TAB_ID_ATTR = 'data-mira-tab-id';
 const ERR_INTERNET_DISCONNECTED = -106;
 const ERR_CONNECTION_REFUSED = -102;
 const ERR_CONNECTION_FAILED = -104;
-const ERR_NAME_NOT_RESOLVED = -105;
+const ERR_SSL_PROTOCOL_ERROR = -107;
 const DETACHED_TRANSFER_ATTACH_TIMEOUT_MS = 1500;
 
 /**
@@ -174,6 +186,19 @@ function normalizeComparableUrl(url: string): string {
   } catch {
     return trimmed;
   }
+}
+
+function isHttpsUpgradeFailure(event: WebviewDidFailLoadEvent): boolean {
+  if (
+    event.errorCode === ERR_CONNECTION_REFUSED
+    || event.errorCode === ERR_CONNECTION_FAILED
+    || event.errorCode === ERR_SSL_PROTOCOL_ERROR
+  ) {
+    return true;
+  }
+
+  const normalizedDescription = event.errorDescription.trim().toUpperCase();
+  return normalizedDescription.includes('ERR_SSL_');
 }
 
 function getTabIdForWebContentsId(webContentsId: number): string | undefined {
@@ -297,6 +322,10 @@ function applyRawFileDarkModeStyle(webview: WebviewElement, shouldApply: boolean
 }
 
 function detachWebviewListeners(webview: WebviewElement) {
+  if (webview.willNavigateHandler) {
+    webview.removeEventListener('will-navigate', webview.willNavigateHandler as EventListener);
+    delete webview.willNavigateHandler;
+  }
   if (webview.didNavigateHandler) {
     webview.removeEventListener('did-navigate', webview.didNavigateHandler as EventListener);
     delete webview.didNavigateHandler;
@@ -456,6 +485,15 @@ export default function TabView() {
   const completedDetachedTransferIdsRef = useRef<Record<string, true>>({});
   const pendingDetachedTransferIdsRef = useRef<Record<string, true>>({});
   const completedAuthReturnByTabIdRef = useRef<Record<string, true>>({});
+  const pendingHttpsUpgradeByTabIdRef = useRef<
+    Record<
+      string,
+      {
+        httpsUrlComparable: string;
+        httpUrl: string;
+      }
+    >
+  >({});
 
   const acknowledgeDetachedTransfer = React.useEffectEvent((transferId: string) => {
     if (!transferId || completedDetachedTransferIdsRef.current[transferId]) return;
@@ -533,6 +571,11 @@ export default function TabView() {
         delete completedAuthReturnByTabIdRef.current[tabId];
       }
     }
+    for (const tabId of Object.keys(pendingHttpsUpgradeByTabIdRef.current)) {
+      if (!nextIds.has(tabId)) {
+        delete pendingHttpsUpgradeByTabIdRef.current[tabId];
+      }
+    }
   }, [tabs]);
 
   useEffect(() => {
@@ -580,6 +623,20 @@ export default function TabView() {
       return next;
     });
   }, []);
+
+  const clearPendingHttpsUpgradeForTab = useCallback((tabId: string) => {
+    delete pendingHttpsUpgradeByTabIdRef.current[tabId];
+  }, []);
+
+  const trackPendingHttpsUpgradeForTab = useCallback(
+    (tabId: string, httpUrl: string, httpsUrl: string) => {
+      pendingHttpsUpgradeByTabIdRef.current[tabId] = {
+        httpsUrlComparable: normalizeComparableUrl(httpsUrl),
+        httpUrl,
+      };
+    },
+    [],
+  );
 
   useEffect(() => {
     const tabById = new Map(tabs.map((tab) => [tab.id, tab]));
@@ -644,12 +701,38 @@ export default function TabView() {
     (tabId: string, webview: WebviewElement, event: Event) => {
       const webviewEvent = event as WebviewNavigationEvent;
       webview.setAttribute(WEBVIEW_TRACKED_SRC_ATTR, normalizeComparableUrl(webviewEvent.url));
+      clearPendingHttpsUpgradeForTab(tabId);
       clearExternalErrorForTab(tabId);
       navigate(webviewEvent.url, tabId, { fromWebview: true });
       applyRawFileDarkModeStyle(webview, shouldApplyRawFileDarkMode);
       maybeReturnFromAuthFlow(tabId, webviewEvent.url);
     },
   );
+
+  const handleWillNavigate = React.useEffectEvent((tabId: string, event: Event) => {
+    const webviewEvent = event as WebviewWillNavigateEvent;
+    if (webviewEvent.isMainFrame === false) return;
+
+    const requestedUrl = typeof webviewEvent.url === 'string' ? webviewEvent.url.trim() : '';
+    if (!requestedUrl.toLowerCase().startsWith('http://')) return;
+
+    if (consumeUnsecureSiteBypassOnce(requestedUrl)) {
+      clearPendingHttpsUpgradeForTab(tabId);
+      return;
+    }
+    if (isUnsecureSiteAllowed(requestedUrl)) {
+      clearPendingHttpsUpgradeForTab(tabId);
+      return;
+    }
+
+    const httpsUrl = toHttpsUrlFromHttp(requestedUrl);
+    if (!httpsUrl) return;
+
+    event.preventDefault();
+    trackPendingHttpsUpgradeForTab(tabId, requestedUrl, httpsUrl);
+    clearExternalErrorForTab(tabId);
+    navigate(httpsUrl, tabId);
+  });
 
   const handleDidStartLoading = React.useEffectEvent((tabId: string) => {
     clearExternalErrorForTab(tabId);
@@ -663,19 +746,35 @@ export default function TabView() {
 
     const currentTab = tabsById.get(tabId);
     const failedUrl = webviewEvent.validatedURL || currentTab?.url || '';
+    const failedComparable = normalizeComparableUrl(failedUrl);
+    const pendingHttpsUpgrade = pendingHttpsUpgradeByTabIdRef.current[tabId];
 
-    // Check if this is an HTTPS connection failure that we should fallback from
     if (
-      failedUrl.startsWith('https://') &&
-      (webviewEvent.errorCode === ERR_CONNECTION_REFUSED ||
-        webviewEvent.errorCode === ERR_CONNECTION_FAILED ||
-        webviewEvent.errorCode === ERR_NAME_NOT_RESOLVED)
+      pendingHttpsUpgrade
+      && pendingHttpsUpgrade.httpsUrlComparable === failedComparable
+      && isHttpsUpgradeFailure(webviewEvent)
     ) {
-      // Try HTTP fallback - navigate to unsecure warning page with HTTP URL
-      const httpUrl = failedUrl.replace(/^https:\/\//, 'http://');
-      navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(httpUrl)}`, tabId);
+      clearPendingHttpsUpgradeForTab(tabId);
+      navigate(
+        `mira://errors/unsecure-site?url=${encodeURIComponent(pendingHttpsUpgrade.httpUrl)}`,
+        tabId,
+      );
       return;
     }
+
+    if (isHttpsUpgradeFailure(webviewEvent)) {
+      const pendingTypedHttpUrl = consumePendingHttpsUpgradeHttpUrl(failedUrl);
+      if (pendingTypedHttpUrl) {
+        clearPendingHttpsUpgradeForTab(tabId);
+        navigate(
+          `mira://errors/unsecure-site?url=${encodeURIComponent(pendingTypedHttpUrl)}`,
+          tabId,
+        );
+        return;
+      }
+    }
+
+    clearPendingHttpsUpgradeForTab(tabId);
 
     const route =
       webviewEvent.errorCode === ERR_INTERNET_DISCONNECTED
@@ -685,7 +784,7 @@ export default function TabView() {
       ...current,
       [tabId]: {
         route,
-        failedUrlComparable: normalizeComparableUrl(failedUrl),
+        failedUrlComparable: failedComparable,
       },
     }));
   });
@@ -906,6 +1005,9 @@ export default function TabView() {
     const didNavigateHandler = (event: Event) => {
       handleDidNavigate(tabId, webview, event);
     };
+    const willNavigateHandler = (event: Event) => {
+      handleWillNavigate(tabId, event);
+    };
     const didNavigateInPageHandler = (event: Event) => {
       handleDidNavigate(tabId, webview, event);
     };
@@ -934,6 +1036,7 @@ export default function TabView() {
       handleNewWindow(tabId, event);
     };
 
+    webview.willNavigateHandler = willNavigateHandler as (e: WebviewWillNavigateEvent) => void;
     webview.didNavigateHandler = didNavigateHandler as (e: WebviewNavigationEvent) => void;
     webview.didNavigateInPageHandler = didNavigateInPageHandler as (
       e: WebviewNavigationEvent,
@@ -951,6 +1054,7 @@ export default function TabView() {
     webview.contextMenuHandler = contextMenuHandler as (e: WebviewContextMenuEvent) => void;
     webview.newWindowHandler = newWindowHandler as (e: WebviewNewWindowEvent) => void;
 
+    webview.addEventListener('will-navigate', willNavigateHandler);
     webview.addEventListener('did-navigate', didNavigateHandler);
     webview.addEventListener('did-navigate-in-page', didNavigateInPageHandler);
     webview.addEventListener('did-start-loading', didStartLoadingHandler);
@@ -966,6 +1070,7 @@ export default function TabView() {
   const handleWebviewRefChange = React.useEffectEvent((tabId: string, node: Element | null) => {
     const existing = webviewMap.current[tabId] ?? null;
     if (!node) {
+      clearPendingHttpsUpgradeForTab(tabId);
       if (!existing) return;
       detachWebviewListeners(existing);
       existing.removeAttribute(WEBVIEW_TAB_ID_ATTR);

@@ -14,8 +14,11 @@
       New private window: Ctrl+Shift+N
 - [ ] Finish cookies and site data
 - [ ] Clean up ui
-- [ ] Fix http warning page
-- [ ] Fix #74, #76, #77, and #81
+- [x] Fix http warning page
+- [x] #74
+- [ ] #76
+- [ ] #77
+- [ ] #81
 
 ## v1.2.0
 - [ ] Tab groups and colors

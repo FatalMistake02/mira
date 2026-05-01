@@ -6,6 +6,7 @@ import {
   getBrowserSettings,
   getSearchUrlFromInput,
 } from '../features/settings/browserSettings';
+import { markPendingHttpsUpgrade, toHttpsUrlFromHttp } from '../features/security/unsecureSitePolicy';
 
 const NEW_TAB_INTRO_SHOWN_KEY = 'mira.newtab.intro.shown.v1';
 const INTRO_BLOCK_HEIGHT = 300;
@@ -107,14 +108,18 @@ export default function NewTab() {
     const trimmed = query.trim();
     if (!trimmed) return;
 
-    // If user explicitly types http://, show unsecure warning first
-    if (trimmed.startsWith('http://')) {
-      navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(trimmed)}`);
-      setQuery('');
-      return;
-    }
-
-    if (isLikelyDomainOrUrl(trimmed)) {
+    if (isSupportedProtocol(trimmed)) {
+      if (/^http:\/\//i.test(trimmed)) {
+        const httpsUrl = toHttpsUrlFromHttp(trimmed);
+        if (httpsUrl) {
+          markPendingHttpsUpgrade(trimmed, httpsUrl);
+          navigate(httpsUrl);
+          setQuery('');
+          return;
+        }
+      }
+      navigate(trimmed);
+    } else if (isLikelyDomainOrUrl(trimmed)) {
       const url = trimmed.startsWith('//') ? `https:${trimmed}` : `https://${trimmed}`;
       navigate(url);
     } else {

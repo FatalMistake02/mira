@@ -25,6 +25,7 @@ import {
   getBrowserSettings,
   getSearchUrlFromInput,
 } from '../features/settings/browserSettings';
+import { markPendingHttpsUpgrade, toHttpsUrlFromHttp } from '../features/security/unsecureSitePolicy';
 import { electron } from '../electronBridge';
 
 const MAIN_MENU_ANIMATION_MS = 150;
@@ -271,12 +272,15 @@ export default function AddressBar({ inputRef }: AddressBarProps) {
 
     let finalUrl: string;
     if (isSupportedProtocol(raw)) {
-      finalUrl = raw;
-      // If user explicitly types http://, show unsecure warning first
-      if (raw.startsWith('http://')) {
-        navigate(`mira://errors/unsecure-site?url=${encodeURIComponent(raw)}`);
-        return;
+      if (/^http:\/\//i.test(raw)) {
+        const httpsUrl = toHttpsUrlFromHttp(raw);
+        if (httpsUrl) {
+          markPendingHttpsUpgrade(raw, httpsUrl);
+          navigate(httpsUrl);
+          return;
+        }
       }
+      finalUrl = raw;
     } else if (isLikelyDomainOrUrl(raw)) {
       finalUrl = raw.startsWith('//') ? `https:${raw}` : `https://${raw}`;
     } else {

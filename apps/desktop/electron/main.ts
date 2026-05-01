@@ -1453,6 +1453,23 @@ function normalizeSitePermissionOrigin(rawValue: string): string | null {
   return null;
 }
 
+function getSiteDisplayLabel(rawValue: string): string {
+  const normalizedOrigin = normalizeSitePermissionOrigin(rawValue);
+  if (normalizedOrigin) return normalizedOrigin;
+
+  const trimmed = rawValue.trim();
+  if (!trimmed) return 'This site';
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.hostname) return parsed.hostname.toLowerCase();
+  } catch {
+    // Fall through to default label below.
+  }
+
+  return 'This site';
+}
+
 function normalizePersistedSitePermissions(
   value: unknown,
 ): Record<string, Partial<Record<SitePermissionId, SitePermissionSetting>>> {

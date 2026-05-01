@@ -1,24 +1,11 @@
 import { useTabs } from '../../features/tabs/TabsProvider';
 import { useState, useEffect } from 'react';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
-
-const UNSecureSiteStorage = {
-  getKey: (url: string) => `mira.unsecure-site.allowed.${url}`,
-
-  isAllowed: (url: string): boolean => {
-    try {
-      return localStorage.getItem(UNSecureSiteStorage.getKey(url)) === '1';
-    } catch {
-      return false;
-    }
-  },
-
-  allow: (url: string): void => {
-    try {
-      localStorage.setItem(UNSecureSiteStorage.getKey(url), '1');
-    } catch {}
-  },
-};
+import {
+  allowUnsecureSite,
+  isUnsecureSiteAllowed,
+  markUnsecureSiteBypassOnce,
+} from '../../features/security/unsecureSitePolicy';
 
 export default function UnsecureSiteWarningPage() {
   const { navigate, tabs, activeId } = useTabs();
@@ -31,15 +18,16 @@ export default function UnsecureSiteWarningPage() {
   const [isRemembered, setIsRemembered] = useState(false);
 
   useEffect(() => {
-    if (targetUrl && UNSecureSiteStorage.isAllowed(targetUrl)) {
+    if (targetUrl && isUnsecureSiteAllowed(targetUrl)) {
       navigate(targetUrl);
     }
   }, [targetUrl, navigate]);
 
   const handleProceed = () => {
     if (isRemembered && targetUrl) {
-      UNSecureSiteStorage.allow(targetUrl);
+      allowUnsecureSite(targetUrl);
     }
+    markUnsecureSiteBypassOnce(targetUrl);
     navigate(targetUrl);
   };
 
