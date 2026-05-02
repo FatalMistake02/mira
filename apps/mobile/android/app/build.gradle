@@ -39,14 +39,15 @@ react {
     //   See https://github.com/react-native-community/cli/blob/main/docs/commands.md#bundle
     // extraPackagerArgs = []
 
-    /* Hermes Commands */
+    /* Hermes Commands - DISABLED */
+    //   Hermes is disabled in favor of JavaScriptCore to avoid compiler compatibility issues
     //   The hermes compiler command to run. By default it is 'hermesc'
-    def hermesPath = System.getProperty('os.name').toLowerCase().contains('win') ? 
-        "\${rootDir}/../../../node_modules/hermes-engine/win64-bin/hermesc" :
-        System.getProperty('os.name').toLowerCase().contains('mac') ?
-        "\${rootDir}/../../../node_modules/hermes-engine/osx-bin/hermesc" :
-        "\${rootDir}/../../../node_modules/hermes-engine/linux64-bin/hermesc"
-    hermesCommand = hermesPath
+    // def hermesPath = System.getProperty('os.name').toLowerCase().contains('win') ? 
+    //     "\${rootDir}/../../../node_modules/hermes-engine/win64-bin/hermesc" :
+    //     System.getProperty('os.name').toLowerCase().contains('mac') ?
+    //     "\${rootDir}/../../../node_modules/hermes-engine/osx-bin/hermesc" :
+    //     "\${rootDir}/../../../node_modules/hermes-engine/linux64-bin/hermesc"
+    // hermesCommand = hermesPath
     //
     //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
     // hermesFlags = ["-O", "-output-source-map"]
@@ -112,7 +113,7 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
-    if (hermesEnabled.toBoolean()) {
+    if (false) {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
