@@ -197,7 +197,7 @@ jobs:
 
       - name: Build Android Release APK
         run: |
-          npm run mobile:android:build:windows
+          npm run mobile:android:build:windows:action
 
       - name: Upload Android Assets to Release
         uses: softprops/action-gh-release@v1

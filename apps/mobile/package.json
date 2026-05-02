@@ -12,6 +12,7 @@
     "android:build:windows": "set \"JAVA_HOME=C:\\Program Files\\Java\\jdk-17.0.2\" && cd android && call gradlew.bat assembleRelease",
     "android:build:linux": "cd android && chmod +x gradlew && ./gradlew assembleRelease",
     "android:build:mac": "cd android && chmod +x gradlew && ./gradlew assembleRelease",
+    "android:build:windows:action": "cd android && call gradlew.bat assembleRelease",
     "ios:build": "react-native build-ios --mode=release",
     "lint": "node -e \"process.env.ESLINT_USE_FLAT_CONFIG='false'; const result = require('child_process').spawnSync('eslint',['.'],{stdio:'inherit',shell:true,env:process.env}); process.exit(result.status ?? 1);\"",
     "start": "react-native start",
