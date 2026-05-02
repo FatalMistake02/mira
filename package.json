@@ -38,7 +38,10 @@
     "mobile:android": "npm run android --workspace apps/mobile",
     "mobile:android:dev": "npm run android:dev --workspace apps/mobile",
     "mobile:android:release": "npm run android:release --workspace apps/mobile",
-    "mobile:android:build": "npm run android:build --workspace apps/mobile",
+    "mobile:android:build": "node -e \"console.error('Don\\'t use this! Instead, run: \\'npm run mobile:android:build:<platform>\\''); process.exit(1)\"",
+    "mobile:android:build:windows": "npm run android:build:windows --workspace apps/mobile",
+    "mobile:android:build:linux": "npm run android:build:linux --workspace apps/mobile",
+    "mobile:android:build:mac": "npm run android:build:mac --workspace apps/mobile",
     "mobile:ios": "npm run ios --workspace apps/mobile",
     "mobile:ios:release": "npm run ios:release --workspace apps/mobile",
     "mobile:ios:build": "npm run ios:build --workspace apps/mobile"

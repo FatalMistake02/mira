@@ -41,7 +41,12 @@ react {
 
     /* Hermes Commands */
     //   The hermes compiler command to run. By default it is 'hermesc'
-    // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
+    def hermesPath = System.getProperty('os.name').toLowerCase().contains('win') ? 
+        "\${rootDir}/../../../node_modules/hermes-engine/win64-bin/hermesc" :
+        System.getProperty('os.name').toLowerCase().contains('mac') ?
+        "\${rootDir}/../../../node_modules/hermes-engine/osx-bin/hermesc" :
+        "\${rootDir}/../../../node_modules/hermes-engine/linux64-bin/hermesc"
+    hermesCommand = hermesPath
     //
     //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
     // hermesFlags = ["-O", "-output-source-map"]
