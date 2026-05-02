@@ -168,7 +168,7 @@ jobs:
     needs:
       - prepare-version
       - create-release
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -197,7 +197,7 @@ jobs:
 
       - name: Build Android Release APK
         run: |
-          npm run mobile:android:build:linux
+          npm run mobile:android:build:windows
 
       - name: Upload Android Assets to Release
         uses: softprops/action-gh-release@v1
